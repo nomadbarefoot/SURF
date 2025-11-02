@@ -1,0 +1,255 @@
+# Granular Tool Configurations
+# These tools are designed for AI agent orchestration
+
+navigation_tools:
+  navigate_to_url:
+    default_timeout: 30
+    wait_strategies:
+      - "domcontentloaded"
+      - "networkidle"
+      - "selector_wait"
+    retry_attempts: 3
+    stealth_mode: true
+  
+  wait_for_element:
+    default_timeout: 10
+    polling_interval: 0.5
+    visibility_check: true
+    interaction_check: false
+
+content_extraction_tools:
+  extract_content:
+    content_types:
+      text:
+        cleaning: true
+        normalization: true
+        encoding: "utf-8"
+      html:
+        cleaning: false
+        normalization: false
+        encoding: "utf-8"
+      links:
+        absolute_urls: true
+        deduplication: true
+        validation: true
+      images:
+        download: false
+        alt_text: true
+        dimensions: true
+    
+    selector_strategies:
+      primary: "css"
+      fallback: "xpath"
+      dynamic: true
+      validation: true
+  
+  extract_structured_data:
+    schemas:
+      - "json-ld"
+      - "microdata"
+      - "rdfa"
+    validation: true
+    normalization: true
+
+element_interaction_tools:
+  interact_with_element:
+    actions:
+      click:
+        wait_after: 1.0
+        human_delay: true
+        scroll_into_view: true
+      type:
+        human_delay: true
+        clear_first: true
+        validation: true
+      hover:
+        wait_after: 0.5
+        human_movement: true
+      scroll:
+        smooth: true
+        human_timing: true
+      select:
+        wait_after: 0.5
+        validation: true
+    
+    error_handling:
+      element_not_found: "retry"
+      interaction_failed: "retry"
+      timeout: "fail"
+      max_retries: 3
+
+stealth_tools:
+  apply_stealth_mode:
+    levels:
+      basic:
+        user_agent_rotation: true
+        header_randomization: true
+        viewport_randomization: false
+        fingerprint_masking: false
+      
+      advanced:
+        user_agent_rotation: true
+        header_randomization: true
+        viewport_randomization: true
+        fingerprint_masking: true
+        mouse_movement: true
+        timing_randomization: true
+      
+      maximum:
+        user_agent_rotation: true
+        header_randomization: true
+        viewport_randomization: true
+        fingerprint_masking: true
+        mouse_movement: true
+        timing_randomization: true
+        proxy_rotation: true
+        canvas_fingerprint: true
+        webgl_fingerprint: true
+        audio_fingerprint: true
+  
+  human_behavior_simulation:
+    mouse_movement:
+      bezier_curves: true
+      natural_timing: true
+      reaction_delays: true
+    typing:
+      human_delays: true
+      error_simulation: false
+      backspace_probability: 0.05
+    scrolling:
+      natural_patterns: true
+      pause_probability: 0.1
+      direction_changes: true
+
+pattern_learning_tools:
+  learn_patterns:
+    pattern_types:
+      behavioral:
+        timing_patterns: true
+        interaction_patterns: true
+        navigation_patterns: true
+        success_correlation: true
+      
+      content:
+        extraction_patterns: true
+        selector_effectiveness: true
+        content_type_recognition: true
+        quality_patterns: true
+      
+      site_specific:
+        site_characteristics: true
+        optimal_strategies: true
+        anti_detection_rules: true
+        performance_metrics: true
+    
+    learning_parameters:
+      min_samples: 5
+      confidence_threshold: 0.7
+      update_frequency: "session_end"
+      persistence: true
+  
+  optimize_strategy:
+    optimization_goals:
+      - "success_rate"
+      - "speed"
+      - "stealth"
+      - "accuracy"
+      - "reliability"
+    
+    strategy_components:
+      - "timing"
+      - "selectors"
+      - "interactions"
+      - "stealth_level"
+      - "retry_logic"
+    
+    optimization_methods:
+      - "pattern_analysis"
+      - "success_correlation"
+      - "performance_comparison"
+      - "adaptive_adjustment"
+
+resource_management_tools:
+  get_resource_status:
+    metrics:
+      system:
+        - "cpu_usage"
+        - "memory_usage"
+        - "disk_usage"
+        - "network_usage"
+      session:
+        - "success_rate"
+        - "response_time"
+        - "error_rate"
+        - "data_volume"
+      browser:
+        - "page_load_time"
+        - "dom_ready_time"
+        - "network_requests"
+        - "javascript_errors"
+  
+  optimize_resources:
+    thresholds:
+      cpu_usage: 80
+      memory_usage: 80
+      response_time: 5000
+      error_rate: 0.1
+    actions:
+      - "reduce_concurrency"
+      - "increase_delays"
+      - "switch_strategy"
+      - "cleanup_resources"
+
+site_memory_tools:
+  get_site_memory:
+    data_types:
+      - "session_data"
+      - "cookies"
+      - "success_rate"
+      - "access_count"
+      - "custom_data"
+    ttl: 86400  # 24 hours
+    encryption: false
+  
+  update_site_memory:
+    update_frequency: "session_end"
+    data_retention: 30  # days
+    compression: true
+    backup: true
+
+# Tool-specific configurations
+navigate_to_url:
+  default_stealth: true
+  human_behavior: true
+  error_recovery: true
+  performance_monitoring: true
+
+extract_content:
+  content_validation: true
+  quality_scoring: true
+  deduplication: true
+  semantic_chunking: true
+
+interact_with_element:
+  human_timing: true
+  error_handling: true
+  performance_tracking: true
+  success_validation: true
+
+apply_stealth_mode:
+  adaptive_level: true
+  performance_impact: "monitor"
+  detection_avoidance: "maximize"
+  resource_efficiency: "balanced"
+
+learn_patterns:
+  real_time_learning: true
+  batch_processing: true
+  pattern_validation: true
+  performance_impact: "minimal"
+
+optimize_strategy:
+  continuous_optimization: true
+  performance_tracking: true
+  strategy_validation: true
+  rollback_capability: true

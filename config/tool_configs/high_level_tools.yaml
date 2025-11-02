@@ -1,0 +1,198 @@
+# High-Level Tool Configurations
+# These tools are designed for direct module consumption
+
+news_sources:
+  cnn:
+    url: "https://www.cnn.com/search?q={query}"
+    selectors:
+      title: "h3.cnn-search__result-headline"
+      content: ".cnn-search__result-body"
+      url: "a.cnn-search__result-headline"
+      timestamp: ".cnn-search__result-timestamp"
+    search_param: "q"
+    pagination: ".cnn-search__pagination"
+  
+  bbc:
+    url: "https://www.bbc.com/search?q={query}"
+    selectors:
+      title: "h1.ssrcss-1f3bvyz-Headline"
+      content: ".ssrcss-1f3bvyz-Summary"
+      url: "a.ssrcss-1f3bvyz-Headline"
+      timestamp: ".ssrcss-1f3bvyz-Timestamp"
+    search_param: "q"
+    pagination: ".ssrcss-1f3bvyz-Pagination"
+  
+  reuters:
+    url: "https://www.reuters.com/search/news?blob={query}"
+    selectors:
+      title: ".search-result-title"
+      content: ".search-result-summary"
+      url: "a.search-result-title"
+      timestamp: ".search-result-timestamp"
+    search_param: "blob"
+    pagination: ".search-pagination"
+
+financial_sources:
+  yahoo_finance:
+    url_template: "https://finance.yahoo.com/quote/{symbol}"
+    selectors:
+      pe_ratio: "[data-testid='PE_RATIO-value']"
+      market_cap: "[data-testid='MARKET_CAP-value']"
+      revenue: "[data-testid='REVENUE-value']"
+      eps: "[data-testid='EPS_RATIO-value']"
+      price: "[data-testid='qsp-price']"
+      change: "[data-testid='qsp-price-change']"
+      volume: "[data-testid='qsp-volume']"
+  
+  marketwatch:
+    url_template: "https://www.marketwatch.com/investing/stock/{symbol}"
+    selectors:
+      pe_ratio: ".kv__item .primary"
+      market_cap: ".kv__item .primary"
+      revenue: ".kv__item .primary"
+      eps: ".kv__item .primary"
+      price: ".intraday__price"
+      change: ".intraday__change"
+      volume: ".kv__item .primary"
+  
+  finviz:
+    url_template: "https://finviz.com/quote.ashx?t={symbol}"
+    selectors:
+      pe_ratio: "td[data-snap-ignore='true']"
+      market_cap: "td[data-snap-ignore='true']"
+      revenue: "td[data-snap-ignore='true']"
+      eps: "td[data-snap-ignore='true']"
+      price: ".snapshot-td2"
+      change: ".snapshot-td2"
+      volume: "td[data-snap-ignore='true']"
+
+ecommerce_sources:
+  amazon:
+    search_url: "https://www.amazon.com/s?k={query}"
+    selectors:
+      name: "h2.a-size-mini a span"
+      price: ".a-price-whole"
+      url: "h2.a-size-mini a"
+      image: ".s-image"
+      rating: ".a-icon-alt"
+      availability: ".a-color-success"
+    pagination: ".s-pagination"
+    price_selector: ".a-price-whole"
+  
+  best_buy:
+    search_url: "https://www.bestbuy.com/site/searchpage.jsp?st={query}"
+    selectors:
+      name: ".sku-title h4 a"
+      price: ".priceView-customer-price span"
+      url: ".sku-title h4 a"
+      image: ".product-image img"
+      rating: ".c-ratings-reviews"
+      availability: ".fulfillment-add-to-cart-button"
+    pagination: ".pager"
+    price_selector: ".priceView-customer-price span"
+  
+  walmart:
+    search_url: "https://www.walmart.com/search?q={query}"
+    selectors:
+      name: ".product-title-link"
+      price: ".price-main"
+      url: ".product-title-link"
+      image: ".product-image img"
+      rating: ".stars-small"
+      availability: ".prod-ProductCTA"
+    pagination: ".paginator"
+    price_selector: ".price-main"
+
+monitoring_configs:
+  content_monitoring:
+    default_selectors:
+      - "article"
+      - ".content"
+      - ".post"
+      - ".entry"
+    change_detection:
+      method: "content_hash"
+      threshold: 0.1
+    notification:
+      enabled: false
+      channels: ["email", "webhook"]
+  
+  price_monitoring:
+    default_selectors:
+      - ".price"
+      - "[data-testid*='price']"
+      - ".cost"
+      - ".amount"
+    change_detection:
+      method: "price_comparison"
+      threshold: 0.05
+    notification:
+      enabled: true
+      channels: ["email", "webhook"]
+  
+  availability_monitoring:
+    default_selectors:
+      - ".availability"
+      - ".stock-status"
+      - ".in-stock"
+      - ".out-of-stock"
+    change_detection:
+      method: "status_change"
+      threshold: 1.0
+    notification:
+      enabled: true
+      channels: ["email", "webhook"]
+
+# Tool-specific configurations
+extract_news:
+  default_sources: ["cnn", "bbc", "reuters"]
+  max_articles_per_source: 5
+  time_range_mapping:
+    "1d": 1
+    "1w": 7
+    "1m": 30
+    "3m": 90
+    "1y": 365
+  content_processing:
+    clean_html: true
+    extract_keywords: true
+    sentiment_analysis: false
+    language_detection: true
+
+extract_fundamentals:
+  default_sources: ["yahoo_finance", "marketwatch"]
+  data_types_priority:
+    - "pe_ratio"
+    - "market_cap"
+    - "revenue"
+    - "eps"
+    - "price"
+    - "change"
+    - "volume"
+  validation:
+    required_fields: ["price"]
+    numeric_fields: ["pe_ratio", "market_cap", "revenue", "eps", "price"]
+    percentage_fields: ["change"]
+
+extract_products:
+  default_sites: ["amazon", "best_buy", "walmart"]
+  max_products_per_site: 10
+  price_processing:
+    currency_detection: true
+    price_cleaning: true
+    currency_conversion: false
+  product_validation:
+    required_fields: ["name", "price"]
+    optional_fields: ["url", "image", "rating", "availability"]
+  filtering:
+    min_price: 0
+    max_price: 1000000
+    exclude_out_of_stock: false
+
+monitor_site:
+  default_interval: 60  # minutes
+  max_monitoring_duration: 24  # hours
+  retry_attempts: 3
+  timeout: 30  # seconds
+  stealth_mode: true
+  human_behavior: true

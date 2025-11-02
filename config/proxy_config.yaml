@@ -1,0 +1,51 @@
+# Proxy Configuration for Anti-Detection
+# Add your proxy servers here for rotation
+
+proxies:
+  # Example proxy configurations (replace with real proxies)
+  - host: "proxy1.example.com"
+    port: 8080
+    username: "user1"
+    password: "pass1"
+    protocol: "http"
+  
+  - host: "proxy2.example.com"
+    port: 8080
+    username: "user2"
+    password: "pass2"
+    protocol: "http"
+  
+  - host: "proxy3.example.com"
+    port: 3128
+    username: ""
+    password: ""
+    protocol: "http"
+
+# Proxy rotation settings
+rotation:
+  max_failures: 3  # Mark proxy as failed after this many failures
+  reset_interval: 3600  # Reset failed proxies after this many seconds
+  success_weight: 0.7  # Weight for success rate in selection
+  recency_weight: 0.3  # Weight for recency in selection
+
+# CAPTCHA handling settings
+captcha:
+  detection_enabled: true
+  backoff_min: 300  # Minimum backoff time in seconds
+  backoff_max: 600  # Maximum backoff time in seconds
+  screenshot_on_detection: true
+
+# Human mimicry settings
+human_behavior:
+  min_delay: 0.5  # Minimum delay between actions
+  max_delay: 2.0  # Maximum delay between actions
+  scroll_pauses: 3  # Number of scroll pauses to simulate reading
+  mouse_movements: true  # Enable random mouse movements
+  typing_speed: 0.1  # Human-like typing speed
+
+# Smart waiting settings
+smart_waiting:
+  content_load_timeout: 30000  # Timeout for content loading
+  dynamic_content_timeout: 10000  # Timeout for dynamic content
+  image_load_threshold: 0.8  # Threshold for considering images loaded
+  network_idle_timeout: 5000  # Additional network idle timeout
