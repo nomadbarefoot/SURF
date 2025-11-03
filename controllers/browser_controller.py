@@ -55,11 +55,17 @@ async def navigate(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
-        logger.error("Navigation failed", error=str(e), session_id=request.session_id)
+    except BrowserOperationError as e:
+        logger.error("Navigation failed", error=str(e), error_code=e.error_code, details=e.details, session_id=request.session_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Navigation failed"
+            detail=f"Navigation failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error("Navigation failed", error=str(e), error_type=type(e).__name__, session_id=request.session_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Navigation failed: {str(e)}"
         )
 
 
@@ -100,11 +106,17 @@ async def extract_content(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
-        logger.error("Content extraction failed", error=str(e), session_id=request.session_id)
+    except BrowserOperationError as e:
+        logger.error("Content extraction failed", error=str(e), error_code=e.error_code, details=e.details, session_id=request.session_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Content extraction failed"
+            detail=f"Content extraction failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error("Content extraction failed", error=str(e), error_type=type(e).__name__, session_id=request.session_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Content extraction failed: {str(e)}"
         )
 
 

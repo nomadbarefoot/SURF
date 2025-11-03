@@ -178,13 +178,44 @@ class BrowserService:
             # Enhanced content processing
             enhanced_result = await self._enhance_extracted_content(result, extract_type)
             
-            # Wrap result in data field for consistency
-            return {
-                "data": enhanced_result,
+            # Flatten response for better accessibility - extract the actual content to top level
+            final_result = {
                 "success": True,
                 "extract_type": extract_type.value,
                 "selector": selector
             }
+            
+            # Add the actual content based on extract type for easy access
+            if extract_type == ExtractType.TEXT:
+                if "raw_content" in enhanced_result and "text" in enhanced_result["raw_content"]:
+                    final_result["content"] = enhanced_result["raw_content"]["text"]
+                elif "text" in enhanced_result:
+                    final_result["content"] = enhanced_result["text"]
+            elif extract_type == ExtractType.HTML:
+                if "raw_content" in enhanced_result and "html" in enhanced_result["raw_content"]:
+                    final_result["content"] = enhanced_result["raw_content"]["html"]
+                elif "html" in enhanced_result:
+                    final_result["content"] = enhanced_result["html"]
+            elif extract_type == ExtractType.LINKS:
+                if "raw_content" in enhanced_result and "links" in enhanced_result["raw_content"]:
+                    final_result["content"] = enhanced_result["raw_content"]["links"]
+                elif "links" in enhanced_result:
+                    final_result["content"] = enhanced_result["links"]
+            elif extract_type == ExtractType.IMAGES:
+                if "raw_content" in enhanced_result and "images" in enhanced_result["raw_content"]:
+                    final_result["content"] = enhanced_result["raw_content"]["images"]
+                elif "images" in enhanced_result:
+                    final_result["content"] = enhanced_result["images"]
+            elif extract_type == ExtractType.TABLE:
+                if "raw_content" in enhanced_result and "table" in enhanced_result["raw_content"]:
+                    final_result["content"] = enhanced_result["raw_content"]["table"]
+                elif "table" in enhanced_result:
+                    final_result["content"] = enhanced_result["table"]
+            
+            # Keep the full enhanced result for detailed info
+            final_result["data"] = enhanced_result
+            
+            return final_result
                 
         except Exception as e:
             logger.error("Content extraction failed", session_id=session.session_id, extract_type=extract_type, error=str(e))

@@ -1,7 +1,7 @@
 """Consolidated Pydantic schemas for Surf Browser Service"""
 from typing import Optional, Dict, Any, List, Union
 from pydantic import BaseModel, Field, validator, HttpUrl
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -439,28 +439,11 @@ class BrowserContext(BaseModel):
     url: Optional[str] = Field(default=None, description="Current URL")
     title: Optional[str] = Field(default=None, description="Page title")
     status: SessionStatus = Field(default=SessionStatus.ACTIVE, description="Session status")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
-    last_activity: datetime = Field(default_factory=datetime.utcnow, description="Last activity timestamp")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last activity timestamp")
     
     class Config:
         use_enum_values = True
-
-
-class SessionData(BaseModel):
-    """Complete session data model"""
-    session_id: str = Field(..., description="Unique session identifier")
-    config: SessionConfig = Field(..., description="Session configuration")
-    context: BrowserContext = Field(..., description="Browser context")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    stats: Dict[str, Any] = Field(default_factory=dict, description="Session statistics")
-    
-    # Runtime objects (not serialized)
-    page: Optional[Any] = Field(default=None, exclude=True, description="Playwright page object")
-    context_obj: Optional[Any] = Field(default=None, exclude=True, description="Playwright context object")
-    
-    class Config:
-        use_enum_values = True
-        arbitrary_types_allowed = True
 
 
 class SessionStats(BaseModel):
@@ -497,6 +480,23 @@ class SessionStats(BaseModel):
     def update_duration(self, duration: float) -> None:
         """Update total duration"""
         self.total_duration += duration
+
+
+class SessionData(BaseModel):
+    """Complete session data model"""
+    session_id: str = Field(..., description="Unique session identifier")
+    config: SessionConfig = Field(..., description="Session configuration")
+    context: BrowserContext = Field(..., description="Browser context")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    stats: SessionStats = Field(default_factory=SessionStats, description="Session statistics")
+    
+    # Runtime objects (not serialized)
+    page: Optional[Any] = Field(default=None, exclude=True, description="Playwright page object")
+    context_obj: Optional[Any] = Field(default=None, exclude=True, description="Playwright context object")
+    
+    class Config:
+        use_enum_values = True
+        arbitrary_types_allowed = True
 
 
 class SessionMetrics(BaseModel):

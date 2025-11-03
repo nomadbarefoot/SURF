@@ -8,9 +8,11 @@ import structlog
 from core.foundation import get_session_service
 from models.schemas import HealthResponse
 from services.session_service import SessionService
+from config.settings import get_settings
 
 logger = structlog.get_logger()
 router = APIRouter()
+settings = get_settings()
 
 # Track service start time
 _start_time = time.time()
@@ -47,9 +49,8 @@ async def health_check(
             version="1.0.0",
             uptime=uptime,
             active_sessions=active_sessions,
-            max_sessions=session_service.session_limits.max_sessions,
-            memory_usage=memory_usage,
-            cpu_usage=cpu_usage
+            max_sessions=settings.max_sessions,
+            memory_usage=memory_usage
         )
         
     except Exception as e:
@@ -75,7 +76,7 @@ async def readiness_check(
         if session_service.browser is None:
             return {"status": "not_ready", "reason": "Browser not initialized"}
         
-        if session_service.active_session_count >= session_service.session_limits.max_sessions:
+        if session_service.active_session_count >= settings.max_sessions:
             return {"status": "not_ready", "reason": "Maximum sessions reached"}
         
         return {"status": "ready"}
@@ -140,8 +141,8 @@ async def get_metrics(
             "service": {
                 "uptime_seconds": uptime,
                 "active_sessions": active_sessions,
-                "max_sessions": session_service.session_limits.max_sessions,
-                "session_utilization": (active_sessions / session_service.session_limits.max_sessions) * 100
+                "max_sessions": settings.max_sessions,
+                "session_utilization": (active_sessions / settings.max_sessions) * 100 if settings.max_sessions > 0 else 0
             },
             "process": {
                 "memory_rss": process_memory.rss,

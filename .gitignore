@@ -63,19 +63,17 @@ htmlcov/
 playwright-report/
 test-results/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-site_memory.db
+# Database - keeping .db files tracked for stateful persistence
+# *.db
+# *.sqlite
+# *.sqlite3
+# Only ignore WAL files and temporary files
+*.db-shm
+*.db-wal
 
 # Cache
 .cache/
 *.cache
-
-# DuckDB
-*.duckdb
-*.duckdb.wal
 
 # Redis dumps
 dump.rdb

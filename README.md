@@ -1,15 +1,15 @@
 # SURF Browser Service - Advanced Web Automation Platform
 
-A sophisticated browser automation service built with FastAPI and Playwright for the VoidOS MCP ecosystem. SURF provides enterprise-grade web scraping, content extraction, and browser automation capabilities with advanced anti-detection, intelligent content processing, and seamless MCP integration.
+A sophisticated standalone headless browser automation service built with FastAPI and Playwright. SURF provides enterprise-grade web scraping, content extraction, and browser automation capabilities with advanced anti-detection, intelligent content processing, and a robust REST API.
 
 ## 🎯 **System Overview**
 
-SURF is a comprehensive browser automation platform that provides powerful web scraping and automation capabilities. Built on modern Python technologies and designed for the VoidOS MCP ecosystem, it provides:
+SURF is a comprehensive standalone browser automation platform that provides powerful web scraping and automation capabilities. Built on modern Python technologies, it can be deployed and run independently:
 
 - **Advanced Web Automation**: Sophisticated content extraction and interaction capabilities
 - **Anti-Detection Features**: Stealth mechanisms and human behavior simulation
 - **Enterprise-Grade Architecture**: Scalable, secure, and maintainable design
-- **MCP Integration**: Seamless integration with the VoidOS MCP ecosystem
+- **REST API**: Complete HTTP API for easy integration with any application
 - **Smart Content Processing**: Rule-based content understanding and optimization
 
 ## 🏗️ **Architecture & Components**
@@ -72,7 +72,7 @@ SURF is a comprehensive browser automation platform that provides powerful web s
 - **Confidence Scoring**: Simple confidence assessment for each chunk
 
 #### **5. Site Memory System (`utils/site_memory.py`)**
-- **Pattern Database**: DuckDB-based storage for site-specific patterns
+- **Pattern Database**: SQLite-based storage for site-specific patterns
 - **Performance Tracking**: Success/failure patterns, timing optimization
 - **Adaptive Strategies**: Site-specific optimization based on historical data
 - **Pattern Recognition**: Identify successful extraction strategies per site
@@ -258,8 +258,8 @@ SURF_REDIS_URL=redis://localhost:6379
 
 2. **Installation**
 ```bash
-   # Clone and navigate
-   cd MCP/servers/surf
+   # Clone and navigate to the project directory
+   cd SURF
    
    # Install dependencies
    pip install -r requirements.txt
@@ -267,9 +267,9 @@ SURF_REDIS_URL=redis://localhost:6379
    # Install Playwright browsers
    playwright install
    
-   # Configure environment
-   cp .env.example .env
-   # Edit .env with your configuration
+   # Configure environment (optional)
+   # Create .env file with your configuration
+   # See Configuration section for available options
    ```
 
 3. **Start Service**
@@ -289,21 +289,21 @@ SURF_REDIS_URL=redis://localhost:6379
 - **Quality Assessment**: Rule-based content quality scoring and relevance filtering
 - **Pattern Learning**: Site-specific pattern recognition and optimization
 
-### **Planned Enhancements** (See `AI_ORCHESTRATOR_PLAN.md`)
+### **Planned Enhancements**
 - **Natural Language Interface**: Process natural language queries for web scraping tasks
 - **Autonomous Operation**: Self-healing and adaptive scraping strategies
 - **Advanced Learning**: Machine learning for continuous improvement
-- **LLM Integration**: Full integration with VoidOS LLM manager for enhanced intelligence
+- **LLM Integration**: Optional integration with LLM models for enhanced intelligence
 
 ### **Future Learning System Architecture**
 ```python
 # Planned AI Agent Structure (Future Enhancement)
 class SurfAIAgent:
     def __init__(self):
-        self.llm_manager = ModelManager()  # VoidOS LLM integration
+        self.llm_client = None  # Optional LLM integration
         self.pattern_learner = PatternLearner()
         self.strategy_selector = StrategySelector()
-        self.tool_orchestrator = ToolOrchestrator()
+        self.task_orchestrator = TaskOrchestrator()
     
     async def process_query(self, query: str) -> Dict:
         """Process natural language query and execute scraping task"""
@@ -314,10 +314,10 @@ class SurfAIAgent:
         return result
 ```
 
-## 🔄 **MCP Integration**
+## 🔌 **API Integration**
 
-### **Tool Registration**
-SURF automatically registers as an MCP server and exposes browser automation tools:
+### **REST API**
+SURF exposes a comprehensive REST API for browser automation:
 
 - **Browser Management**: Session creation, management, and cleanup
 - **Navigation Tools**: URL navigation with various wait strategies
@@ -327,11 +327,11 @@ SURF automatically registers as an MCP server and exposes browser automation too
 - **Batch Operations**: Execute multiple operations in parallel or sequence
 - **Smart Tools**: Content analysis, structured data extraction, CAPTCHA detection
 
-### **Cross-Service Communication**
-- **Unified Configuration**: Uses MCP configuration system
-- **Service Discovery**: Automatic discovery by other MCP services
-- **Data Sharing**: Seamless data flow between MCP services
-- **Event System**: Integration with MCP event system for real-time updates
+### **Integration Options**
+- **HTTP Clients**: Use any HTTP client (httpx, requests, curl, etc.)
+- **Python SDK**: Direct Python integration via the service layer
+- **Webhooks**: Real-time event notifications (future enhancement)
+- **WebSocket**: Real-time bidirectional communication (future enhancement)
 
 ## 📈 **Performance & Monitoring**
 
@@ -521,9 +521,9 @@ SURF_HEADLESS=true
 
 ## 📚 **Documentation & Resources**
 
-- **API Documentation**: Available at `http://localhost:8000/docs` when running
+- **API Documentation**: Available at `http://localhost:8000/docs` when running (FastAPI auto-generated docs)
+- **Interactive API**: Swagger UI at `http://localhost:8000/docs`, ReDoc at `http://localhost:8000/redoc`
 - **Configuration Guide**: See `config/settings.py` for all available options
-- **Upgrade Roadmap**: See `next_upgrades.md` for planned enhancements
 - **Examples**: See `examples/` directory for usage examples
 
 ## 🤝 **Contributing**
@@ -544,18 +544,17 @@ SURF_HEADLESS=true
 
 ## 📄 **License & Acknowledgments**
 
-This project is licensed under the MIT License and is part of the VoidOS MCP ecosystem.
+This project is licensed under the MIT License.
 
 **Key Technologies:**
 - **Playwright**: Browser automation framework
 - **FastAPI**: Modern Python web framework
 - **Pydantic**: Data validation and serialization
-- **DuckDB**: High-performance analytical database
-- **Redis**: In-memory data structure store
-- **VoidOS MCP**: Microservice architecture platform
+- **SQLite**: Embedded database for site memory storage
+- **Redis**: In-memory data structure store (optional)
 
 ---
 
-**Built with ❤️ for advanced web automation in the VoidOS ecosystem**
+**Built with ❤️ for advanced web automation**
 
-*SURF provides powerful web scraping capabilities with sophisticated anti-detection, smart content processing, and seamless MCP integration for maximum effectiveness and reliability.*
+*SURF provides powerful web scraping capabilities with sophisticated anti-detection, smart content processing, and a robust REST API for maximum effectiveness and reliability.*

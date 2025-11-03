@@ -154,7 +154,7 @@ class SessionService:
                         "created_by": "api",
                         "browser_type": config.browser_type
                     },
-                    stats=SessionStats().dict()
+                    stats=SessionStats()
                 )
                 
                 # Store session with page and context references
@@ -226,7 +226,8 @@ class SessionService:
             raise InvalidSessionError(session_id, f"Session limits exceeded: {', '.join(violations)}")
         
         # Update last activity
-        session.context.last_activity = datetime.utcnow()
+        from datetime import timezone
+        session.context.last_activity = datetime.now(timezone.utc)
         
         return session
     
