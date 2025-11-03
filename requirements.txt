@@ -34,21 +34,4 @@ psutil>=5.9.6
 # redis>=5.0.1
 # aioredis>=2.0.1
 
-# ==============================================================================
-# Development Tools (Optional - install with: pip install -e ".[dev]")
-# ==============================================================================
-# These are typically installed separately for development
-# Uncomment for development:
-# pytest>=7.4.3
-# pytest-asyncio>=0.21.1
-# pytest-httpx>=0.26.0
-# black>=23.11.0
-# isort>=5.12.0
-# flake8>=6.1.0
-# mypy>=1.7.1
 
-# ==============================================================================
-# Optional Enhancements
-# ==============================================================================
-# Prometheus metrics (optional)
-# prometheus-client>=0.19.0
