@@ -1,7 +1,7 @@
 """Minimal SURF client for agents and one-off scripts.
 
 Run SURF first:
-    SURF_HOST=127.0.0.1 SURF_PORT=6670 .venv/bin/uvicorn main:app --host 127.0.0.1 --port 6670
+    .venv/bin/python start_surf.py
 """
 import json
 import os
@@ -10,13 +10,12 @@ import time
 import httpx
 
 
-BASE_URL = os.getenv("SURF_BASE_URL", "http://127.0.0.1:6670")
+BASE_URL = os.getenv("SURF_BASE_URL", "http://127.0.0.1:17777")
 
 
 def main() -> None:
     with httpx.Client(timeout=180.0) as client:
-        token = login(client)
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = auth_headers()
         session_id = create_session(client, headers)
 
         try:
@@ -50,13 +49,9 @@ def main() -> None:
             close_session(client, headers, session_id)
 
 
-def login(client: httpx.Client) -> str:
-    response = client.post(
-        f"{BASE_URL}/auth/login",
-        json={"username": "agent", "password": "password123"},
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]
+def auth_headers() -> dict[str, str]:
+    token = os.getenv("SURF_API_TOKEN")
+    return {"Authorization": f"Bearer {token}"} if token else {}
 
 
 def create_session(client: httpx.Client, headers: dict[str, str]) -> str:
@@ -69,6 +64,7 @@ def create_session(client: httpx.Client, headers: dict[str, str]) -> str:
                 "headed": True,
                 "persist_profile": True,
                 "stealth_strategy": "minimal",
+                "block_mode": "conservative",
             }
         },
     )
@@ -97,7 +93,7 @@ def observe(client: httpx.Client, headers: dict[str, str], session_id: str) -> d
     response = client.post(
         f"{BASE_URL}/browser/observe",
         headers=headers,
-        json={"session_id": session_id, "max_text_length": 4000, "max_items": 50},
+        json={"session_id": session_id, "max_text_length": 4000, "max_items": 50, "content_mode": "compact"},
     )
     response.raise_for_status()
     return response.json()["data"]
@@ -116,7 +112,7 @@ def fetch_json(
         json={
             "method": "GET",
             "url": url,
-            "backend": "curl_cffi",
+            "backend": "browser" if "nseindia.com/api/" in url else "curl_cffi",
             "session_id": session_id,
             "headers": extra_headers,
             "timeout": 60000,

@@ -1,32 +1,47 @@
 #!/usr/bin/env python3
-"""
-Start Surf Browser Service for testing
-"""
+"""Start SURF on a local port with a small conflict check."""
+import os
+import socket
+import sys
 
 import uvicorn
-import sys
-import os
 
-# Add current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config.settings import get_settings
+
+
+def port_available(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex((host, port)) != 0
+
+
+def choose_port(host: str, preferred: int) -> int:
+    if os.getenv("SURF_STRICT_PORT", "").lower() in {"1", "true", "yes"}:
+        if port_available(host, preferred):
+            return preferred
+        raise RuntimeError(f"SURF startup port {preferred} is not available")
+
+    candidates = [preferred, 17778]
+    for port in candidates:
+        if port_available(host, port):
+            return port
+    raise RuntimeError(f"No SURF startup port available from {candidates}")
+
 
 if __name__ == "__main__":
-    print("🚀 Starting Surf Browser Service...")
-    print("📍 URL: http://localhost:6660")
-    print("📚 API Docs: http://localhost:6660/docs")
-    print("🔍 Health Check: http://localhost:6660/health")
-    print("=" * 50)
-    
-    try:
-        uvicorn.run(
-            "main:app",
-            host="0.0.0.0",
-            port=6660,
-            reload=True,
-            log_level="info"
-        )
-    except KeyboardInterrupt:
-        print("\n🛑 Service stopped by user")
-    except Exception as e:
-        print(f"❌ Error starting service: {e}")
-        sys.exit(1)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    settings = get_settings()
+    settings.validate_runtime_security()
+    port = choose_port(settings.host, settings.port)
+    print(f"Starting SURF at http://{settings.host}:{port}")
+    print(f"Health: http://{settings.host}:{port}/health")
+    if settings.debug:
+        print(f"Docs: http://{settings.host}:{port}/docs")
+
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=port,
+        reload=settings.debug,
+        log_level=settings.log_level.lower()
+    )

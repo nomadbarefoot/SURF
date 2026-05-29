@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
 from core.foundation import get_current_user, get_browser_service, get_session_service
-from core.foundation import BrowserOperationError, SessionNotFoundError
+from core.foundation import BrowserOperationError, SessionNotFoundError, SessionBusyError
 from models.schemas import (
     NavigateRequest, ExtractRequest, InteractRequest, ScreenshotRequest,
     NavigationResponse, ExtractResponse, InteractResponse, ScreenshotResponse,
     ObserveRequest, ObserveResponse, WaitRequest, WaitResponse,
     NetworkCaptureRequest, NetworkCaptureResponse,
+    DownloadClickRequest, DownloadResponse,
     StructuredDataRequest, StructuredDataResponse, 
     CaptchaDetectionRequest, CaptchaDetectionResponse
 )
@@ -30,16 +31,15 @@ async def navigate(
     """Navigate to a URL with intelligent waiting"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Perform navigation
-        result = await browser_service.navigate_to_url(
-            session=session,
-            url=str(request.url),
-            wait_until=request.wait_until,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(request.session_id, "navigate") as session:
+            session_service.start_navigation_snapshot(session)
+            result = await browser_service.navigate_to_url(
+                session=session,
+                url=str(request.url),
+                wait_until=request.wait_until,
+                timeout=request.timeout
+            )
+            result["blocker_delta"] = session_service.finish_navigation_snapshot(session)
         
         # Update session stats
         await session_service.update_session_stats(
@@ -52,6 +52,8 @@ async def navigate(
             data=result
         )
         
+    except HTTPException:
+        raise
     except SessionNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -81,16 +83,13 @@ async def extract_content(
     """Extract content with smart fallback strategies"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Perform extraction
-        result = await browser_service.extract_content(
-            session=session,
-            extract_type=request.extract_type,
-            selector=request.selector,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(request.session_id, "extract") as session:
+            result = await browser_service.extract_content(
+                session=session,
+                extract_type=request.extract_type,
+                selector=request.selector,
+                timeout=request.timeout
+            )
         
         # Update session stats
         await session_service.update_session_stats(
@@ -103,6 +102,8 @@ async def extract_content(
             data=result
         )
         
+    except HTTPException:
+        raise
     except SessionNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,18 +133,15 @@ async def interact_with_element(
     """Perform element interactions with human-like behavior"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Perform interaction
-        result = await browser_service.interact_with_element(
-            session=session,
-            action=request.action,
-            selector=request.selector,
-            value=request.value,
-            options=request.options,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(request.session_id, "interact") as session:
+            result = await browser_service.interact_with_element(
+                session=session,
+                action=request.action,
+                selector=request.selector,
+                value=request.value,
+                options=request.options,
+                timeout=request.timeout
+            )
         
         # Update session stats
         await session_service.update_session_stats(
@@ -179,18 +177,15 @@ async def take_screenshot(
     """Capture page or element screenshots"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Take screenshot
-        result = await browser_service.take_screenshot(
-            session=session,
-            selector=request.selector,
-            full_page=request.full_page,
-            path=request.path,
-            quality=request.quality,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(request.session_id, "screenshot") as session:
+            result = await browser_service.take_screenshot(
+                session=session,
+                selector=request.selector,
+                full_page=request.full_page,
+                path=request.path,
+                quality=request.quality,
+                timeout=request.timeout
+            )
         
         # Update session stats
         await session_service.update_session_stats(
@@ -225,13 +220,14 @@ async def observe_page(
 ):
     """Return a compact agent-friendly observation of the current page"""
     try:
-        session = await session_service.get_session(request.session_id)
-        result = await browser_service.observe_page(
-            session=session,
-            include_screenshot=request.include_screenshot,
-            max_text_length=request.max_text_length,
-            max_items=request.max_items
-        )
+        async with session_service.session_operation(request.session_id, "observe") as session:
+            result = await browser_service.observe_page(
+                session=session,
+                include_screenshot=request.include_screenshot,
+                max_text_length=request.max_text_length,
+                max_items=request.max_items,
+                content_mode=request.content_mode or session.config.content_mode
+            )
         return ObserveResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -249,15 +245,15 @@ async def wait_for_condition(
 ):
     """Wait for an explicit browser condition"""
     try:
-        session = await session_service.get_session(request.session_id)
-        result = await browser_service.wait_for_condition(
-            session=session,
-            selector=request.selector,
-            text=request.text,
-            url_contains=request.url_contains,
-            load_state=request.load_state,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(request.session_id, "wait") as session:
+            result = await browser_service.wait_for_condition(
+                session=session,
+                selector=request.selector,
+                text=request.text,
+                url_contains=request.url_contains,
+                load_state=request.load_state,
+                timeout=request.timeout
+            )
         return WaitResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -275,11 +271,11 @@ async def start_network_capture(
 ):
     """Start bounded response capture for a session"""
     try:
-        session = await session_service.get_session(request.session_id)
-        result = await browser_service.start_network_capture(
-            session=session,
-            filters=request.dict(exclude={"session_id"})
-        )
+        async with session_service.session_operation(request.session_id, "network_start") as session:
+            result = await browser_service.start_network_capture(
+                session=session,
+                filters=request.dict(exclude={"session_id"})
+            )
         return NetworkCaptureResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -297,8 +293,8 @@ async def stop_network_capture(
 ):
     """Stop response capture for a session"""
     try:
-        session = await session_service.get_session(request.session_id)
-        result = await browser_service.stop_network_capture(session=session)
+        async with session_service.session_operation(request.session_id, "network_stop") as session:
+            result = await browser_service.stop_network_capture(session=session)
         return NetworkCaptureResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -316,14 +312,38 @@ async def get_network_events(
 ):
     """Return captured response events for a session"""
     try:
-        session = await session_service.get_session(session_id)
-        result = await browser_service.get_network_events(session=session)
+        async with session_service.session_operation(session_id, "network_events") as session:
+            result = await browser_service.get_network_events(session=session)
         return NetworkCaptureResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error("Network capture read failed", error=str(e), session_id=session_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Network capture read failed")
+
+
+@router.post("/download/click", response_model=DownloadResponse)
+async def click_download(
+    request: DownloadClickRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Click an element that triggers a download and save it in the SURF sandbox."""
+    try:
+        async with session_service.session_operation(request.session_id, "download") as session:
+            result = await browser_service.click_and_download(
+                session=session,
+                selector=request.selector,
+                timeout=request.timeout,
+                filename=request.filename
+            )
+        return DownloadResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Download click failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Download failed: {str(e)}")
 
 
 @router.post("/batch")
@@ -339,16 +359,13 @@ async def batch_operations(
     """Perform multiple operations in parallel or sequence"""
     
     try:
-        # Get session
-        session = await session_service.get_session(session_id)
-        
         if parallel:
-            # Parallel processing
-            results = await _execute_parallel_operations(
-                operations, session, browser_service, max_concurrent
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Parallel batch operations on one page are disabled; send sequential operations or separate sessions."
             )
-        else:
-            # Sequential processing (original behavior)
+
+        async with session_service.session_operation(session_id, "batch") as session:
             results = await _execute_sequential_operations(
                 operations, session, browser_service
             )
@@ -365,9 +382,16 @@ async def batch_operations(
             "max_concurrent": max_concurrent if parallel else 1
         }
         
+    except HTTPException:
+        raise
     except SessionNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except SessionBusyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
         )
     except Exception as e:
@@ -474,10 +498,14 @@ async def _execute_operation(operation: dict, session, browser_service) -> dict:
         op_type = operation.get("type")
         
         if op_type == "navigate":
+            wait_until = operation.get("wait_until", "domcontentloaded")
+            if isinstance(wait_until, str):
+                from models.schemas import WaitUntil
+                wait_until = WaitUntil(wait_until)
             result = await browser_service.navigate_to_url(
                 session=session,
                 url=operation["url"],
-                wait_until=operation.get("wait_until", "networkidle"),
+                wait_until=wait_until,
                 timeout=operation.get("timeout")
             )
         elif op_type == "extract":

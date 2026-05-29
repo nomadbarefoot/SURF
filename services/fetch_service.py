@@ -2,6 +2,7 @@
 import asyncio
 import time
 from typing import Any, Dict, Optional, List
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 import structlog
 
@@ -25,7 +26,8 @@ class FetchService:
         timeout: int = 30000,
         backend: FetchBackend = FetchBackend.AUTO,
         cookies: Optional[List[Dict[str, Any]]] = None,
-        impersonate: Optional[str] = "chrome"
+        impersonate: Optional[str] = "chrome",
+        browser_context: Optional[Any] = None
     ) -> Dict[str, Any]:
         """Execute a one-off HTTP request."""
         backend_value = backend.value if hasattr(backend, "value") else str(backend)
@@ -33,7 +35,11 @@ class FetchService:
         started = time.time()
 
         try:
-            if selected_backend == FetchBackend.CURL_CFFI.value:
+            if selected_backend == FetchBackend.BROWSER.value:
+                result = await self._request_browser_context(
+                    browser_context, method, url, headers, params, body, json_body, timeout
+                )
+            elif selected_backend == FetchBackend.CURL_CFFI.value:
                 result = await self._request_curl_cffi(
                     method, url, headers, params, body, json_body, timeout, cookies, impersonate
                 )
@@ -59,6 +65,35 @@ class FetchService:
             return FetchBackend.HTTPX.value
         return backend
 
+    async def _request_browser_context(
+        self,
+        browser_context: Any,
+        method: str,
+        url: str,
+        headers: Optional[Dict[str, str]],
+        params: Optional[Dict[str, Any]],
+        body: Optional[Any],
+        json_body: Optional[Any],
+        timeout: int
+    ) -> Dict[str, Any]:
+        if browser_context is None:
+            raise BrowserOperationError("fetch", "browser backend requires a session_id with a browser context")
+        request_url = self._url_with_params(url, params)
+        data = body
+        if json_body is not None:
+            import json
+            data = json.dumps(json_body)
+            headers = {**(headers or {}), "content-type": "application/json"}
+        response = await browser_context.request.fetch(
+            request_url,
+            method=method.upper(),
+            headers=headers,
+            data=data,
+            timeout=timeout
+        )
+        content = await response.body()
+        return self._format_response(response.status, response.url, response.headers, content)
+
     async def _request_httpx(
         self,
         method: str,
@@ -82,7 +117,7 @@ class FetchService:
                 json=json_body,
                 cookies=self._cookie_dict(cookies)
             )
-            return self._format_response(response.status_code, str(response.url), response.headers, response.text)
+            return self._format_response(response.status_code, str(response.url), response.headers, response.content)
 
     async def _request_curl_cffi(
         self,
@@ -112,7 +147,7 @@ class FetchService:
                 cookies=self._cookie_dict(cookies),
                 allow_redirects=True
             )
-            return self._format_response(response.status_code, response.url, response.headers, response.text)
+            return self._format_response(response.status_code, response.url, response.headers, response.content)
 
     async def _request_cloudscraper(
         self,
@@ -143,18 +178,21 @@ class FetchService:
                 cookies=self._cookie_dict(cookies),
                 allow_redirects=True
             )
-            return self._format_response(response.status_code, response.url, response.headers, response.text)
+            return self._format_response(response.status_code, response.url, response.headers, response.content)
 
         return await asyncio.to_thread(run_request)
 
-    def _format_response(self, status: int, url: str, headers: Any, text: str) -> Dict[str, Any]:
+    def _format_response(self, status: int, url: str, headers: Any, content: Any) -> Dict[str, Any]:
+        raw = content if isinstance(content, bytes) else str(content).encode("utf-8", errors="replace")
+        text = raw.decode("utf-8", errors="replace")
         data = {
             "status": status,
             "url": url,
             "headers": dict(headers),
             "text": text,
             "text_preview": text[:4000],
-            "length": len(text)
+            "length": len(raw),
+            "_content_bytes": raw
         }
         try:
             import json
@@ -162,6 +200,14 @@ class FetchService:
         except Exception:
             data["json"] = None
         return data
+
+    def _url_with_params(self, url: str, params: Optional[Dict[str, Any]]) -> str:
+        if not params:
+            return url
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query))
+        query.update({key: str(value) for key, value in params.items()})
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
     def _cookie_dict(self, cookies: Optional[List[Dict[str, Any]]]) -> Dict[str, str]:
         if not cookies:

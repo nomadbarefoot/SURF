@@ -18,6 +18,30 @@ settings = get_settings()
 _start_time = time.time()
 
 
+def _process_memory_tree() -> Dict[str, Any]:
+    process = psutil.Process()
+    children = process.children(recursive=True)
+    process_memory = process.memory_info()
+    child_rss = 0
+    child_count = 0
+    for child in children:
+        try:
+            child_rss += child.memory_info().rss
+            child_count += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {
+        "pid": process.pid,
+        "rss": process_memory.rss,
+        "vms": process_memory.vms,
+        "child_count": child_count,
+        "child_rss": child_rss,
+        "tree_rss": process_memory.rss + child_rss,
+        "num_threads": process.num_threads(),
+        "create_time": process.create_time(),
+    }
+
+
 @router.get("/", response_model=HealthResponse)
 async def health_check(
     session_service: SessionService = Depends(get_session_service)
@@ -72,14 +96,15 @@ async def readiness_check(
     """Readiness check for load balancers"""
     
     try:
-        # Check if service is ready to accept requests
-        if session_service.browser is None:
-            return {"status": "not_ready", "reason": "Browser not initialized"}
-        
         if session_service.active_session_count >= settings.max_sessions:
             return {"status": "not_ready", "reason": "Maximum sessions reached"}
         
-        return {"status": "ready"}
+        return {
+            "status": "ready",
+            "active_sessions": session_service.active_session_count,
+            "max_sessions": settings.max_sessions,
+            "browser_runtime": session_service.browser_runtime_state(),
+        }
         
     except Exception as e:
         logger.error("Readiness check failed", error=str(e))
@@ -115,9 +140,7 @@ async def get_metrics(
         uptime = time.time() - _start_time
         active_sessions = session_service.active_session_count
         
-        # Process metrics
-        process = psutil.Process()
-        process_memory = process.memory_info()
+        process_memory = _process_memory_tree()
         
         metrics = {
             "system": {
@@ -145,11 +168,14 @@ async def get_metrics(
                 "session_utilization": (active_sessions / settings.max_sessions) * 100 if settings.max_sessions > 0 else 0
             },
             "process": {
-                "memory_rss": process_memory.rss,
-                "memory_vms": process_memory.vms,
-                "cpu_percent": process.cpu_percent(),
-                "num_threads": process.num_threads(),
-                "create_time": process.create_time()
+                "memory_rss": process_memory["rss"],
+                "memory_vms": process_memory["vms"],
+                "child_count": process_memory["child_count"],
+                "child_memory_rss": process_memory["child_rss"],
+                "tree_memory_rss": process_memory["tree_rss"],
+                "cpu_percent": psutil.Process().cpu_percent(),
+                "num_threads": process_memory["num_threads"],
+                "create_time": process_memory["create_time"]
             }
         }
         
@@ -157,4 +183,34 @@ async def get_metrics(
         
     except Exception as e:
         logger.error("Failed to get metrics", error=str(e))
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/runtime")
+async def runtime_check(
+    session_service: SessionService = Depends(get_session_service)
+):
+    """Cheap runtime state for agents and local supervisors."""
+    try:
+        return {
+            "success": True,
+            "service": {
+                "status": "running",
+                "version": "1.0.0",
+                "uptime_seconds": time.time() - _start_time,
+            },
+            "limits": {
+                "max_sessions": settings.max_sessions,
+                "max_headed_sessions": settings.max_headed_sessions,
+                "session_idle_timeout_seconds": settings.idle_timeout_seconds,
+                "browser_idle_timeout_seconds": settings.browser_idle_timeout_seconds,
+            },
+            "sessions": {
+                "active": session_service.active_session_count,
+            },
+            "browser_runtime": session_service.browser_runtime_state(),
+            "process": _process_memory_tree(),
+        }
+    except Exception as e:
+        logger.error("Runtime check failed", error=str(e))
         return {"success": False, "error": str(e)}

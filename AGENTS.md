@@ -1,47 +1,63 @@
 # SURF Agent Guide
 
-SURF exposes a local HTTP API for browser-backed browsing, observation, extraction, network capture, and fetches.
+SURF exposes a local HTTP API for browser-backed browsing, observation, extraction, network capture, fetches, and sandboxed downloads.
 
-## Default Endpoint
+## Endpoint
 
-Use:
+Use `SURF_BASE_URL` when present. Otherwise default to:
 
 ```text
-http://127.0.0.1:6670
+http://127.0.0.1:17777
 ```
 
-unless the user provides another `SURF_BASE_URL`.
+## Auth
 
-## Recommended Agent Workflow
+Default local mode is `SURF_AUTH_MODE=loopback`; do not login and do not send a bearer token.
 
-1. `POST /auth/login` with any local demo credentials that satisfy validation.
-2. `POST /sessions/` with a stable `profile_id`.
+If `SURF_API_TOKEN` is present, send:
+
+```text
+Authorization: Bearer $SURF_API_TOKEN
+```
+
+`/auth/login` and `/auth/api-key` are disabled compatibility endpoints.
+
+## Workflow
+
+1. `POST /sessions/` with a stable `profile_id`.
+2. `POST /browser/network/start` before navigation when XHR/API discovery matters.
 3. `POST /browser/navigate` with `wait_until="domcontentloaded"`.
-4. `POST /browser/observe` to get title, visible text, links, forms, buttons, tables, and warnings.
+4. `POST /browser/observe`; omit `content_mode` to use the session default.
 5. Use `/browser/interact` and `/browser/wait` for page workflows.
-6. Use `/browser/network/start` before navigation when API/XHR discovery matters.
-7. Use `/fetch/request` with `session_id` when an endpoint needs browser cookies.
-8. `DELETE /sessions/{session_id}` when done.
+6. Use `/fetch/request` with `session_id` when an endpoint needs browser cookies.
+7. Use `/browser/download/click` or `/fetch/request save_to_downloads=true` for files.
+8. Use `/sessions/monitor` or `/sessions/{session_id}/touch` for long workflows.
+9. `DELETE /sessions/{session_id}` when done.
 
-## Safety Defaults
+## Payloads
 
-- Keep request volume low.
-- Do not automate CAPTCHA solving.
-- Back off on 403, 429, login walls, or challenge warnings.
-- Prefer browser-backed sessions for protected or JS-heavy sites.
-- Prefer direct fetch only after the browser has established cookies/session context.
-
-## Useful Payloads
-
-Create session:
+Default silent session:
 
 ```json
 {
   "config": {
     "profile_id": "agent-default",
+    "persist_profile": true,
+    "block_mode": "conservative",
+    "content_mode": "compact"
+  }
+}
+```
+
+Visible session for protected or interactive sites:
+
+```json
+{
+  "config": {
+    "profile_id": "agent-protected",
     "headed": true,
     "persist_profile": true,
-    "stealth_strategy": "minimal"
+    "block_mode": "conservative"
   }
 }
 ```
@@ -61,9 +77,31 @@ Fetch with browser cookies:
 ```json
 {
   "method": "GET",
-  "url": "https://www.nseindia.com/api/marketStatus",
-  "backend": "curl_cffi",
+  "url": "https://example.com/api/data",
+  "backend": "browser",
   "session_id": "sess_xxxxxxxx",
   "timeout": 60000
 }
 ```
+
+Save fetch response:
+
+```json
+{
+  "method": "GET",
+  "url": "https://example.com/report.csv",
+  "backend": "browser",
+  "session_id": "sess_xxxxxxxx",
+  "save_to_downloads": true,
+  "download_filename": "report.csv"
+}
+```
+
+## Constraints
+
+- Only one active persistent session may use a given `profile_id`.
+- Operations on a session are serialized; use separate sessions for independent parallel work.
+- Silent mode is default. Use `"headed": true` or `"silent": false` when normal visible-browser interaction is needed.
+- Leave `user_agent` unset unless the user requests an override.
+- Back off on 403, 429, CAPTCHA, login-wall, or challenge warnings.
+- Do not automate CAPTCHA solving, credential bypass, access-control bypass, or high-volume crawling.

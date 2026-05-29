@@ -1,49 +1,76 @@
 """Enhanced configuration management for Surf Browser Service"""
-import os
 from typing import List, Dict, Any, Optional
+from ipaddress import ip_address
 from pydantic import Field, validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     """Centralized configuration with environment variable support"""
+    model_config = SettingsConfigDict(
+        env_prefix="SURF_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+        enable_decoding=False
+    )
     
     # Server Configuration
-    host: str = Field(default="0.0.0.0", env="SURF_HOST")
-    port: int = Field(default=8000, env="SURF_PORT")
-    debug: bool = Field(default=False, env="SURF_DEBUG")
-    log_level: str = Field(default="INFO", env="SURF_LOG_LEVEL")
+    host: str = Field(default="127.0.0.1")
+    port: int = Field(default=17777)
+    debug: bool = Field(default=False)
+    log_level: str = Field(default="INFO")
     
     # Security Configuration
-    secret_key: str = Field(default="your-secret-key-change-this", env="SURF_SECRET_KEY")
-    access_token_expire_minutes: int = Field(default=30, env="SURF_ACCESS_TOKEN_EXPIRE_MINUTES")
-    algorithm: str = Field(default="HS256", env="SURF_ALGORITHM")
+    secret_key: str = Field(default="your-secret-key-change-this")
+    access_token_expire_minutes: int = Field(default=30)
+    algorithm: str = Field(default="HS256")
+    api_token: Optional[str] = Field(default=None)
+    auth_mode: str = Field(default="loopback")
     
     # Rate Limiting
-    rate_limit_requests: int = Field(default=100, env="SURF_RATE_LIMIT_REQUESTS")
-    rate_limit_window: int = Field(default=60, env="SURF_RATE_LIMIT_WINDOW")  # seconds
+    rate_limit_requests: int = Field(default=100)
+    rate_limit_window: int = Field(default=60)  # seconds
     
     # Session Management
-    max_sessions: int = Field(default=20, env="SURF_MAX_SESSIONS")
-    session_ttl: int = Field(default=300, env="SURF_SESSION_TTL")  # 5 minutes
-    session_cleanup_interval: int = Field(default=60, env="SURF_SESSION_CLEANUP_INTERVAL")  # seconds
+    max_sessions: int = Field(default=3)
+    max_headed_sessions: int = Field(default=1)
+    session_ttl: int = Field(default=7200)
+    idle_timeout_seconds: int = Field(default=600)
+    hard_ttl_seconds: int = Field(default=7200)
+    session_cleanup_interval: int = Field(default=30)
+    browser_idle_timeout_seconds: int = Field(default=60)
     
     # Browser Configuration
-    headless: bool = Field(default=False, env="SURF_HEADLESS")
-    default_timeout: int = Field(default=30000, env="SURF_DEFAULT_TIMEOUT")  # 30 seconds
-    max_page_load_timeout: int = Field(default=60000, env="SURF_MAX_PAGE_LOAD_TIMEOUT")  # 60 seconds
-    profiles_dir: str = Field(default="data/profiles", env="SURF_PROFILES_DIR")
-    default_profile_id: str = Field(default="default", env="SURF_DEFAULT_PROFILE_ID")
-    persist_profiles: bool = Field(default=True, env="SURF_PERSIST_PROFILES")
+    headless: bool = Field(default=True)
+    default_silent: bool = Field(default=True)
+    default_timeout: int = Field(default=30000)  # 30 seconds
+    max_page_load_timeout: int = Field(default=60000)  # 60 seconds
+    profiles_dir: str = Field(default="data/profiles")
+    default_profile_id: str = Field(default="default")
+    persist_profiles: bool = Field(default=True)
+    downloads_dir: str = Field(default="data/downloads")
+    max_download_size_bytes: int = Field(default=104857600)
+    download_retention_seconds: int = Field(default=86400)
     
     # Performance & Stealth
-    enable_stealth: bool = Field(default=False, env="SURF_ENABLE_STEALTH")
-    stealth_strategy: str = Field(default="minimal", env="SURF_STEALTH_STRATEGY")
-    block_resources: List[str] = Field(default=[], env="SURF_BLOCK_RESOURCES")
+    enable_stealth: bool = Field(default=False)
+    stealth_strategy: str = Field(default="minimal")
+    block_resources: List[str] = Field(default=[])
+    block_mode: str = Field(default="conservative")
+    content_mode: str = Field(default="compact")
+    adblock_enabled: bool = Field(default=True)
+    adblock_filter_urls: List[str] = Field(default=[
+        "https://easylist.to/easylist/easylist.txt",
+        "https://easylist.to/easylist/easyprivacy.txt"
+    ])
+    adblock_cache_dir: str = Field(default="data/filterlists")
+    adblock_cache_ttl_seconds: int = Field(default=86400)
     default_viewport: Dict[str, int] = Field(default={"width": 1920, "height": 1080})
-    default_locale: str = Field(default="en-US", env="SURF_DEFAULT_LOCALE")
-    default_timezone_id: str = Field(default="Asia/Kolkata", env="SURF_DEFAULT_TIMEZONE_ID")
+    default_locale: str = Field(default="en-US")
+    default_timezone_id: str = Field(default="Asia/Kolkata")
     
     # User Agents Pool
     user_agents: List[str] = Field(default=[
@@ -55,52 +82,57 @@ class Settings(BaseSettings):
     ])
     
     # Caching Configuration
-    enable_cache: bool = Field(default=True, env="SURF_ENABLE_CACHE")
-    cache_ttl: int = Field(default=300, env="SURF_CACHE_TTL")  # 5 minutes
-    redis_url: Optional[str] = Field(default=None, env="SURF_REDIS_URL")
+    enable_cache: bool = Field(default=True)
+    cache_ttl: int = Field(default=300)  # 5 minutes
+    redis_url: Optional[str] = Field(default=None)
     
     # Request Limits
-    max_request_size: int = Field(default=10485760, env="SURF_MAX_REQUEST_SIZE")  # 10MB
-    max_url_length: int = Field(default=2048, env="SURF_MAX_URL_LENGTH")
+    max_request_size: int = Field(default=10485760)  # 10MB
+    max_url_length: int = Field(default=2048)
     
     # Monitoring
-    enable_metrics: bool = Field(default=True, env="SURF_ENABLE_METRICS")
-    metrics_port: int = Field(default=9090, env="SURF_METRICS_PORT")
+    enable_metrics: bool = Field(default=True)
+    metrics_port: int = Field(default=9090)
     
     # CORS Configuration
-    cors_origins: List[str] = Field(default=["*"], env="SURF_CORS_ORIGINS")
-    cors_methods: List[str] = Field(default=["GET", "POST", "PUT", "DELETE"], env="SURF_CORS_METHODS")
-    cors_headers: List[str] = Field(default=["*"], env="SURF_CORS_HEADERS")
+    cors_origins: List[str] = Field(default=[
+        "http://127.0.0.1",
+        "http://localhost",
+        "http://127.0.0.1:17777",
+        "http://localhost:17777"
+    ])
+    cors_methods: List[str] = Field(default=["GET", "POST", "PUT", "DELETE"])
+    cors_headers: List[str] = Field(default=["*"])
     
     # Enhanced Features Configuration
-    enable_adaptive_rate_limiting: bool = Field(default=True, env="SURF_ENABLE_ADAPTIVE_RATE_LIMITING")
-    enable_site_memory: bool = Field(default=True, env="SURF_ENABLE_SITE_MEMORY")
-    enable_semantic_chunking: bool = Field(default=True, env="SURF_ENABLE_SEMANTIC_CHUNKING")
-    enable_content_deduplication: bool = Field(default=True, env="SURF_ENABLE_CONTENT_DEDUPLICATION")
-    enable_enhanced_mouse_movement: bool = Field(default=True, env="SURF_ENABLE_ENHANCED_MOUSE_MOVEMENT")
-    policy_mode: str = Field(default="permissive", env="SURF_POLICY_MODE")
-    per_domain_delay_seconds: float = Field(default=2.0, env="SURF_PER_DOMAIN_DELAY_SECONDS")
+    enable_adaptive_rate_limiting: bool = Field(default=True)
+    enable_site_memory: bool = Field(default=True)
+    enable_semantic_chunking: bool = Field(default=True)
+    enable_content_deduplication: bool = Field(default=True)
+    enable_enhanced_mouse_movement: bool = Field(default=True)
+    policy_mode: str = Field(default="permissive")
+    per_domain_delay_seconds: float = Field(default=2.0)
     
     # Site Memory Configuration
-    site_memory_ttl: int = Field(default=86400, env="SURF_SITE_MEMORY_TTL")  # 24 hours
+    site_memory_ttl: int = Field(default=86400)  # 24 hours
     
     # Adaptive Rate Limiting Configuration
-    adaptive_rate_base_delay: float = Field(default=2.0, env="SURF_ADAPTIVE_RATE_BASE_DELAY")
-    adaptive_rate_min_delay: float = Field(default=0.5, env="SURF_ADAPTIVE_RATE_MIN_DELAY")
-    adaptive_rate_max_delay: float = Field(default=10.0, env="SURF_ADAPTIVE_RATE_MAX_DELAY")
-    adaptive_rate_success_increment: float = Field(default=0.1, env="SURF_ADAPTIVE_RATE_SUCCESS_INCREMENT")
-    adaptive_rate_failure_decrement: float = Field(default=0.2, env="SURF_ADAPTIVE_RATE_FAILURE_DECREMENT")
+    adaptive_rate_base_delay: float = Field(default=2.0)
+    adaptive_rate_min_delay: float = Field(default=0.5)
+    adaptive_rate_max_delay: float = Field(default=10.0)
+    adaptive_rate_success_increment: float = Field(default=0.1)
+    adaptive_rate_failure_decrement: float = Field(default=0.2)
     
     # Content Processing Configuration
-    content_deduplication_ttl: int = Field(default=3600, env="SURF_CONTENT_DEDUPLICATION_TTL")  # 1 hour
-    semantic_chunking_confidence_threshold: float = Field(default=0.7, env="SURF_SEMANTIC_CHUNKING_CONFIDENCE_THRESHOLD")
+    content_deduplication_ttl: int = Field(default=3600)  # 1 hour
+    semantic_chunking_confidence_threshold: float = Field(default=0.7)
     
     # Mouse Movement Configuration
-    mouse_movement_bezier_points: int = Field(default=20, env="SURF_MOUSE_MOVEMENT_BEZIER_POINTS")
-    mouse_movement_min_delay: float = Field(default=0.01, env="SURF_MOUSE_MOVEMENT_MIN_DELAY")
-    mouse_movement_max_delay: float = Field(default=0.03, env="SURF_MOUSE_MOVEMENT_MAX_DELAY")
-    mouse_movement_reaction_delay_min: float = Field(default=0.1, env="SURF_MOUSE_MOVEMENT_REACTION_DELAY_MIN")
-    mouse_movement_reaction_delay_max: float = Field(default=0.3, env="SURF_MOUSE_MOVEMENT_REACTION_DELAY_MAX")
+    mouse_movement_bezier_points: int = Field(default=20)
+    mouse_movement_min_delay: float = Field(default=0.01)
+    mouse_movement_max_delay: float = Field(default=0.03)
+    mouse_movement_reaction_delay_min: float = Field(default=0.1)
+    mouse_movement_reaction_delay_max: float = Field(default=0.3)
     
     @validator("log_level")
     def validate_log_level(cls, v: str) -> str:
@@ -109,12 +141,43 @@ class Settings(BaseSettings):
         if v.upper() not in valid_levels:
             raise ValueError(f"Log level must be one of {valid_levels}")
         return v.upper()
+
+    @validator("auth_mode")
+    def validate_auth_mode(cls, v: str) -> str:
+        value = v.lower()
+        if value not in {"loopback", "token"}:
+            raise ValueError("auth_mode must be 'loopback' or 'token'")
+        return value
+
+    def is_loopback_host(self) -> bool:
+        """Return True when SURF is bound only to a local loopback host."""
+        host = self.host.lower()
+        if host in {"localhost"}:
+            return True
+        try:
+            return ip_address(host).is_loopback
+        except ValueError:
+            return False
+
+    def validate_runtime_security(self) -> None:
+        """Refuse unsafe local-browser control exposure."""
+        if self.auth_mode == "token" and not self.api_token:
+            raise ValueError("SURF_AUTH_MODE=token requires SURF_API_TOKEN")
+        if self.auth_mode == "loopback" and not self.is_loopback_host():
+            raise ValueError("SURF_AUTH_MODE=loopback is only allowed on loopback hosts")
     
     @validator("block_resources", pre=True)
     def parse_block_resources(cls, v: Any) -> List[str]:
         """Parse block resources from string or list"""
         if isinstance(v, str):
-            return [item.strip() for item in v.split(",")]
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
+    @validator("adblock_filter_urls", pre=True)
+    def parse_adblock_filter_urls(cls, v: Any) -> List[str]:
+        """Parse adblock filter URLs from string or list"""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
         return v
     
     @validator("cors_origins", pre=True)
@@ -138,11 +201,6 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-
 
 @lru_cache()
 def get_settings() -> Settings:

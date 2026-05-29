@@ -229,7 +229,8 @@ class BrowserService:
         session: SessionData,
         include_screenshot: bool = False,
         max_text_length: int = 8000,
-        max_items: int = 100
+        max_items: int = 100,
+        content_mode: str = "compact"
     ) -> Dict[str, Any]:
         """Return a compact agent-friendly observation of the current page."""
         if not self.initialized:
@@ -239,23 +240,49 @@ class BrowserService:
             page = self._get_page_from_session(session)
             observation = await page.evaluate(
                 """
-                ({maxTextLength, maxItems}) => {
+                ({maxTextLength, maxItems, contentMode}) => {
+                    const noiseSelector = [
+                        '[class*="ad-"]', '[class*="ads"]', '[id*="ad-"]', '[id*="ads"]',
+                        '[class*="cookie"]', '[id*="cookie"]', '[class*="newsletter"]',
+                        '[class*="subscribe"]', '[aria-label*="advertisement" i]',
+                        'aside', 'footer'
+                    ].join(',');
                     const visible = (el) => {
                         const style = window.getComputedStyle(el);
                         const rect = el.getBoundingClientRect();
                         return style && style.visibility !== 'hidden' &&
                             style.display !== 'none' && rect.width > 0 && rect.height > 0;
                     };
+                    const noisy = (el) => contentMode !== 'full' && !!el.closest(noiseSelector);
                     const text = (el) => (el.innerText || el.textContent || '').trim();
                     const attr = (el, name) => el.getAttribute(name) || '';
                     const clip = (value, length = 300) => (value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
+                    const sourceText = () => document.body ? (document.body.innerText || document.body.textContent || '') : '';
+                    const readableText = () => {
+                        if (!document.body) return '';
+                        if (contentMode === 'full') return document.body.innerText || '';
+                        const clone = document.body.cloneNode(true);
+                        clone.querySelectorAll(noiseSelector + ', script, style, noscript, svg').forEach((el) => el.remove());
+                        if (contentMode === 'reader') {
+                            const article = clone.querySelector('main, article, [role=main], .article, .story, .post, .content');
+                            if (article) {
+                                article.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
+                                return article.innerText || article.textContent || '';
+                            }
+                            clone.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
+                        }
+                        if (contentMode === 'data') {
+                            clone.querySelectorAll('nav, header, footer, aside, form, button').forEach((el) => el.remove());
+                        }
+                        return clone.innerText || clone.textContent || '';
+                    };
 
-                    const links = Array.from(document.querySelectorAll('a[href]')).filter(visible).slice(0, maxItems).map((a) => ({
+                    const links = Array.from(document.querySelectorAll('a[href]')).filter((el) => visible(el) && !noisy(el)).slice(0, maxItems).map((a) => ({
                         text: clip(text(a), 160),
                         href: a.href
                     }));
 
-                    const forms = Array.from(document.querySelectorAll('form')).slice(0, maxItems).map((form, index) => ({
+                    const forms = Array.from(document.querySelectorAll('form')).filter((el) => !noisy(el)).slice(0, maxItems).map((form, index) => ({
                         index,
                         action: form.action || '',
                         method: (form.method || 'get').toUpperCase(),
@@ -270,7 +297,7 @@ class BrowserService:
                     }));
 
                     const actions = Array.from(document.querySelectorAll('button, input[type=button], input[type=submit], [role=button], [onclick]'))
-                        .filter(visible).slice(0, maxItems).map((el) => ({
+                        .filter((el) => visible(el) && !noisy(el)).slice(0, maxItems).map((el) => ({
                             tag: el.tagName.toLowerCase(),
                             text: clip(text(el) || attr(el, 'value') || attr(el, 'aria-label'), 160),
                             id: el.id || '',
@@ -278,7 +305,7 @@ class BrowserService:
                             selector_hint: el.id ? `#${CSS.escape(el.id)}` : ''
                         }));
 
-                    const tables = Array.from(document.querySelectorAll('table')).slice(0, Math.min(maxItems, 20)).map((table, index) => ({
+                    const tables = Array.from(document.querySelectorAll('table')).filter((el) => !noisy(el)).slice(0, Math.min(maxItems, 20)).map((table, index) => ({
                         index,
                         rows: table.rows.length,
                         columns: table.rows[0] ? table.rows[0].cells.length : 0,
@@ -287,8 +314,17 @@ class BrowserService:
                         )
                     }));
 
+                    const rawText = sourceText();
+                    const selectedText = readableText();
+                    const visibleText = clip(selectedText, maxTextLength);
                     return {
-                        visible_text: clip(document.body ? document.body.innerText : '', maxTextLength),
+                        visible_text: visibleText,
+                        visible_text_length: visibleText.length,
+                        token_estimate: Math.ceil(visibleText.length / 4),
+                        source_text_length: rawText.length,
+                        selected_text_length: selectedText.length,
+                        truncated: selectedText.length > visibleText.length,
+                        reduction_ratio: rawText.length ? Math.round((1 - (visibleText.length / rawText.length)) * 10000) / 10000 : 0,
                         links,
                         forms,
                         actions,
@@ -296,7 +332,7 @@ class BrowserService:
                     };
                 }
                 """,
-                {"maxTextLength": max_text_length, "maxItems": max_items}
+                {"maxTextLength": max_text_length, "maxItems": max_items, "contentMode": content_mode}
             )
 
             screenshot_path = None
@@ -308,12 +344,38 @@ class BrowserService:
                 "url": page.url,
                 "title": await page.title(),
                 "screenshot": screenshot_path,
+                "content_mode": content_mode,
+                "blocker": session.metadata.get("blocker", {}),
+                "blocker_delta": session.metadata.get("last_navigation_blocker", {}),
                 "warnings": self._page_warnings(await page.title(), observation.get("visible_text", "")),
                 **observation
             }
         except Exception as e:
             logger.error("Page observation failed", session_id=session.session_id, error=str(e))
             raise BrowserOperationError("observe", str(e))
+
+    async def click_and_download(
+        self,
+        session: SessionData,
+        selector: str,
+        timeout: int = 60000,
+        filename: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Click an element and save the resulting browser download."""
+        page = self._get_page_from_session(session)
+        try:
+            from core.foundation import get_download_service
+
+            download_service = await get_download_service()
+            async with page.expect_download(timeout=timeout) as download_info:
+                await page.locator(selector).click(timeout=timeout)
+            download = await download_info.value
+            result = await download_service.save_playwright_download(download, filename=filename)
+            logger.info("Browser download saved", session_id=session.session_id, download_id=result.get("download_id"))
+            return result
+        except Exception as e:
+            logger.error("Browser download failed", session_id=session.session_id, selector=selector, error=str(e))
+            raise BrowserOperationError("download", str(e))
 
     async def wait_for_condition(
         self,
@@ -362,8 +424,6 @@ class BrowserService:
             "filters": filters,
             "events": deque(maxlen=500)
         }
-        self.network_captures[session.session_id] = capture
-
         async def capture_response(response):
             try:
                 if not capture.get("enabled"):
@@ -384,7 +444,15 @@ class BrowserService:
             except Exception as e:
                 logger.debug("Network capture event skipped", error=str(e))
 
-        page.on("response", lambda response: asyncio.create_task(capture_response(response)))
+        def handler(response):
+            asyncio.create_task(capture_response(response))
+
+        old_capture = self.network_captures.get(session.session_id)
+        if old_capture:
+            self._remove_network_listener(session, old_capture)
+        capture["handler"] = handler
+        self.network_captures[session.session_id] = capture
+        page.on("response", handler)
         return {"capturing": True, "session_id": session.session_id, "filters": filters}
 
     async def stop_network_capture(self, session: SessionData) -> Dict[str, Any]:
@@ -392,6 +460,8 @@ class BrowserService:
         capture = self.network_captures.get(session.session_id)
         if capture:
             capture["enabled"] = False
+            self._remove_network_listener(session, capture)
+            self.network_captures.pop(session.session_id, None)
         return {"capturing": False, "session_id": session.session_id}
 
     async def get_network_events(self, session: SessionData) -> Dict[str, Any]:
@@ -404,6 +474,22 @@ class BrowserService:
             "count": len(events),
             "events": events
         }
+
+    def cleanup_session(self, session_id: str) -> None:
+        """Drop browser-service state tied to a closed session."""
+        capture = self.network_captures.pop(session_id, None)
+        if capture:
+            capture["enabled"] = False
+
+    def _remove_network_listener(self, session: SessionData, capture: Dict[str, Any]) -> None:
+        handler = capture.get("handler")
+        if not handler:
+            return
+        try:
+            page = self._get_page_from_session(session)
+            page.remove_listener("response", handler)
+        except Exception as e:
+            logger.debug("Network listener cleanup skipped", session_id=session.session_id, error=str(e))
     
     async def _enhance_extracted_content(self, content: Dict[str, Any], extract_type: ExtractType) -> Dict[str, Any]:
         """Enhance extracted content with deduplication, type detection, and chunking"""

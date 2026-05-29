@@ -133,6 +133,28 @@ class ResourceLimitError(SurfException):
         )
 
 
+class SessionBusyError(SurfException):
+    """Raised when an operation conflicts with active session work"""
+
+    def __init__(self, session_id: str, operation: str = "operation"):
+        super().__init__(
+            message=f"Session {session_id} is busy; retry after the active operation completes",
+            error_code="SESSION_BUSY",
+            details={"session_id": session_id, "operation": operation}
+        )
+
+
+class ProfileInUseError(SurfException):
+    """Raised when a persistent browser profile is already leased"""
+
+    def __init__(self, profile_id: str):
+        super().__init__(
+            message=f"Persistent profile '{profile_id}' is already active",
+            error_code="PROFILE_IN_USE",
+            details={"profile_id": profile_id}
+        )
+
+
 # ============================================================================
 # MIDDLEWARE
 # ============================================================================
@@ -348,25 +370,28 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Optional[Dict[str, Any]]:
-    """Get current authenticated user from JWT token"""
-    
-    if not credentials:
-        return None
-    
-    try:
-        payload = SecurityConfig.verify_token(credentials.credentials)
-        if payload is None:
-            raise AuthenticationError("Invalid token")
-        
+    """Return a local principal for loopback mode or validate the static bearer token."""
+
+    scopes = ["browser:read", "browser:write", "sessions:manage", "downloads:manage"]
+    if settings.auth_mode == "loopback":
         return {
-            "username": payload.get("sub"),
-            "scopes": payload.get("scopes", []),
-            "exp": payload.get("exp")
+            "username": "local-loopback",
+            "scopes": scopes,
+            "auth_type": "loopback"
         }
-    
-    except Exception as e:
-        logger.error("Authentication failed", error=str(e))
-        raise AuthenticationError("Authentication failed")
+
+    if not credentials or credentials.credentials != settings.api_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    return {
+        "username": "local-token",
+        "scopes": scopes,
+        "auth_type": "local_token"
+    }
 
 
 async def get_optional_user(
@@ -376,7 +401,7 @@ async def get_optional_user(
     
     try:
         return await get_current_user(credentials)
-    except AuthenticationError:
+    except (AuthenticationError, HTTPException):
         return None
 
 
@@ -414,6 +439,8 @@ _session_service: Optional[Any] = None
 _browser_service: Optional[Any] = None
 _cache_service: Optional[Any] = None
 _fetch_service: Optional[Any] = None
+_download_service: Optional[Any] = None
+_adblock_service: Optional[Any] = None
 
 
 async def get_session_service():
@@ -463,6 +490,29 @@ async def get_fetch_service():
     return _fetch_service
 
 
+async def get_download_service():
+    """Get download service instance"""
+    global _download_service
+
+    if _download_service is None:
+        from services.download_service import DownloadService
+        _download_service = DownloadService()
+
+    return _download_service
+
+
+async def get_adblock_service():
+    """Get adblock service instance"""
+    global _adblock_service
+
+    if _adblock_service is None:
+        from services.adblock_service import AdblockService
+        _adblock_service = AdblockService()
+        await _adblock_service.initialize()
+
+    return _adblock_service
+
+
 async def get_session_manager():
     """Alias for get_session_service for backward compatibility"""
     return await get_session_service()
@@ -505,7 +555,7 @@ async def validate_url(url: str) -> str:
 # Cleanup function
 async def cleanup_services():
     """Cleanup all services on shutdown"""
-    global _session_service, _browser_service, _cache_service, _fetch_service
+    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service
     
     if _session_service:
         await _session_service.cleanup()
@@ -520,3 +570,5 @@ async def cleanup_services():
         _cache_service = None
 
     _fetch_service = None
+    _download_service = None
+    _adblock_service = None

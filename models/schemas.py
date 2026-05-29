@@ -71,6 +71,22 @@ class FetchBackend(str, Enum):
     HTTPX = "httpx"
     CURL_CFFI = "curl_cffi"
     CLOUDSCRAPER = "cloudscraper"
+    BROWSER = "browser"
+
+
+class BlockMode(str, Enum):
+    """Request blocking mode enumeration"""
+    OFF = "off"
+    CONSERVATIVE = "conservative"
+    TOKEN_SAVER = "token_saver"
+
+
+class ContentMode(str, Enum):
+    """Agent observation verbosity mode"""
+    COMPACT = "compact"
+    READER = "reader"
+    DATA = "data"
+    FULL = "full"
 
 
 # ============================================================================
@@ -82,6 +98,7 @@ class SessionCreateRequest(BaseModel):
     config: Optional[Dict[str, Any]] = Field(default=None, description="Session configuration")
     user_agent: Optional[str] = Field(default=None, max_length=500, description="Custom user agent")
     viewport: Optional[Dict[str, int]] = Field(default=None, description="Viewport dimensions")
+    silent: Optional[bool] = Field(default=None, description="Run browser in the background without opening a visible window")
     stealth: Optional[bool] = Field(default=None, description="Enable stealth mode")
     block_resources: Optional[List[str]] = Field(default=None, description="Resource types to block")
     
@@ -101,7 +118,7 @@ class NavigateRequest(BaseModel):
     """Request model for navigation"""
     session_id: str = Field(..., description="Session ID")
     url: HttpUrl = Field(..., description="URL to navigate to")
-    wait_until: WaitUntil = Field(default=WaitUntil.NETWORKIDLE, description="Wait condition")
+    wait_until: WaitUntil = Field(default=WaitUntil.DOMCONTENTLOADED, description="Wait condition")
     timeout: Optional[int] = Field(default=None, ge=1000, le=300000, description="Timeout in milliseconds")
     
     @validator("session_id")
@@ -170,6 +187,7 @@ class ObserveRequest(BaseModel):
     include_screenshot: bool = Field(default=False, description="Capture a screenshot with the observation")
     max_text_length: int = Field(default=8000, ge=500, le=50000, description="Maximum visible text length")
     max_items: int = Field(default=100, ge=1, le=500, description="Maximum links/forms/actions/tables to return")
+    content_mode: Optional[ContentMode] = Field(default=None, description="Observation content mode; defaults to the session config")
 
 
 class WaitRequest(BaseModel):
@@ -205,28 +223,29 @@ class FetchRequest(BaseModel):
     backend: FetchBackend = Field(default=FetchBackend.AUTO, description="Fetch backend")
     session_id: Optional[str] = Field(default=None, description="Optional browser session cookie source")
     impersonate: Optional[str] = Field(default="chrome", description="curl_cffi impersonation target")
+    save_to_downloads: bool = Field(default=False, description="Save response body into SURF downloads")
+    download_filename: Optional[str] = Field(default=None, max_length=255, description="Optional download filename")
 
     class Config:
         populate_by_name = True
 
 
-class LoginRequest(BaseModel):
-    """Request model for user authentication"""
-    username: str = Field(..., min_length=3, max_length=50, description="Username")
-    password: str = Field(..., min_length=8, max_length=100, description="Password")
-    
-    @validator("username")
-    def validate_username(cls, v: str) -> str:
-        if not v.isalnum():
-            raise ValueError("Username must contain only alphanumeric characters")
-        return v.lower()
+class SessionTouchRequest(BaseModel):
+    """Request model for explicit session heartbeat"""
+    reason: Optional[str] = Field(default=None, max_length=200, description="Optional heartbeat reason")
 
 
-class APIKeyRequest(BaseModel):
-    """Request model for API key generation"""
-    name: str = Field(..., min_length=3, max_length=50, description="API key name")
-    scopes: List[str] = Field(default=["browser:read"], description="API key scopes")
-    expires_in_days: Optional[int] = Field(default=None, ge=1, le=365, description="Expiration in days")
+class SessionReapRequest(BaseModel):
+    """Request model for manual idle session cleanup"""
+    dry_run: bool = Field(default=False, description="Report sessions that would be reaped without closing them")
+
+
+class DownloadClickRequest(BaseModel):
+    """Request model for click-triggered browser downloads"""
+    session_id: str = Field(..., description="Session ID")
+    selector: str = Field(..., max_length=1000, description="Selector that triggers a download")
+    timeout: int = Field(default=60000, ge=1000, le=300000, description="Timeout in milliseconds")
+    filename: Optional[str] = Field(default=None, max_length=255, description="Optional saved filename")
 
 
 class BatchRequest(BaseModel):
@@ -404,6 +423,12 @@ class FetchResponse(BaseResponse):
     data: Dict[str, Any] = Field(..., description="Fetch data")
 
 
+class DownloadResponse(BaseResponse):
+    """Download operation response model"""
+    success: bool = Field(default=True, description="Download operation success status")
+    data: Dict[str, Any] = Field(..., description="Download data")
+
+
 class HealthResponse(BaseResponse):
     """Health check response model"""
     success: bool = Field(default=True, description="Service health status")
@@ -430,53 +455,6 @@ class HealthResponse(BaseResponse):
                     "heap_used": 30000000,
                     "heap_total": 50000000
                 }
-            }
-        }
-
-
-class LoginResponse(BaseResponse):
-    """Login response model"""
-    success: bool = Field(default=True, description="Login success status")
-    access_token: str = Field(..., description="JWT access token")
-    token_type: str = Field(default="bearer", description="Token type")
-    expires_in: int = Field(..., description="Token expiration in seconds")
-    user: Dict[str, Any] = Field(..., description="User information")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "timestamp": "2024-01-01T00:00:00Z",
-                "request_id": "req_123456",
-                "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                "token_type": "bearer",
-                "expires_in": 1800,
-                "user": {
-                    "username": "user123",
-                    "scopes": ["browser:read", "browser:write"]
-                }
-            }
-        }
-
-
-class APIKeyResponse(BaseResponse):
-    """API key response model"""
-    success: bool = Field(default=True, description="API key creation success status")
-    api_key: str = Field(..., description="Generated API key")
-    key_id: str = Field(..., description="API key ID")
-    scopes: List[str] = Field(..., description="API key scopes")
-    expires_at: Optional[datetime] = Field(default=None, description="API key expiration time")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "timestamp": "2024-01-01T00:00:00Z",
-                "request_id": "req_123456",
-                "api_key": "surf_abc123def456...",
-                "key_id": "key_789",
-                "scopes": ["browser:read"],
-                "expires_at": "2024-12-31T23:59:59Z"
             }
         }
 
@@ -515,12 +493,15 @@ class SessionConfig(BaseModel):
     mode: SessionMode = Field(default=SessionMode.BROWSER, description="Session mode")
     profile_id: str = Field(default="default", description="Persistent browser profile ID")
     headed: bool = Field(default=True, description="Launch a visible browser")
+    silent: bool = Field(default=False, description="Run browser in the background")
     persist_profile: bool = Field(default=True, description="Persist browser profile data")
     viewport: Dict[str, int] = Field(default={"width": 1920, "height": 1080}, description="Viewport dimensions")
-    user_agent: str = Field(..., description="User agent string")
+    user_agent: Optional[str] = Field(default=None, description="User agent string")
     stealth: bool = Field(default=False, description="Enable legacy stealth mode")
     stealth_strategy: StealthStrategy = Field(default=StealthStrategy.MINIMAL, description="Browser profile strategy")
     block_resources: List[str] = Field(default=[], description="Resource types to block")
+    block_mode: BlockMode = Field(default=BlockMode.CONSERVATIVE, description="Ad/resource blocking mode")
+    content_mode: ContentMode = Field(default=ContentMode.COMPACT, description="Default observation mode")
     timeout: int = Field(default=30000, description="Default timeout in milliseconds")
     java_script_enabled: bool = Field(default=True, description="Enable JavaScript")
     ignore_https_errors: bool = Field(default=True, description="Ignore HTTPS errors")
@@ -541,6 +522,8 @@ class BrowserContext(BaseModel):
     status: SessionStatus = Field(default=SessionStatus.ACTIVE, description="Session status")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
     last_activity: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last activity timestamp")
+    expires_at: Optional[datetime] = Field(default=None, description="Hard expiration timestamp")
+    close_reason: Optional[str] = Field(default=None, description="Reason the session was closed or marked expired")
     
     class Config:
         use_enum_values = True

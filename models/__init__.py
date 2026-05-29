@@ -13,8 +13,6 @@ from .schemas import (
     ExtractRequest,
     InteractRequest,
     ScreenshotRequest,
-    LoginRequest,
-    APIKeyRequest,
     BatchRequest,
     # Response Schemas
     BaseResponse,
@@ -25,8 +23,6 @@ from .schemas import (
     InteractResponse,
     ScreenshotResponse,
     HealthResponse,
-    LoginResponse,
-    APIKeyResponse,
     BatchResponse,
     # Session Schemas
     SessionConfig,
@@ -50,8 +46,6 @@ __all__ = [
     "ExtractRequest",
     "InteractRequest",
     "ScreenshotRequest",
-    "LoginRequest",
-    "APIKeyRequest",
     "BatchRequest",
     # Response Schemas
     "BaseResponse",
@@ -62,8 +56,6 @@ __all__ = [
     "InteractResponse",
     "ScreenshotResponse",
     "HealthResponse",
-    "LoginResponse",
-    "APIKeyResponse",
     "BatchResponse",
     # Session Schemas
     "SessionConfig",

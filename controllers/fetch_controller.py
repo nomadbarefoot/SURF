@@ -4,10 +4,11 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
-from core.foundation import get_current_user, get_fetch_service, get_session_service
+from core.foundation import get_current_user, get_fetch_service, get_session_service, get_download_service
 from models.schemas import FetchRequest, FetchResponse
 from services.fetch_service import FetchService
 from services.session_service import SessionService
+from services.download_service import DownloadService
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -18,28 +19,56 @@ async def fetch_request(
     request: FetchRequest,
     fetch_service: FetchService = Depends(get_fetch_service),
     session_service: SessionService = Depends(get_session_service),
+    download_service: DownloadService = Depends(get_download_service),
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Execute a one-off HTTP request, optionally using cookies from a browser session."""
     try:
-        cookies = None
         if request.session_id:
-            session = await session_service.get_session(request.session_id)
-            if getattr(session, "context_obj", None):
-                cookies = await session.context_obj.cookies()
-
-        result = await fetch_service.request(
-            method=request.method,
-            url=str(request.url),
-            headers=request.headers,
-            params=request.params,
-            body=request.body,
-            json_body=request.json_body,
-            timeout=request.timeout,
-            backend=request.backend,
-            cookies=cookies,
-            impersonate=request.impersonate
-        )
+            async with session_service.session_operation(request.session_id, "fetch") as session:
+                cookies = None
+                browser_context = None
+                if getattr(session, "context_obj", None):
+                    cookies = await session.context_obj.cookies()
+                    browser_context = session.context_obj
+                result = await fetch_service.request(
+                    method=request.method,
+                    url=str(request.url),
+                    headers=request.headers,
+                    params=request.params,
+                    body=request.body,
+                    json_body=request.json_body,
+                    timeout=request.timeout,
+                    backend=request.backend,
+                    cookies=cookies,
+                    impersonate=request.impersonate,
+                    browser_context=browser_context
+                )
+        else:
+            result = await fetch_service.request(
+                method=request.method,
+                url=str(request.url),
+                headers=request.headers,
+                params=request.params,
+                body=request.body,
+                json_body=request.json_body,
+                timeout=request.timeout,
+                backend=request.backend,
+                cookies=None,
+                impersonate=request.impersonate,
+                browser_context=None
+            )
+        content_bytes = result.pop("_content_bytes", b"")
+        if request.save_to_downloads:
+            download = await download_service.save_bytes(
+                content_bytes,
+                filename=request.download_filename,
+                source_url=result.get("url"),
+                content_type=result.get("headers", {}).get("content-type")
+            )
+            result["download"] = download
+            result["text"] = ""
+            result["text_preview"] = ""
         return FetchResponse(success=True, data=result)
     except Exception as e:
         logger.error("Fetch request failed", error=str(e), url=str(request.url))

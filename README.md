@@ -1,17 +1,8 @@
 # SURF
 
-SURF is a local browser substrate for agents and one-off scripts. It runs a FastAPI daemon, launches a headed persistent Chromium profile through Playwright, exposes browser actions over HTTP, captures network responses, and provides a fetch endpoint that can reuse browser-session cookies.
+SURF is a local browser substrate for agents and one-off scripts. It runs a FastAPI daemon, launches local Chromium through Playwright, exposes browser actions over HTTP, captures network responses, and provides fetch endpoints that can reuse browser-session cookies.
 
-The goal is reliable occasional browsing and scraping, not high-volume crawling or bypass tooling. SURF defaults to permissive local behavior: it warns on likely rate limits, login walls, and challenges, but does not solve CAPTCHAs or escalate around site protections.
-
-## What It Does
-
-- Launches headed Chromium sessions with persistent profile storage.
-- Lets agents navigate, observe, click, type, wait, screenshot, and extract content.
-- Captures document/XHR/fetch network responses for pages agents visit.
-- Runs one-off HTTP fetches with `httpx` or `curl_cffi`.
-- Reuses cookies from a browser session for fetches when a site needs browser context.
-- Keeps default browser identity stable instead of rotating fingerprints randomly.
+The goal is reliable occasional browsing and scraping. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, and browser-like fetches for one-off work. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
 ## Setup
 
@@ -25,44 +16,61 @@ python3 -m venv .venv
 Start SURF:
 
 ```bash
-SURF_HOST=127.0.0.1 SURF_PORT=6670 .venv/bin/uvicorn main:app --host 127.0.0.1 --port 6670
+.venv/bin/python start_surf.py
 ```
 
-OpenAPI docs are available at `http://127.0.0.1:6670/docs` when `SURF_DEBUG=true`.
+Or let an agent/helper start or discover it:
+
+```bash
+.venv/bin/python surfctl.py ensure
+```
+
+Default base URL:
+
+```text
+http://127.0.0.1:17777
+```
+
+OpenAPI docs are available at `/docs` when `SURF_DEBUG=true`.
+
+## Auth
+
+SURF defaults to `SURF_AUTH_MODE=loopback`, which requires no bearer token but only works when bound to a loopback host.
+
+For stricter local process isolation:
+
+```bash
+export SURF_AUTH_MODE=token
+export SURF_API_TOKEN="$(openssl rand -hex 24)"
+.venv/bin/python start_surf.py
+```
+
+Then send `Authorization: Bearer $SURF_API_TOKEN`.
+
+SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runtime API-key creation are disabled; configure `SURF_API_TOKEN` instead.
 
 ## Quick Agent Flow
 
-Login:
+Create a default silent persistent browser session:
 
 ```bash
-curl -s http://127.0.0.1:6670/auth/login \
+curl -s http://127.0.0.1:17777/sessions/ \
   -H 'Content-Type: application/json' \
-  -d '{"username":"agent","password":"password123"}'
-```
-
-Create a headed persistent browser session:
-
-```bash
-curl -s http://127.0.0.1:6670/sessions/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"config":{"profile_id":"agent-default","headed":true,"persist_profile":true}}'
+  -d '{"config":{"profile_id":"agent-default","persist_profile":true,"block_mode":"conservative"}}'
 ```
 
 Navigate:
 
 ```bash
-curl -s http://127.0.0.1:6670/browser/navigate \
-  -H "Authorization: Bearer $TOKEN" \
+curl -s http://127.0.0.1:17777/browser/navigate \
   -H 'Content-Type: application/json' \
   -d '{"session_id":"'$SESSION_ID'","url":"https://www.nseindia.com/","wait_until":"domcontentloaded","timeout":90000}'
 ```
 
-Observe the page:
+Observe:
 
 ```bash
-curl -s http://127.0.0.1:6670/browser/observe \
-  -H "Authorization: Bearer $TOKEN" \
+curl -s http://127.0.0.1:17777/browser/observe \
   -H 'Content-Type: application/json' \
   -d '{"session_id":"'$SESSION_ID'","max_text_length":4000,"max_items":50}'
 ```
@@ -70,38 +78,32 @@ curl -s http://127.0.0.1:6670/browser/observe \
 Fetch with browser cookies:
 
 ```bash
-curl -s http://127.0.0.1:6670/fetch/request \
-  -H "Authorization: Bearer $TOKEN" \
+curl -s http://127.0.0.1:17777/fetch/request \
   -H 'Content-Type: application/json' \
-  -d '{"method":"GET","url":"https://www.nseindia.com/api/marketStatus","backend":"curl_cffi","session_id":"'$SESSION_ID'","timeout":60000}'
+  -d '{"method":"GET","url":"https://www.nseindia.com/api/marketStatus","backend":"browser","session_id":"'$SESSION_ID'","timeout":60000}'
 ```
 
-Close the session:
+Close:
 
 ```bash
-curl -s -X DELETE http://127.0.0.1:6670/sessions/$SESSION_ID \
-  -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://127.0.0.1:17777/sessions/$SESSION_ID
 ```
 
-## Main API Surface
+Add `-H "Authorization: Bearer $SURF_API_TOKEN"` to each request when `SURF_AUTH_MODE=token`.
 
-### Sessions
+## API Surface
 
-- `POST /sessions/` creates a browser session.
-- `GET /sessions/` lists sessions.
-- `GET /sessions/{session_id}` returns session state.
-- `DELETE /sessions/{session_id}` closes a session.
+Sessions:
 
-Important session config keys:
+- `POST /sessions/`
+- `GET /sessions/`
+- `GET /sessions/monitor`
+- `POST /sessions/{session_id}/touch`
+- `POST /sessions/reap`
+- `GET /sessions/{session_id}`
+- `DELETE /sessions/{session_id}?force=false`
 
-- `profile_id`: stable local browser profile name.
-- `headed`: defaults to `true`.
-- `persist_profile`: defaults to `true`.
-- `stealth_strategy`: `minimal`, `none`, or `legacy`; default is `minimal`.
-- `block_resources`: defaults to `[]`.
-- `locale`, `timezone_id`, `viewport`, `user_agent`.
-
-### Browser
+Browser:
 
 - `POST /browser/navigate`
 - `POST /browser/observe`
@@ -109,42 +111,112 @@ Important session config keys:
 - `POST /browser/extract`
 - `POST /browser/interact`
 - `POST /browser/screenshot`
+- `POST /browser/download/click`
 - `POST /browser/network/start`
 - `POST /browser/network/stop`
 - `GET /browser/network/events/{session_id}`
 
-`/browser/observe` is the best first call for agents. It returns current URL, title, visible text, links, forms, action candidates, tables, warnings, and optional screenshot path.
-
-### Fetch
+Fetch:
 
 - `POST /fetch/request`
 
-Supported backends:
+Downloads:
+
+- `GET /downloads/`
+- `GET /downloads/{download_id}`
+- `GET /downloads/{download_id}/content`
+- `DELETE /downloads/{download_id}`
+
+Health:
+
+- `GET /health/`
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /health/metrics`
+- `GET /health/runtime`
+
+## Session Config
+
+Important keys:
+
+- `profile_id`: stable local browser profile name. Only one active persistent session can use a profile at a time.
+- `silent`: defaults to `true`.
+- `headed`: set `true` to show the browser.
+- `persist_profile`: defaults to `true`.
+- `stealth_strategy`: `minimal`, `none`, or `legacy`; default is `minimal`.
+- `block_mode`: `off`, `conservative`, or `token_saver`.
+- `content_mode`: `compact`, `reader`, `data`, or `full`.
+- `locale`, `timezone_id`, `viewport`, `user_agent`.
+
+Defaults are tuned for one-off agent work: silent browser, persistent local cookies, conservative blocking, stable browser identity, 3 active browser sessions, 1 headed session, 10 minute session idle timeout, 60 second browser-runtime idle teardown, and 2 hour hard TTL.
+
+## Daemon Lifecycle
+
+SURF is designed as a resident thin daemon. The FastAPI shell stays available on loopback, while Playwright/Chromium starts lazily on browser-session creation and stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` when no sessions remain.
+
+Use `surfctl.py` for agent-friendly local supervision:
+
+```bash
+.venv/bin/python surfctl.py status
+.venv/bin/python surfctl.py ensure
+.venv/bin/python surfctl.py stop
+```
+
+Agents should close sessions when finished and leave the daemon running. Use `/health/runtime` to inspect pid, active sessions, browser-runtime state, limits, and process-tree RSS.
+
+## Observe Modes
+
+`/browser/observe` is the preferred first call for agents. It returns current URL, title, visible text, links, forms, action candidates, tables, warnings, token estimate, blocker stats, per-navigation blocker deltas, and optional screenshot path.
+
+Modes:
+
+- `compact`: general agent view with common noise removed.
+- `reader`: article/main-content focused view.
+- `data`: removes most navigation/forms/buttons and favors tables/text.
+- `full`: raw visible body text.
+
+## Fetch Backends
 
 - `auto`: currently uses `httpx`.
 - `httpx`: normal HTTP client.
+- `browser`: Playwright browser-context request sharing cookies with the active session.
 - `curl_cffi`: browser-like TLS/session fetches.
-- `cloudscraper`: optional compatibility backend if installed.
+- `cloudscraper`: optional backend if installed.
 
-Use `session_id` on fetch requests when you want SURF to export cookies from the active browser context.
+Browser-context fetches are API calls made from the browser context; they reuse cookies but are not counted in page adblock metrics.
+
+Set `save_to_downloads=true` to store a response body under `data/downloads/`.
 
 ## Corporate Actions Probe
 
-Example RELIANCE checks that worked during verification:
+For NSE/BSE-style protected sites, use a headed session first:
 
-NSE corporate actions:
+```json
+{
+  "config": {
+    "profile_id": "agent-protected",
+    "headed": true,
+    "persist_profile": true,
+    "block_mode": "conservative"
+  }
+}
+```
+
+Then warm the site homepage before calling API endpoints with browser cookies.
+
+NSE RELIANCE:
 
 ```json
 {
   "method": "GET",
   "url": "https://www.nseindia.com/api/corporates-corporateActions?index=equities&symbol=RELIANCE",
-  "backend": "curl_cffi",
+  "backend": "browser",
   "session_id": "<session_id>",
   "timeout": 60000
 }
 ```
 
-BSE corporate actions:
+BSE RELIANCE:
 
 ```json
 {
@@ -159,28 +231,24 @@ BSE corporate actions:
 }
 ```
 
-In the live verification run, NSE returned RELIANCE dividend and bonus records, and BSE returned `Table`, `Table1`, and `Table2` corporate-action JSON for scrip code `500325`.
-
-## Python Client Example
-
-See [examples/agent_usage.py](examples/agent_usage.py) for a minimal agent-style client that logs in, creates a profile-backed session, navigates, observes, fetches corporate actions, and closes the session.
-
-## Operational Notes
+## Operational Rules
 
 - Keep request volume low and respect site terms.
-- Prefer browser navigation first for protected or JS-heavy sites, then use fetch with browser cookies for specific API endpoints.
+- Prefer browser navigation first for protected or JS-heavy sites, then use fetch with browser cookies for specific endpoints.
+- Use headed mode when a site requires normal visible-browser interaction.
 - Stop or back off on 403, 429, CAPTCHA, login, or challenge warnings.
-- Do not use SURF to bypass access controls or scrape at scale.
-- Runtime browser profiles are stored in `data/profiles/` and ignored by Git.
+- Do not automate CAPTCHA solving or use SURF to bypass access controls.
+- Leave `user_agent` unset unless the user explicitly needs an override.
 
-## Verification Commands
+Runtime browser profiles, downloads, and filter-list caches live under `data/` and are ignored by Git.
+
+## Agent Skill
+
+This repo includes a compact agent skill at `.agents/skills/surf/SKILL.md`. Install or copy that skill into an agent environment when you want agents to discover and use SURF consistently.
+
+## Verification
 
 ```bash
-.venv/bin/python -m compileall main.py controllers services models config core utils
-```
-
-Optional live check:
-
-```bash
+.venv/bin/python -m compileall main.py controllers services models config core utils examples
 .venv/bin/python examples/agent_usage.py
 ```
