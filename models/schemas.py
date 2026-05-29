@@ -494,6 +494,7 @@ class SessionConfig(BaseModel):
     profile_id: str = Field(default="default", description="Persistent browser profile ID")
     headed: bool = Field(default=True, description="Launch a visible browser")
     silent: bool = Field(default=False, description="Run browser in the background")
+    background_headed: bool = Field(default=True, description="Place headed browser windows off-screen by default")
     persist_profile: bool = Field(default=True, description="Persist browser profile data")
     viewport: Dict[str, int] = Field(default={"width": 1920, "height": 1080}, description="Viewport dimensions")
     user_agent: Optional[str] = Field(default=None, description="User agent string")

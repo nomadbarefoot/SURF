@@ -1,5 +1,6 @@
 """Enhanced session management service for Surf Browser Service"""
 import asyncio
+import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -52,6 +53,7 @@ class SessionService:
         self.adblock_service = None
         self.operation_locks: Dict[str, asyncio.Lock] = {}
         self.profile_leases: Dict[str, str] = {}
+        self.ephemeral_profile_dirs: Dict[str, Path] = {}
     
     async def initialize(self) -> None:
         """Initialize the lightweight session manager.
@@ -235,6 +237,7 @@ class SessionService:
             del self.active_sessions[session_id]
             self.operation_locks.pop(session_id, None)
             self._release_profile_lease(session)
+            self._cleanup_ephemeral_profile(session_id)
             if not self.active_sessions:
                 self.browser_last_used_at = time.time()
             
@@ -247,6 +250,7 @@ class SessionService:
                 del self.active_sessions[session_id]
             self.operation_locks.pop(session_id, None)
             self._release_profile_lease(session)
+            self._cleanup_ephemeral_profile(session_id)
             if not self.active_sessions:
                 self.browser_last_used_at = time.time()
     
@@ -395,6 +399,7 @@ class SessionService:
             "profile_id": settings.default_profile_id,
             "headed": not settings.default_silent,
             "silent": settings.default_silent,
+            "background_headed": True,
             "persist_profile": settings.persist_profiles,
             "viewport": settings.default_viewport,
             "user_agent": None,
@@ -430,8 +435,16 @@ class SessionService:
 
         launch_args = [
             "--no-sandbox",
-            "--disable-dev-shm-usage"
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
         ]
+        if config.headed and config.background_headed:
+            width = config.viewport.get("width", 1920)
+            height = config.viewport.get("height", 1080)
+            launch_args.extend([
+                "--window-position=-32000,-32000",
+                f"--window-size={width},{height}",
+            ])
 
         context_options = {
             "headless": not config.headed,
@@ -446,12 +459,13 @@ class SessionService:
         if config.user_agent:
             context_options["user_agent"] = config.user_agent
 
-        if config.persist_profile:
-            profile_id = self._safe_profile_id(config.profile_id)
-            profile_dir = Path(settings.profiles_dir)
-            if not profile_dir.is_absolute():
-                profile_dir = Path(__file__).parent.parent / profile_dir
-            user_data_dir = profile_dir / profile_id
+        if config.persist_profile or config.headed:
+            profile_dir = self._profile_root()
+            if config.persist_profile:
+                user_data_dir = profile_dir / self._safe_profile_id(config.profile_id)
+            else:
+                user_data_dir = profile_dir / "_ephemeral" / session_id
+                self.ephemeral_profile_dirs[session_id] = user_data_dir
             user_data_dir.mkdir(parents=True, exist_ok=True)
             return await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
@@ -520,6 +534,21 @@ class SessionService:
         allowed = [c if c.isalnum() or c in ("-", "_") else "_" for c in profile_id]
         safe = "".join(allowed).strip("_")
         return safe or "default"
+
+    def _profile_root(self) -> Path:
+        profile_dir = Path(settings.profiles_dir)
+        if not profile_dir.is_absolute():
+            profile_dir = Path(__file__).parent.parent / profile_dir
+        return profile_dir
+
+    def _cleanup_ephemeral_profile(self, session_id: str) -> None:
+        profile_dir = self.ephemeral_profile_dirs.pop(session_id, None)
+        if not profile_dir:
+            return
+        try:
+            shutil.rmtree(profile_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning("Failed to clean ephemeral profile", session_id=session_id, path=str(profile_dir), error=str(e))
 
     def _enum_value(self, value: Any) -> str:
         """Return enum value or string value for Pydantic v1/v2 compatibility."""

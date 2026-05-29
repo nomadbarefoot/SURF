@@ -4,8 +4,8 @@ SURF is a local FastAPI service around Playwright Chromium. It is designed for a
 
 ## Entrypoints
 
-- `start_surf.py`: local startup helper with port checks.
-- `surfctl.py`: local agent-friendly supervisor for status, ensure, and stop.
+- `surfctl.py`: agent bridge for MCP stdio and raw JSONL stdio.
+- `start_surf.py`: optional manual HTTP development server with port checks.
 - `main.py`: FastAPI application, middleware, lifespan cleanup, router mounting.
 
 Mounted routers:
@@ -45,7 +45,7 @@ Sessions are persistent by default and silent by default. A persistent `profile_
 
 Idle cleanup closes inactive sessions after `SURF_IDLE_TIMEOUT_SECONDS`. Hard TTL closes sessions after `SURF_HARD_TTL_SECONDS`. Busy sessions are not reaped until the active operation completes.
 
-The daemon is resident but thin. Health checks and non-browser work do not start Playwright. Browser runtime starts when a browser session is created, then stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` once no sessions are active. Default limits are `SURF_MAX_SESSIONS=3` and `SURF_MAX_HEADED_SESSIONS=1`.
+The stdio bridge is process-scoped and thin. Health checks and non-browser work do not start Playwright. Browser runtime starts when a browser session is created, then stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` once no sessions are active. Default limits are `SURF_MAX_SESSIONS=3` and `SURF_MAX_HEADED_SESSIONS=1`.
 
 ## Blocking And Observation
 

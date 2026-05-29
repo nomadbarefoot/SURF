@@ -1,6 +1,6 @@
 # SURF
 
-SURF is a local browser substrate for agents and one-off scripts. It runs a FastAPI daemon, launches local Chromium through Playwright, exposes browser actions over HTTP, captures network responses, and provides fetch endpoints that can reuse browser-session cookies.
+SURF is a local browser substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
 
 The goal is reliable occasional browsing and scraping. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, and browser-like fetches for one-off work. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
@@ -13,22 +13,30 @@ python3 -m venv .venv
 .venv/bin/python -m playwright install chromium
 ```
 
-Start SURF:
+Run the agent MCP bridge:
+
+```bash
+.venv/bin/python surfctl.py mcp
+```
+
+Raw JSONL stdio is available for scripts:
+
+```bash
+.venv/bin/python surfctl.py stdio
+```
+
+Send one JSON object per line:
+
+```jsonl
+{"id":"health","method":"GET","path":"/health/live"}
+{"id":"create","method":"POST","path":"/sessions/","data":{"config":{"profile_id":"agent-default","persist_profile":true}}}
+{"id":"quit","method":"QUIT"}
+```
+
+Manual HTTP development server:
 
 ```bash
 .venv/bin/python start_surf.py
-```
-
-Or let an agent/helper start or discover it:
-
-```bash
-.venv/bin/python surfctl.py ensure
-```
-
-Default base URL:
-
-```text
-http://127.0.0.1:17777
 ```
 
 OpenAPI docs are available at `/docs` when `SURF_DEBUG=true`.
@@ -51,45 +59,16 @@ SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runti
 
 ## Quick Agent Flow
 
-Create a default silent persistent browser session:
+Preferred MCP tools:
 
-```bash
-curl -s http://127.0.0.1:17777/sessions/ \
-  -H 'Content-Type: application/json' \
-  -d '{"config":{"profile_id":"agent-default","persist_profile":true,"block_mode":"conservative"}}'
-```
-
-Navigate:
-
-```bash
-curl -s http://127.0.0.1:17777/browser/navigate \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id":"'$SESSION_ID'","url":"https://www.nseindia.com/","wait_until":"domcontentloaded","timeout":90000}'
-```
-
-Observe:
-
-```bash
-curl -s http://127.0.0.1:17777/browser/observe \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id":"'$SESSION_ID'","max_text_length":4000,"max_items":50}'
-```
-
-Fetch with browser cookies:
-
-```bash
-curl -s http://127.0.0.1:17777/fetch/request \
-  -H 'Content-Type: application/json' \
-  -d '{"method":"GET","url":"https://www.nseindia.com/api/marketStatus","backend":"browser","session_id":"'$SESSION_ID'","timeout":60000}'
-```
-
-Close:
-
-```bash
-curl -s -X DELETE http://127.0.0.1:17777/sessions/$SESSION_ID
-```
-
-Add `-H "Authorization: Bearer $SURF_API_TOKEN"` to each request when `SURF_AUTH_MODE=token`.
+- `browser_create_session`
+- `browser_network_start` when XHR/API discovery matters.
+- `browser_navigate`
+- `browser_observe`
+- `browser_links` for full DOM link extraction on disclosure/download pages.
+- `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
+- `browser_download`
+- `browser_close_session`
 
 ## API Surface
 
@@ -142,6 +121,7 @@ Important keys:
 - `profile_id`: stable local browser profile name. Only one active persistent session can use a profile at a time.
 - `silent`: defaults to `true`.
 - `headed`: set `true` to show the browser.
+- `background_headed`: defaults to `true`, placing headed windows off-screen for protected-site fallback.
 - `persist_profile`: defaults to `true`.
 - `stealth_strategy`: `minimal`, `none`, or `legacy`; default is `minimal`.
 - `block_mode`: `off`, `conservative`, or `token_saver`.
@@ -150,19 +130,11 @@ Important keys:
 
 Defaults are tuned for one-off agent work: silent browser, persistent local cookies, conservative blocking, stable browser identity, 3 active browser sessions, 1 headed session, 10 minute session idle timeout, 60 second browser-runtime idle teardown, and 2 hour hard TTL.
 
-## Daemon Lifecycle
+## Runtime Lifecycle
 
-SURF is designed as a resident thin daemon. The FastAPI shell stays available on loopback, while Playwright/Chromium starts lazily on browser-session creation and stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` when no sessions remain.
+For agents, `surfctl.py mcp` and `surfctl.py stdio` keep SURF in-process and exit when the stdio process exits. They do not bind TCP or Unix sockets. Playwright/Chromium starts lazily on browser-session creation and stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` when no sessions remain.
 
-Use `surfctl.py` for agent-friendly local supervision:
-
-```bash
-.venv/bin/python surfctl.py status
-.venv/bin/python surfctl.py ensure
-.venv/bin/python surfctl.py stop
-```
-
-Agents should close sessions when finished and leave the daemon running. Use `/health/runtime` to inspect pid, active sessions, browser-runtime state, limits, and process-tree RSS.
+`start_surf.py` is only the optional manual HTTP development server.
 
 ## Observe Modes
 
@@ -177,7 +149,7 @@ Modes:
 
 ## Fetch Backends
 
-- `auto`: currently uses `httpx`.
+- `auto`: uses `curl_cffi` when installed, otherwise `httpx`.
 - `httpx`: normal HTTP client.
 - `browser`: Playwright browser-context request sharing cookies with the active session.
 - `curl_cffi`: browser-like TLS/session fetches.
@@ -242,9 +214,9 @@ BSE RELIANCE:
 
 Runtime browser profiles, downloads, and filter-list caches live under `data/` and are ignored by Git.
 
-## Agent Skill
+## Agent Integration
 
-This repo includes a compact agent skill at `.agents/skills/surf/SKILL.md`. Install or copy that skill into an agent environment when you want agents to discover and use SURF consistently.
+Use `surfctl.py mcp` as a stdio MCP server. MCP server instructions mark SURF as the preferred local browsing, scraping, download, and browser-cookie fetch tool.
 
 ## Verification
 

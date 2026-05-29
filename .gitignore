@@ -48,6 +48,7 @@ venv.bak/
 *.log
 logs/
 *.log.*
+.surf-state/
 
 # Testing
 .pytest_cache/

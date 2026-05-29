@@ -62,7 +62,11 @@ class FetchService:
 
     def _select_backend(self, backend: str) -> str:
         if backend == FetchBackend.AUTO.value:
-            return FetchBackend.HTTPX.value
+            try:
+                import curl_cffi  # noqa: F401
+                return FetchBackend.CURL_CFFI.value
+            except ImportError:
+                return FetchBackend.HTTPX.value
         return backend
 
     async def _request_browser_context(

@@ -1,59 +1,65 @@
 # SURF Usage
 
-Start:
+Agent MCP bridge:
+
+```bash
+.venv/bin/python surfctl.py mcp
+```
+
+Script JSONL bridge:
+
+```bash
+.venv/bin/python surfctl.py stdio
+```
+
+Manual HTTP development server:
 
 ```bash
 .venv/bin/python start_surf.py
 ```
 
-Agent-friendly start/discovery:
+Default auth is loopback-only for the manual HTTP server and does not require login. If `SURF_AUTH_MODE=token`, send `Authorization: Bearer $SURF_API_TOKEN`.
 
-```bash
-.venv/bin/python surfctl.py ensure
+## Agent Flow
+
+Use MCP tools:
+
+1. `browser_create_session`
+2. `browser_network_start` when XHR/API discovery matters.
+3. `browser_navigate`
+4. `browser_observe`
+5. `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
+6. `browser_download` for files.
+7. `browser_close_session`
+
+Default session:
+
+```json
+{
+  "profile_id": "agent-default",
+  "persist_profile": true,
+  "headed": false,
+  "background_headed": true,
+  "block_mode": "conservative",
+  "content_mode": "compact"
+}
 ```
 
-Default base URL:
+Set `headed=true` only when a protected or interactive site fails in silent/headless mode. Headed sessions default to an off-screen window.
 
-```text
-http://127.0.0.1:17777
-```
+## JSONL Example
 
-Default auth is loopback-only and does not require login. If `SURF_AUTH_MODE=token`, send `Authorization: Bearer $SURF_API_TOKEN`.
+Keep one process open for the full workflow:
 
-Create a session:
-
-```bash
-curl -s http://127.0.0.1:17777/sessions/ \
-  -H 'Content-Type: application/json' \
-  -d '{"config":{"profile_id":"agent-default","persist_profile":true,"block_mode":"conservative"}}'
-```
-
-Navigate and observe:
-
-```bash
-curl -s http://127.0.0.1:17777/browser/navigate \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id":"'$SESSION_ID'","url":"https://example.com","wait_until":"domcontentloaded"}'
-
-curl -s http://127.0.0.1:17777/browser/observe \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id":"'$SESSION_ID'","max_text_length":4000,"max_items":50}'
-```
-
-Fetch with browser cookies:
-
-```bash
-curl -s http://127.0.0.1:17777/fetch/request \
-  -H 'Content-Type: application/json' \
-  -d '{"method":"GET","url":"https://example.com/api/data","backend":"browser","session_id":"'$SESSION_ID'"}'
-```
-
-Close:
-
-```bash
-curl -s -X DELETE http://127.0.0.1:17777/sessions/$SESSION_ID
+```jsonl
+{"id":"health","method":"GET","path":"/health/live"}
+{"id":"create","method":"POST","path":"/sessions/","data":{"config":{"profile_id":"agent-default","persist_profile":true,"block_mode":"conservative","content_mode":"compact"}}}
+{"id":"nav","method":"POST","path":"/browser/navigate","data":{"session_id":"sess_xxxxxxxx","url":"https://example.com","wait_until":"domcontentloaded"}}
+{"id":"observe","method":"POST","path":"/browser/observe","data":{"session_id":"sess_xxxxxxxx","max_text_length":4000,"max_items":50}}
+{"id":"close","method":"DELETE","path":"/sessions/sess_xxxxxxxx"}
+{"id":"quit","method":"QUIT"}
 ```
 
 Use `README.md` for the canonical API overview and `AGENTS.md` for agent protocol.
 
-Close sessions when work is done. The daemon remains resident, and Playwright/Chromium is released after browser idle.
+Close sessions when work is done. SURF stdio exits when the MCP/JSONL process closes, and Playwright/Chromium is released after browser idle.

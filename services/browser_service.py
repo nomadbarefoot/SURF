@@ -915,22 +915,33 @@ class BrowserService:
     
     async def _extract_links(self, page: Page, selector: Optional[str], timeout: int) -> Dict[str, Any]:
         """Extract all links from page or specific container"""
-        
-        link_selector = f"{selector} a" if selector else "a"
-        links = await page.locator(link_selector).all()
-        
-        link_data = []
-        for link in links:
-            href = await link.get_attribute("href")
-            text = await link.text_content()
-            
-            if href:  # Only include links with href
-                link_data.append({
-                    "url": href,
-                    "text": text.strip() if text else "",
-                    "absolute_url": page.url  # Base URL for relative links
-                })
-        
+
+        root_selector = selector or "body"
+        await page.locator(root_selector).first.wait_for(state="attached", timeout=timeout)
+        link_data = await page.evaluate(
+            """
+            ({rootSelector}) => {
+                const root = document.querySelector(rootSelector) || document;
+                const visible = (el) => {
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style && style.visibility !== 'hidden' &&
+                        style.display !== 'none' && rect.width > 0 && rect.height > 0;
+                };
+                const clip = (value, length = 300) => (value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
+                return Array.from(root.querySelectorAll('a[href]')).map((a, index) => ({
+                    index,
+                    text: clip(a.innerText || a.textContent || a.getAttribute('aria-label') || a.title || ''),
+                    href: a.getAttribute('href') || '',
+                    url: a.href,
+                    title: a.title || '',
+                    visible: visible(a)
+                })).filter((link) => link.url);
+            }
+            """,
+            {"rootSelector": root_selector}
+        )
+
         return {
             "links": link_data,
             "count": len(link_data),
