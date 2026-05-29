@@ -15,7 +15,7 @@ from core.foundation import (
     RequestIDMiddleware,
     cleanup_services
 )
-from controllers import browser_controller, session_controller, health_controller, auth_controller
+from controllers import browser_controller, session_controller, health_controller, auth_controller, fetch_controller
 from utils.logging import configure_logging
 
 # Configure logging
@@ -67,6 +67,7 @@ app.add_middleware(
 app.include_router(auth_controller.router, prefix="/auth", tags=["Authentication"])
 app.include_router(session_controller.router, prefix="/sessions", tags=["Sessions"])
 app.include_router(browser_controller.router, prefix="/browser", tags=["Browser Operations"])
+app.include_router(fetch_controller.router, prefix="/fetch", tags=["HTTP Fetch"])
 app.include_router(health_controller.router, prefix="/health", tags=["Health"])
 
 # Root endpoint

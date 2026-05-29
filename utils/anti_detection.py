@@ -378,7 +378,7 @@ class HumanMimicry:
             
             # Add some randomness (20% variation)
             actual_time = random.gauss(reading_time, reading_time * 0.2)
-            actual_time = max(0.5, actual_time)  # Minimum 0.5 seconds
+            actual_time = min(max(0.5, actual_time), 3.0)
             
             await asyncio.sleep(actual_time)
             

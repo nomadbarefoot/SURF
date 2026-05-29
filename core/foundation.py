@@ -413,6 +413,7 @@ async def require_scope(required_scope: str):
 _session_service: Optional[Any] = None
 _browser_service: Optional[Any] = None
 _cache_service: Optional[Any] = None
+_fetch_service: Optional[Any] = None
 
 
 async def get_session_service():
@@ -449,6 +450,17 @@ async def get_cache_service():
         await _cache_service.initialize()
     
     return _cache_service
+
+
+async def get_fetch_service():
+    """Get fetch service instance"""
+    global _fetch_service
+
+    if _fetch_service is None:
+        from services.fetch_service import FetchService
+        _fetch_service = FetchService()
+
+    return _fetch_service
 
 
 async def get_session_manager():
@@ -493,7 +505,7 @@ async def validate_url(url: str) -> str:
 # Cleanup function
 async def cleanup_services():
     """Cleanup all services on shutdown"""
-    global _session_service, _browser_service, _cache_service
+    global _session_service, _browser_service, _cache_service, _fetch_service
     
     if _session_service:
         await _session_service.cleanup()
@@ -506,3 +518,5 @@ async def cleanup_services():
     if _cache_service:
         await _cache_service.cleanup()
         _cache_service = None
+
+    _fetch_service = None

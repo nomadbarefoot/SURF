@@ -52,6 +52,27 @@ class BrowserType(str, Enum):
     WEBKIT = "webkit"
 
 
+class SessionMode(str, Enum):
+    """Session mode enumeration"""
+    BROWSER = "browser"
+    FETCH_ONLY = "fetch_only"
+
+
+class StealthStrategy(str, Enum):
+    """Browser profile strategy enumeration"""
+    NONE = "none"
+    MINIMAL = "minimal"
+    LEGACY = "legacy"
+
+
+class FetchBackend(str, Enum):
+    """HTTP fetch backend enumeration"""
+    AUTO = "auto"
+    HTTPX = "httpx"
+    CURL_CFFI = "curl_cffi"
+    CLOUDSCRAPER = "cloudscraper"
+
+
 # ============================================================================
 # REQUEST SCHEMAS
 # ============================================================================
@@ -143,6 +164,52 @@ class ScreenshotRequest(BaseModel):
         return v
 
 
+class ObserveRequest(BaseModel):
+    """Request model for compact page observation"""
+    session_id: str = Field(..., description="Session ID")
+    include_screenshot: bool = Field(default=False, description="Capture a screenshot with the observation")
+    max_text_length: int = Field(default=8000, ge=500, le=50000, description="Maximum visible text length")
+    max_items: int = Field(default=100, ge=1, le=500, description="Maximum links/forms/actions/tables to return")
+
+
+class WaitRequest(BaseModel):
+    """Request model for explicit browser waits"""
+    session_id: str = Field(..., description="Session ID")
+    selector: Optional[str] = Field(default=None, description="Selector to wait for")
+    text: Optional[str] = Field(default=None, description="Text to wait for")
+    url_contains: Optional[str] = Field(default=None, description="URL fragment to wait for")
+    load_state: Optional[WaitUntil] = Field(default=None, description="Playwright load state to wait for")
+    timeout: int = Field(default=30000, ge=1000, le=300000, description="Timeout in milliseconds")
+
+
+class NetworkCaptureRequest(BaseModel):
+    """Request model for browser network capture"""
+    session_id: str = Field(..., description="Session ID")
+    url_contains: Optional[str] = Field(default=None, description="Only capture responses containing this URL fragment")
+    resource_types: Optional[List[str]] = Field(default=None, description="Resource types to capture")
+    status_min: Optional[int] = Field(default=None, ge=100, le=599, description="Minimum HTTP status")
+    status_max: Optional[int] = Field(default=None, ge=100, le=599, description="Maximum HTTP status")
+    include_body: bool = Field(default=False, description="Include small text or JSON response bodies")
+    max_body_bytes: int = Field(default=65536, ge=1024, le=1048576, description="Maximum body bytes per response")
+
+
+class FetchRequest(BaseModel):
+    """Request model for one-off HTTP fetches"""
+    method: str = Field(default="GET", max_length=16, description="HTTP method")
+    url: HttpUrl = Field(..., description="URL to fetch")
+    headers: Optional[Dict[str, str]] = Field(default=None, description="Request headers")
+    params: Optional[Dict[str, Any]] = Field(default=None, description="Query params")
+    body: Optional[Union[str, bytes]] = Field(default=None, description="Raw request body")
+    json_body: Optional[Any] = Field(default=None, alias="json", description="JSON request body")
+    timeout: int = Field(default=30000, ge=1000, le=300000, description="Timeout in milliseconds")
+    backend: FetchBackend = Field(default=FetchBackend.AUTO, description="Fetch backend")
+    session_id: Optional[str] = Field(default=None, description="Optional browser session cookie source")
+    impersonate: Optional[str] = Field(default="chrome", description="curl_cffi impersonation target")
+
+    class Config:
+        populate_by_name = True
+
+
 class LoginRequest(BaseModel):
     """Request model for user authentication"""
     username: str = Field(..., min_length=3, max_length=50, description="Username")
@@ -166,6 +233,8 @@ class BatchRequest(BaseModel):
     """Request model for batch operations"""
     operations: List[Dict[str, Any]] = Field(..., min_items=1, max_items=10, description="List of operations")
     session_id: str = Field(..., description="Session ID for batch operations")
+    parallel: bool = Field(default=False, description="Whether to execute operations in parallel")
+    max_concurrent: int = Field(default=3, ge=1, le=10, description="Maximum concurrent operations")
     
     @validator("session_id")
     def validate_session_id(cls, v: str) -> str:
@@ -311,6 +380,30 @@ class ScreenshotResponse(BaseResponse):
         }
 
 
+class ObserveResponse(BaseResponse):
+    """Page observation response model"""
+    success: bool = Field(default=True, description="Observation success status")
+    data: Dict[str, Any] = Field(..., description="Observation data")
+
+
+class WaitResponse(BaseResponse):
+    """Explicit wait response model"""
+    success: bool = Field(default=True, description="Wait success status")
+    data: Dict[str, Any] = Field(..., description="Wait result")
+
+
+class NetworkCaptureResponse(BaseResponse):
+    """Network capture response model"""
+    success: bool = Field(default=True, description="Network capture operation success status")
+    data: Dict[str, Any] = Field(..., description="Network capture data")
+
+
+class FetchResponse(BaseResponse):
+    """Fetch response model"""
+    success: bool = Field(default=True, description="Fetch success status")
+    data: Dict[str, Any] = Field(..., description="Fetch data")
+
+
 class HealthResponse(BaseResponse):
     """Health check response model"""
     success: bool = Field(default=True, description="Service health status")
@@ -419,14 +512,21 @@ class BatchResponse(BaseResponse):
 
 class SessionConfig(BaseModel):
     """Session configuration model"""
+    mode: SessionMode = Field(default=SessionMode.BROWSER, description="Session mode")
+    profile_id: str = Field(default="default", description="Persistent browser profile ID")
+    headed: bool = Field(default=True, description="Launch a visible browser")
+    persist_profile: bool = Field(default=True, description="Persist browser profile data")
     viewport: Dict[str, int] = Field(default={"width": 1920, "height": 1080}, description="Viewport dimensions")
     user_agent: str = Field(..., description="User agent string")
-    stealth: bool = Field(default=True, description="Enable stealth mode")
-    block_resources: List[str] = Field(default=["image", "font", "stylesheet"], description="Resource types to block")
+    stealth: bool = Field(default=False, description="Enable legacy stealth mode")
+    stealth_strategy: StealthStrategy = Field(default=StealthStrategy.MINIMAL, description="Browser profile strategy")
+    block_resources: List[str] = Field(default=[], description="Resource types to block")
     timeout: int = Field(default=30000, description="Default timeout in milliseconds")
     java_script_enabled: bool = Field(default=True, description="Enable JavaScript")
     ignore_https_errors: bool = Field(default=True, description="Ignore HTTPS errors")
     browser_type: BrowserType = Field(default=BrowserType.CHROMIUM, description="Browser type")
+    locale: str = Field(default="en-US", description="Browser locale")
+    timezone_id: str = Field(default="Asia/Kolkata", description="Browser timezone ID")
     
     class Config:
         use_enum_values = True

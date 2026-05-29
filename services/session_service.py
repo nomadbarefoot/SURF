@@ -4,6 +4,7 @@ import time
 import uuid
 from typing import Dict, Optional, Any, List
 from datetime import datetime, timedelta
+from pathlib import Path
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 import structlog
 
@@ -20,7 +21,9 @@ from models.schemas import (
     BrowserContext as BrowserContextModel,
     SessionStatus,
     SessionStats,
-    SessionLimits
+    SessionLimits,
+    SessionMode,
+    StealthStrategy
 )
 from utils.stealth import setup_stealth_mode
 from utils.helpers import get_random_user_agent
@@ -46,16 +49,7 @@ class SessionService:
         """Initialize Playwright and browser instance"""
         try:
             self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(
-                headless=settings.headless,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-web-security",
-                    "--disable-features=VizDisplayCompositor"
-                ]
-            )
+            self.browser = None
             
             # Start cleanup task
             self.cleanup_task = asyncio.create_task(self._cleanup_loop())
@@ -115,27 +109,21 @@ class SessionService:
                 # Build session configuration
                 config = self._build_session_config(user_config)
                 
-                # Get enhanced stealth configuration
-                stealth_config = get_enhanced_stealth_config()
-                
-                # Create browser context with enhanced stealth
-                context = await self.browser.new_context(
-                    viewport=stealth_config["viewport"],
-                    user_agent=stealth_config["user_agent"],
-                    java_script_enabled=stealth_config["java_script_enabled"],
-                    ignore_https_errors=stealth_config["ignore_https_errors"]
-                )
+                context = await self._create_browser_context(config, session_id)
                 
                 # Block resources if enabled
                 if config.block_resources:
-                    await context.route("**/*", self._handle_route)
+                    await context.route("**/*", lambda route: self._handle_route(route, config.block_resources))
                 
                 # Create page
-                page = await context.new_page()
+                page = context.pages[0] if context.pages else await context.new_page()
                 
-                # Setup enhanced stealth mode
-                if config.stealth:
+                stealth_strategy = self._enum_value(config.stealth_strategy)
+                if stealth_strategy == StealthStrategy.LEGACY.value or config.stealth:
+                    stealth_config = get_enhanced_stealth_config()
                     await setup_stealth_mode(page, stealth_config["device_info"])
+                elif stealth_strategy == StealthStrategy.MINIMAL.value:
+                    await self._setup_minimal_profile(page)
                 
                 # Create browser context model
                 browser_context = BrowserContextModel(
@@ -188,12 +176,14 @@ class SessionService:
         session = self.active_sessions[session_id]
         
         try:
-            # Get browser context and close it
-            context_id = session.context.context_id
-            for context in self.browser.contexts:
-                if str(id(context)) == context_id:
-                    await context.close()
-                    break
+            if getattr(session, "context_obj", None):
+                await session.context_obj.close()
+            elif self.browser:
+                context_id = session.context.context_id
+                for context in self.browser.contexts:
+                    if str(id(context)) == context_id:
+                        await context.close()
+                        break
             
             # Remove from active sessions
             del self.active_sessions[session_id]
@@ -290,26 +280,98 @@ class SessionService:
         """Build session configuration with smart defaults"""
         
         default_config = {
+            "mode": SessionMode.BROWSER,
+            "profile_id": settings.default_profile_id,
+            "headed": not settings.headless,
+            "persist_profile": settings.persist_profiles,
             "viewport": settings.default_viewport,
-            "user_agent": get_random_user_agent(),
+            "user_agent": settings.user_agents[0],
             "stealth": settings.enable_stealth,
+            "stealth_strategy": settings.stealth_strategy,
             "block_resources": settings.block_resources,
             "timeout": settings.default_timeout,
             "java_script_enabled": True,
             "ignore_https_errors": True,
-            "browser_type": "chromium"
+            "browser_type": "chromium",
+            "locale": settings.default_locale,
+            "timezone_id": settings.default_timezone_id
         }
         
         if user_config:
             default_config.update(user_config)
         
         return SessionConfig(**default_config)
+
+    async def _create_browser_context(self, config: SessionConfig, session_id: str) -> BrowserContext:
+        """Create a browser context using a persistent headed profile by default."""
+        if self._enum_value(config.mode) == SessionMode.FETCH_ONLY.value:
+            raise ConfigurationError("session_mode", "fetch_only sessions do not create browser contexts yet")
+
+        launch_args = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage"
+        ]
+
+        context_options = {
+            "headless": not config.headed,
+            "viewport": config.viewport,
+            "user_agent": config.user_agent,
+            "java_script_enabled": config.java_script_enabled,
+            "ignore_https_errors": config.ignore_https_errors,
+            "locale": config.locale,
+            "timezone_id": config.timezone_id,
+            "args": launch_args
+        }
+
+        if config.persist_profile:
+            profile_id = self._safe_profile_id(config.profile_id)
+            profile_dir = Path(settings.profiles_dir)
+            if not profile_dir.is_absolute():
+                profile_dir = Path(__file__).parent.parent / profile_dir
+            user_data_dir = profile_dir / profile_id
+            user_data_dir.mkdir(parents=True, exist_ok=True)
+            return await self.playwright.chromium.launch_persistent_context(
+                user_data_dir=str(user_data_dir),
+                **context_options
+            )
+
+        if self.browser is None:
+            self.browser = await self.playwright.chromium.launch(
+                headless=not config.headed,
+                args=launch_args
+            )
+        return await self.browser.new_context(
+            viewport=config.viewport,
+            user_agent=config.user_agent,
+            java_script_enabled=config.java_script_enabled,
+            ignore_https_errors=config.ignore_https_errors,
+            locale=config.locale,
+            timezone_id=config.timezone_id
+        )
+
+    async def _setup_minimal_profile(self, page: Page) -> None:
+        """Apply only low-risk automation cleanup without broad fingerprint spoofing."""
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+        """)
+
+    def _safe_profile_id(self, profile_id: str) -> str:
+        """Return a filesystem-safe profile id."""
+        allowed = [c if c.isalnum() or c in ("-", "_") else "_" for c in profile_id]
+        safe = "".join(allowed).strip("_")
+        return safe or "default"
+
+    def _enum_value(self, value: Any) -> str:
+        """Return enum value or string value for Pydantic v1/v2 compatibility."""
+        return value.value if hasattr(value, "value") else str(value)
     
-    async def _handle_route(self, route) -> None:
+    async def _handle_route(self, route, blocked_resources: Optional[List[str]] = None) -> None:
         """Handle resource blocking"""
         resource_type = route.request.resource_type
         
-        if resource_type in settings.block_resources:
+        if resource_type in (blocked_resources or []):
             await route.abort()
         else:
             await route.continue_()

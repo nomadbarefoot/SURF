@@ -24,6 +24,7 @@ share/python-wheels/
 MANIFEST
 
 # Virtual Environments
+.venv/
 venv/
 env/
 ENV/
@@ -62,6 +63,7 @@ htmlcov/
 .playwright/
 playwright-report/
 test-results/
+data/profiles/
 
 # Database - keeping .db files tracked for stateful persistence
 # *.db
@@ -86,4 +88,3 @@ temp/
 # OS
 .DS_Store
 Thumbs.db
-

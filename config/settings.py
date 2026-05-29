@@ -30,14 +30,20 @@ class Settings(BaseSettings):
     session_cleanup_interval: int = Field(default=60, env="SURF_SESSION_CLEANUP_INTERVAL")  # seconds
     
     # Browser Configuration
-    headless: bool = Field(default=True, env="SURF_HEADLESS")
+    headless: bool = Field(default=False, env="SURF_HEADLESS")
     default_timeout: int = Field(default=30000, env="SURF_DEFAULT_TIMEOUT")  # 30 seconds
     max_page_load_timeout: int = Field(default=60000, env="SURF_MAX_PAGE_LOAD_TIMEOUT")  # 60 seconds
+    profiles_dir: str = Field(default="data/profiles", env="SURF_PROFILES_DIR")
+    default_profile_id: str = Field(default="default", env="SURF_DEFAULT_PROFILE_ID")
+    persist_profiles: bool = Field(default=True, env="SURF_PERSIST_PROFILES")
     
     # Performance & Stealth
-    enable_stealth: bool = Field(default=True, env="SURF_ENABLE_STEALTH")
-    block_resources: List[str] = Field(default=["image", "font", "stylesheet"], env="SURF_BLOCK_RESOURCES")
+    enable_stealth: bool = Field(default=False, env="SURF_ENABLE_STEALTH")
+    stealth_strategy: str = Field(default="minimal", env="SURF_STEALTH_STRATEGY")
+    block_resources: List[str] = Field(default=[], env="SURF_BLOCK_RESOURCES")
     default_viewport: Dict[str, int] = Field(default={"width": 1920, "height": 1080})
+    default_locale: str = Field(default="en-US", env="SURF_DEFAULT_LOCALE")
+    default_timezone_id: str = Field(default="Asia/Kolkata", env="SURF_DEFAULT_TIMEZONE_ID")
     
     # User Agents Pool
     user_agents: List[str] = Field(default=[
@@ -72,6 +78,8 @@ class Settings(BaseSettings):
     enable_semantic_chunking: bool = Field(default=True, env="SURF_ENABLE_SEMANTIC_CHUNKING")
     enable_content_deduplication: bool = Field(default=True, env="SURF_ENABLE_CONTENT_DEDUPLICATION")
     enable_enhanced_mouse_movement: bool = Field(default=True, env="SURF_ENABLE_ENHANCED_MOUSE_MOVEMENT")
+    policy_mode: str = Field(default="permissive", env="SURF_POLICY_MODE")
+    per_domain_delay_seconds: float = Field(default=2.0, env="SURF_PER_DOMAIN_DELAY_SECONDS")
     
     # Site Memory Configuration
     site_memory_ttl: int = Field(default=86400, env="SURF_SITE_MEMORY_TTL")  # 24 hours

@@ -8,6 +8,8 @@ from core.foundation import BrowserOperationError, SessionNotFoundError
 from models.schemas import (
     NavigateRequest, ExtractRequest, InteractRequest, ScreenshotRequest,
     NavigationResponse, ExtractResponse, InteractResponse, ScreenshotResponse,
+    ObserveRequest, ObserveResponse, WaitRequest, WaitResponse,
+    NetworkCaptureRequest, NetworkCaptureResponse,
     StructuredDataRequest, StructuredDataResponse, 
     CaptchaDetectionRequest, CaptchaDetectionResponse
 )
@@ -214,12 +216,122 @@ async def take_screenshot(
         )
 
 
+@router.post("/observe", response_model=ObserveResponse)
+async def observe_page(
+    request: ObserveRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Return a compact agent-friendly observation of the current page"""
+    try:
+        session = await session_service.get_session(request.session_id)
+        result = await browser_service.observe_page(
+            session=session,
+            include_screenshot=request.include_screenshot,
+            max_text_length=request.max_text_length,
+            max_items=request.max_items
+        )
+        return ObserveResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Page observation failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Page observation failed")
+
+
+@router.post("/wait", response_model=WaitResponse)
+async def wait_for_condition(
+    request: WaitRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Wait for an explicit browser condition"""
+    try:
+        session = await session_service.get_session(request.session_id)
+        result = await browser_service.wait_for_condition(
+            session=session,
+            selector=request.selector,
+            text=request.text,
+            url_contains=request.url_contains,
+            load_state=request.load_state,
+            timeout=request.timeout
+        )
+        return WaitResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Wait failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Wait failed")
+
+
+@router.post("/network/start", response_model=NetworkCaptureResponse)
+async def start_network_capture(
+    request: NetworkCaptureRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Start bounded response capture for a session"""
+    try:
+        session = await session_service.get_session(request.session_id)
+        result = await browser_service.start_network_capture(
+            session=session,
+            filters=request.dict(exclude={"session_id"})
+        )
+        return NetworkCaptureResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Network capture start failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Network capture start failed")
+
+
+@router.post("/network/stop", response_model=NetworkCaptureResponse)
+async def stop_network_capture(
+    request: NetworkCaptureRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Stop response capture for a session"""
+    try:
+        session = await session_service.get_session(request.session_id)
+        result = await browser_service.stop_network_capture(session=session)
+        return NetworkCaptureResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Network capture stop failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Network capture stop failed")
+
+
+@router.get("/network/events/{session_id}", response_model=NetworkCaptureResponse)
+async def get_network_events(
+    session_id: str,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Return captured response events for a session"""
+    try:
+        session = await session_service.get_session(session_id)
+        result = await browser_service.get_network_events(session=session)
+        return NetworkCaptureResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Network capture read failed", error=str(e), session_id=session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Network capture read failed")
+
+
 @router.post("/batch")
 async def batch_operations(
     operations: list,
     session_id: str,
-    parallel: bool = True,
-    max_concurrent: int = 5,
+    parallel: bool = False,
+    max_concurrent: int = 3,
     browser_service: BrowserService = Depends(get_browser_service),
     session_service: SessionService = Depends(get_session_service),
     user: Dict[str, Any] = Depends(get_current_user)

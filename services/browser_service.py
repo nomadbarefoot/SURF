@@ -2,6 +2,7 @@
 import asyncio
 import random
 import time
+from collections import deque
 from typing import Optional, Dict, Any, List
 from playwright.async_api import Page
 import structlog
@@ -32,6 +33,7 @@ class BrowserService:
     def __init__(self):
         self.initialized = False
         self.site_memory_manager = create_site_memory_manager(ttl=settings.site_memory_ttl)
+        self.network_captures: Dict[str, Dict[str, Any]] = {}
     
     async def initialize(self) -> None:
         """Initialize browser service"""
@@ -125,7 +127,8 @@ class BrowserService:
                 "title": session.context.title,
                 "duration_ms": int(duration * 1000),
                 "success": True,
-                "site_memory_loaded": site_memory is not None
+                "site_memory_loaded": site_memory is not None,
+                "warnings": self._navigation_warnings(response.status if response else None, page.url)
             }
             
             logger.info("Navigation completed", session_id=session.session_id, **result)
@@ -220,6 +223,187 @@ class BrowserService:
         except Exception as e:
             logger.error("Content extraction failed", session_id=session.session_id, extract_type=extract_type, error=str(e))
             raise BrowserOperationError("extract", str(e))
+
+    async def observe_page(
+        self,
+        session: SessionData,
+        include_screenshot: bool = False,
+        max_text_length: int = 8000,
+        max_items: int = 100
+    ) -> Dict[str, Any]:
+        """Return a compact agent-friendly observation of the current page."""
+        if not self.initialized:
+            raise BrowserOperationError("observe", "Browser service not initialized")
+
+        try:
+            page = self._get_page_from_session(session)
+            observation = await page.evaluate(
+                """
+                ({maxTextLength, maxItems}) => {
+                    const visible = (el) => {
+                        const style = window.getComputedStyle(el);
+                        const rect = el.getBoundingClientRect();
+                        return style && style.visibility !== 'hidden' &&
+                            style.display !== 'none' && rect.width > 0 && rect.height > 0;
+                    };
+                    const text = (el) => (el.innerText || el.textContent || '').trim();
+                    const attr = (el, name) => el.getAttribute(name) || '';
+                    const clip = (value, length = 300) => (value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
+
+                    const links = Array.from(document.querySelectorAll('a[href]')).filter(visible).slice(0, maxItems).map((a) => ({
+                        text: clip(text(a), 160),
+                        href: a.href
+                    }));
+
+                    const forms = Array.from(document.querySelectorAll('form')).slice(0, maxItems).map((form, index) => ({
+                        index,
+                        action: form.action || '',
+                        method: (form.method || 'get').toUpperCase(),
+                        fields: Array.from(form.querySelectorAll('input, textarea, select')).slice(0, 50).map((field) => ({
+                            tag: field.tagName.toLowerCase(),
+                            type: attr(field, 'type'),
+                            name: attr(field, 'name'),
+                            id: field.id || '',
+                            placeholder: attr(field, 'placeholder'),
+                            label: clip(field.labels && field.labels[0] ? text(field.labels[0]) : '', 120)
+                        }))
+                    }));
+
+                    const actions = Array.from(document.querySelectorAll('button, input[type=button], input[type=submit], [role=button], [onclick]'))
+                        .filter(visible).slice(0, maxItems).map((el) => ({
+                            tag: el.tagName.toLowerCase(),
+                            text: clip(text(el) || attr(el, 'value') || attr(el, 'aria-label'), 160),
+                            id: el.id || '',
+                            name: attr(el, 'name'),
+                            selector_hint: el.id ? `#${CSS.escape(el.id)}` : ''
+                        }));
+
+                    const tables = Array.from(document.querySelectorAll('table')).slice(0, Math.min(maxItems, 20)).map((table, index) => ({
+                        index,
+                        rows: table.rows.length,
+                        columns: table.rows[0] ? table.rows[0].cells.length : 0,
+                        preview: Array.from(table.rows).slice(0, 5).map((row) =>
+                            Array.from(row.cells).slice(0, 8).map((cell) => clip(text(cell), 120))
+                        )
+                    }));
+
+                    return {
+                        visible_text: clip(document.body ? document.body.innerText : '', maxTextLength),
+                        links,
+                        forms,
+                        actions,
+                        tables
+                    };
+                }
+                """,
+                {"maxTextLength": max_text_length, "maxItems": max_items}
+            )
+
+            screenshot_path = None
+            if include_screenshot:
+                screenshot = await self.take_screenshot(session=session, full_page=False, wait_for_dynamic=False)
+                screenshot_path = screenshot.get("path")
+
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "screenshot": screenshot_path,
+                "warnings": self._page_warnings(await page.title(), observation.get("visible_text", "")),
+                **observation
+            }
+        except Exception as e:
+            logger.error("Page observation failed", session_id=session.session_id, error=str(e))
+            raise BrowserOperationError("observe", str(e))
+
+    async def wait_for_condition(
+        self,
+        session: SessionData,
+        selector: Optional[str] = None,
+        text: Optional[str] = None,
+        url_contains: Optional[str] = None,
+        load_state: Optional[WaitUntil] = None,
+        timeout: int = 30000
+    ) -> Dict[str, Any]:
+        """Wait for an explicit browser condition."""
+        page = self._get_page_from_session(session)
+        started = time.time()
+        try:
+            if load_state:
+                state_value = load_state.value if hasattr(load_state, "value") else str(load_state)
+                await page.wait_for_load_state(state_value, timeout=timeout)
+            if selector:
+                await page.wait_for_selector(selector, timeout=timeout)
+            if text:
+                await page.get_by_text(text).first.wait_for(timeout=timeout)
+            if url_contains:
+                await page.wait_for_function(
+                    "(fragment) => window.location.href.includes(fragment)",
+                    url_contains,
+                    timeout=timeout
+                )
+            return {
+                "success": True,
+                "url": page.url,
+                "duration_ms": int((time.time() - started) * 1000)
+            }
+        except Exception as e:
+            raise BrowserOperationError("wait", str(e))
+
+    async def start_network_capture(
+        self,
+        session: SessionData,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Start bounded network response capture for a session."""
+        page = self._get_page_from_session(session)
+        filters = filters or {}
+        capture = {
+            "enabled": True,
+            "filters": filters,
+            "events": deque(maxlen=500)
+        }
+        self.network_captures[session.session_id] = capture
+
+        async def capture_response(response):
+            try:
+                if not capture.get("enabled"):
+                    return
+                if not self._network_response_matches(response, filters):
+                    return
+                event = {
+                    "url": response.url,
+                    "status": response.status,
+                    "method": response.request.method,
+                    "resource_type": response.request.resource_type,
+                    "content_type": response.headers.get("content-type", ""),
+                    "timestamp": time.time()
+                }
+                if filters.get("include_body"):
+                    event["body"] = await self._safe_response_body(response, filters.get("max_body_bytes", 65536))
+                capture["events"].append(event)
+            except Exception as e:
+                logger.debug("Network capture event skipped", error=str(e))
+
+        page.on("response", lambda response: asyncio.create_task(capture_response(response)))
+        return {"capturing": True, "session_id": session.session_id, "filters": filters}
+
+    async def stop_network_capture(self, session: SessionData) -> Dict[str, Any]:
+        """Stop network capture for a session."""
+        capture = self.network_captures.get(session.session_id)
+        if capture:
+            capture["enabled"] = False
+        return {"capturing": False, "session_id": session.session_id}
+
+    async def get_network_events(self, session: SessionData) -> Dict[str, Any]:
+        """Return captured network events for a session."""
+        capture = self.network_captures.get(session.session_id)
+        events = list(capture["events"]) if capture else []
+        return {
+            "session_id": session.session_id,
+            "capturing": bool(capture and capture.get("enabled")),
+            "count": len(events),
+            "events": events
+        }
     
     async def _enhance_extracted_content(self, content: Dict[str, Any], extract_type: ExtractType) -> Dict[str, Any]:
         """Enhance extracted content with deduplication, type detection, and chunking"""
@@ -435,6 +619,61 @@ class BrowserService:
             raise BrowserOperationError("get_page", "Page not available in session")
         
         return session.page
+
+    def _navigation_warnings(self, status: Optional[int], url: str) -> List[str]:
+        """Return permissive-local warnings for suspicious navigation outcomes."""
+        warnings = []
+        if status in (401, 403):
+            warnings.append("Authentication or access challenge likely; continue only with permission.")
+        elif status == 429:
+            warnings.append("Rate limit response detected; back off before retrying.")
+        elif status and status >= 500:
+            warnings.append("Server error response detected; retry conservatively.")
+        return warnings
+
+    def _page_warnings(self, title: str, visible_text: str) -> List[str]:
+        """Detect common challenge/login-wall indicators without bypassing them."""
+        haystack = f"{title}\n{visible_text}".lower()
+        indicators = [
+            "captcha", "recaptcha", "hcaptcha", "verify you are human",
+            "access denied", "too many requests", "login required", "sign in"
+        ]
+        return [
+            f"Page contains possible challenge or gated-flow indicator: {indicator}"
+            for indicator in indicators
+            if indicator in haystack
+        ]
+
+    def _network_response_matches(self, response, filters: Dict[str, Any]) -> bool:
+        """Apply lightweight response capture filters."""
+        if not filters:
+            return True
+        url_contains = filters.get("url_contains")
+        if url_contains and url_contains not in response.url:
+            return False
+        resource_types = filters.get("resource_types")
+        if resource_types and response.request.resource_type not in resource_types:
+            return False
+        status_min = filters.get("status_min")
+        if status_min and response.status < status_min:
+            return False
+        status_max = filters.get("status_max")
+        if status_max and response.status > status_max:
+            return False
+        return True
+
+    async def _safe_response_body(self, response, max_body_bytes: int) -> Optional[str]:
+        """Capture only bounded text-like response bodies."""
+        content_type = response.headers.get("content-type", "").lower()
+        if not any(kind in content_type for kind in ("json", "text", "xml", "html", "javascript")):
+            return None
+        body = await response.body()
+        if len(body) > max_body_bytes:
+            body = body[:max_body_bytes]
+        try:
+            return body.decode("utf-8", errors="replace")
+        except Exception:
+            return None
     
     async def _navigate_with_retry(
         self, 

@@ -21,10 +21,16 @@ async def create_session(
     """Create new browser session with smart defaults"""
     
     try:
+        user_config = dict(request.config or {})
+        for key in ("user_agent", "viewport", "stealth", "block_resources"):
+            value = getattr(request, key, None)
+            if value is not None:
+                user_config[key] = value
+
         # Create session
         session_data = await session_service.create_session(
-            user_config=request.config,
-            user_id=user.get("username")
+            user_config=user_config,
+            user_id=user.get("username") if user else None
         )
         
         return SessionResponse(
@@ -34,7 +40,7 @@ async def create_session(
             expires_at=session_data.context.created_at
         )
         
-    except ResourceLimitExceededError as e:
+    except ResourceLimitError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(e)
