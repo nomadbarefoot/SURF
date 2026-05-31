@@ -4,7 +4,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
-from core.foundation import get_current_user, get_fetch_service, get_session_service, get_download_service
+from core.foundation import get_current_user, get_fetch_service, get_session_service, get_download_service, ValidationError
 from models.schemas import FetchRequest, FetchResponse
 from services.fetch_service import FetchService
 from services.session_service import SessionService
@@ -64,12 +64,19 @@ async def fetch_request(
                 content_bytes,
                 filename=request.download_filename,
                 source_url=result.get("url"),
-                content_type=result.get("headers", {}).get("content-type")
+                content_type=result.get("headers", {}).get("content-type"),
+                output_dir=request.output_dir,
+                overwrite=request.overwrite
             )
             result["download"] = download
             result["text"] = ""
             result["text_preview"] = ""
         return FetchResponse(success=True, data=result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"type": type(e).__name__, "code": e.error_code, "message": e.message, "details": e.details}
+        )
     except Exception as e:
         logger.error("Fetch request failed", error=str(e), url=str(request.url))
         raise HTTPException(

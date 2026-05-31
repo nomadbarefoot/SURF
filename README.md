@@ -67,7 +67,7 @@ Preferred MCP tools:
 - `browser_observe`
 - `browser_links` for full DOM link extraction on disclosure/download pages.
 - `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
-- `browser_download`
+- `browser_download`; pass `output_dir` when the caller needs the file in its own workspace.
 - `browser_close_session`
 
 ## API Surface
@@ -157,7 +157,9 @@ Modes:
 
 Browser-context fetches are API calls made from the browser context; they reuse cookies but are not counted in page adblock metrics.
 
-Set `save_to_downloads=true` to store a response body under `data/downloads/`.
+Set `save_to_downloads=true` to store a response body under `data/downloads/`. Pass `output_dir` plus `filename` when the caller needs a directly readable artifact path; SURF returns both `path` and `absolute_path`. Existing files are refused unless `overwrite=true`.
+
+Session creation failures return local diagnostic detail, including exception type, message, SURF error code when available, and hints for common launch problems such as sandbox-denied Chromium startup.
 
 ## Corporate Actions Probe
 

@@ -27,8 +27,10 @@ Do not use the manual HTTP daemon for agent workflows. Do not use localhost curl
 5. Use `browser_links` for full DOM link/PDF discovery on disclosure pages.
 6. Use `browser_click`, `browser_type`, and `browser_wait` for page workflows.
 7. Use `browser_fetch` with `backend="browser"` and `session_id` when an endpoint needs browser cookies.
-8. Use `browser_download` for files.
+8. Use `browser_download` for files; pass `output_dir` when downstream tooling must read the artifact directly.
 9. `browser_close_session` when done.
+
+Downloads return `absolute_path`. Existing files in `output_dir` are refused unless `overwrite=true`.
 
 ## Defaults
 

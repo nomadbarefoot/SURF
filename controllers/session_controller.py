@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 import structlog
 
 from core.foundation import get_current_user, get_session_service, get_browser_service
-from core.foundation import SessionNotFoundError, ResourceLimitError, SessionBusyError, ProfileInUseError
+from core.foundation import SessionNotFoundError, ResourceLimitError, SessionBusyError, ProfileInUseError, SurfException
 from models.schemas import SessionCreateRequest, SessionResponse, SessionTouchRequest, SessionReapRequest
 from services.session_service import SessionService
 from services.browser_service import BrowserService
@@ -52,11 +52,34 @@ async def create_session(
             detail=str(e)
         )
     except Exception as e:
-        logger.error("Session creation failed", error=str(e))
+        detail = session_creation_detail(e)
+        logger.error("Session creation failed", error=str(e), error_type=type(e).__name__, detail=detail)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Session creation failed"
+            detail=detail
         )
+
+
+def session_creation_detail(error: Exception) -> Dict[str, Any]:
+    """Return local diagnostics for browser launch/session failures."""
+    message = getattr(error, "message", str(error))
+    detail: Dict[str, Any] = {
+        "error": "Session creation failed",
+        "type": type(error).__name__,
+        "message": message,
+    }
+    if isinstance(error, SurfException):
+        detail["code"] = error.error_code
+        detail["details"] = error.details
+
+    lower = message.lower()
+    if "machportrendezvousserver" in lower or "bootstrap_check_in" in lower or "permission denied" in lower:
+        detail["hint"] = "Chromium launch was blocked by the host sandbox. Use the configured SURF MCP server, not a sandboxed shell-launched process."
+    elif "executable doesn't exist" in lower or "playwright install" in lower:
+        detail["hint"] = "Playwright browser binaries are missing. Run `python -m playwright install chromium` in the SURF environment."
+    elif "profile" in lower and "in use" in lower:
+        detail["hint"] = "A persistent profile is already active. Use a different profile_id or close the existing session."
+    return detail
 
 
 @router.get("/", response_model=List[Dict[str, Any]])

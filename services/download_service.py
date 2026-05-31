@@ -24,9 +24,15 @@ class DownloadService:
         self.root.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
 
-    async def save_playwright_download(self, download: Any, filename: Optional[str] = None) -> Dict[str, Any]:
+    async def save_playwright_download(
+        self,
+        download: Any,
+        filename: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
         suggested = filename or download.suggested_filename or "download.bin"
-        record = self._new_record(suggested, source_url=download.url)
+        record = self._new_record(suggested, source_url=download.url, output_dir=output_dir, overwrite=overwrite)
         await download.save_as(record["path"])
         self._validate_size(Path(record["path"]))
         record["size_bytes"] = Path(record["path"]).stat().st_size
@@ -39,10 +45,17 @@ class DownloadService:
         filename: Optional[str] = None,
         source_url: Optional[str] = None,
         content_type: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        overwrite: bool = False,
     ) -> Dict[str, Any]:
         if len(content) > settings.max_download_size_bytes:
             raise ValidationError("download", "Downloaded content exceeds configured maximum size")
-        record = self._new_record(filename or self._filename_from_url(source_url) or "download.bin", source_url=source_url)
+        record = self._new_record(
+            filename or self._filename_from_url(source_url) or "download.bin",
+            source_url=source_url,
+            output_dir=output_dir,
+            overwrite=overwrite,
+        )
         Path(record["path"]).write_bytes(content)
         record["size_bytes"] = len(content)
         record["content_type"] = content_type
@@ -61,7 +74,7 @@ class DownloadService:
     def path_for(self, download_id: str) -> Path:
         record = self._record(download_id)
         path = Path(record["path"]).resolve()
-        if not self._inside_root(path):
+        if not record.get("external") and not self._inside_root(path):
             raise ValidationError("download_id", "Download path is outside sandbox")
         return path
 
@@ -72,7 +85,7 @@ class DownloadService:
             if not record:
                 raise ValidationError("download_id", "Download not found")
             path = Path(record["path"])
-            if self._inside_root(path.resolve()) and path.exists():
+            if (self._inside_root(path.resolve()) or record.get("external")) and path.exists():
                 path.unlink()
             self._save_index(records)
             return {"deleted": True, "download_id": download_id}
@@ -93,16 +106,31 @@ class DownloadService:
                 self._save_index(records)
             return {"deleted": deleted, "count": len(deleted)}
 
-    def _new_record(self, filename: str, source_url: Optional[str] = None) -> Dict[str, Any]:
+    def _new_record(
+        self,
+        filename: str,
+        source_url: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
         download_id = f"dl_{uuid.uuid4().hex[:12]}"
         safe_name = self._safe_filename(filename)
-        path = (self.root / f"{download_id}_{safe_name}").resolve()
-        if not self._inside_root(path):
+        external = bool(output_dir)
+        if external:
+            target_dir = self._requested_output_dir(output_dir)
+            path = (target_dir / safe_name).resolve()
+            if path.exists() and not overwrite:
+                raise ValidationError("output_dir", "Target file already exists; set overwrite=true to replace it", str(path))
+        else:
+            path = (self.root / f"{download_id}_{safe_name}").resolve()
+        if not external and not self._inside_root(path):
             raise ValidationError("filename", "Invalid download filename")
         return {
             "download_id": download_id,
             "filename": safe_name,
             "path": str(path),
+            "absolute_path": str(path),
+            "external": external,
             "source_url": source_url,
             "created_at_epoch": time.time(),
             "size_bytes": 0,
@@ -142,7 +170,9 @@ class DownloadService:
 
     def _public_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
         public = dict(record)
-        public["path"] = os.path.relpath(record["path"], Path(__file__).parent.parent)
+        path = Path(record["path"]).resolve()
+        public["absolute_path"] = str(path)
+        public["path"] = str(path) if record.get("external") else os.path.relpath(path, Path(__file__).parent.parent)
         public["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record["created_at_epoch"]))
         return public
 
@@ -169,3 +199,15 @@ class DownloadService:
         if not path.is_absolute():
             path = Path(__file__).parent.parent / path
         return path
+
+    def _requested_output_dir(self, value: Optional[str]) -> Path:
+        if not value:
+            raise ValidationError("output_dir", "Output directory is required")
+        path = Path(value).expanduser()
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise ValidationError("output_dir", f"Unable to create output directory: {e}", value) from e
+        if not path.is_dir():
+            raise ValidationError("output_dir", "Output path is not a directory", value)
+        return path.resolve()

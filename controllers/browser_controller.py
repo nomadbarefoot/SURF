@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
 from core.foundation import get_current_user, get_browser_service, get_session_service
-from core.foundation import BrowserOperationError, SessionNotFoundError, SessionBusyError
+from core.foundation import BrowserOperationError, SessionNotFoundError, SessionBusyError, ValidationError
 from models.schemas import (
     NavigateRequest, ExtractRequest, InteractRequest, ScreenshotRequest,
     NavigationResponse, ExtractResponse, InteractResponse, ScreenshotResponse,
@@ -336,11 +336,18 @@ async def click_download(
                 session=session,
                 selector=request.selector,
                 timeout=request.timeout,
-                filename=request.filename
+                filename=request.filename,
+                output_dir=request.output_dir,
+                overwrite=request.overwrite
             )
         return DownloadResponse(success=True, data=result)
     except SessionNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"type": type(e).__name__, "code": e.error_code, "message": e.message, "details": e.details}
+        )
     except Exception as e:
         logger.error("Download click failed", error=str(e), session_id=request.session_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Download failed: {str(e)}")

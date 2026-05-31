@@ -360,6 +360,10 @@ def build_mcp_server():
         headers: dict[str, str] | None = None,
         params: dict[str, Any] | None = None,
         json_body: Any = None,
+        save_to_downloads: bool = False,
+        output_dir: str | None = None,
+        filename: str | None = None,
+        overwrite: bool = False,
         timeout: int = 30000,
     ) -> dict[str, Any]:
         data = {
@@ -370,6 +374,10 @@ def build_mcp_server():
             "headers": headers,
             "params": params,
             "json": json_body,
+            "save_to_downloads": save_to_downloads,
+            "output_dir": output_dir,
+            "download_filename": filename,
+            "overwrite": overwrite,
             "timeout": timeout,
         }
         return await app_call("POST", "/fetch/request", data)
@@ -380,6 +388,8 @@ def build_mcp_server():
         session_id: str | None = None,
         selector: str | None = None,
         filename: str | None = None,
+        output_dir: str | None = None,
+        overwrite: bool = False,
         timeout: int = 60000,
     ) -> dict[str, Any]:
         if url:
@@ -393,6 +403,8 @@ def build_mcp_server():
                     "backend": "browser" if session_id else "auto",
                     "save_to_downloads": True,
                     "download_filename": filename,
+                    "output_dir": output_dir,
+                    "overwrite": overwrite,
                     "timeout": timeout,
                 },
             )
@@ -400,7 +412,14 @@ def build_mcp_server():
             return await app_call(
                 "POST",
                 "/browser/download/click",
-                {"session_id": session_id, "selector": selector, "filename": filename, "timeout": timeout},
+                {
+                    "session_id": session_id,
+                    "selector": selector,
+                    "filename": filename,
+                    "output_dir": output_dir,
+                    "overwrite": overwrite,
+                    "timeout": timeout,
+                },
             )
         return {"ok": False, "error": "provide url or session_id+selector"}
 

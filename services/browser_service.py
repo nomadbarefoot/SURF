@@ -359,7 +359,9 @@ class BrowserService:
         session: SessionData,
         selector: str,
         timeout: int = 60000,
-        filename: Optional[str] = None
+        filename: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        overwrite: bool = False
     ) -> Dict[str, Any]:
         """Click an element and save the resulting browser download."""
         page = self._get_page_from_session(session)
@@ -370,9 +372,16 @@ class BrowserService:
             async with page.expect_download(timeout=timeout) as download_info:
                 await page.locator(selector).click(timeout=timeout)
             download = await download_info.value
-            result = await download_service.save_playwright_download(download, filename=filename)
+            result = await download_service.save_playwright_download(
+                download,
+                filename=filename,
+                output_dir=output_dir,
+                overwrite=overwrite,
+            )
             logger.info("Browser download saved", session_id=session.session_id, download_id=result.get("download_id"))
             return result
+        except ValidationError:
+            raise
         except Exception as e:
             logger.error("Browser download failed", session_id=session.session_id, selector=selector, error=str(e))
             raise BrowserOperationError("download", str(e))

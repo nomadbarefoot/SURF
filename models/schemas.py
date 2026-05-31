@@ -225,6 +225,8 @@ class FetchRequest(BaseModel):
     impersonate: Optional[str] = Field(default="chrome", description="curl_cffi impersonation target")
     save_to_downloads: bool = Field(default=False, description="Save response body into SURF downloads")
     download_filename: Optional[str] = Field(default=None, max_length=255, description="Optional download filename")
+    output_dir: Optional[str] = Field(default=None, max_length=1000, description="Optional caller-visible output directory")
+    overwrite: bool = Field(default=False, description="Overwrite an existing file in output_dir")
 
     class Config:
         populate_by_name = True
@@ -246,6 +248,8 @@ class DownloadClickRequest(BaseModel):
     selector: str = Field(..., max_length=1000, description="Selector that triggers a download")
     timeout: int = Field(default=60000, ge=1000, le=300000, description="Timeout in milliseconds")
     filename: Optional[str] = Field(default=None, max_length=255, description="Optional saved filename")
+    output_dir: Optional[str] = Field(default=None, max_length=1000, description="Optional caller-visible output directory")
+    overwrite: bool = Field(default=False, description="Overwrite an existing file in output_dir")
 
 
 class BatchRequest(BaseModel):

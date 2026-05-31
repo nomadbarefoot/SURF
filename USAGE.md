@@ -29,7 +29,7 @@ Use MCP tools:
 3. `browser_navigate`
 4. `browser_observe`
 5. `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
-6. `browser_download` for files.
+6. `browser_download` for files; pass `output_dir` when another tool needs to read the file directly.
 7. `browser_close_session`
 
 Default session:
