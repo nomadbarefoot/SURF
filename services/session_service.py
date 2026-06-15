@@ -115,25 +115,28 @@ class SessionService:
             logger.error("Error during session service cleanup", error=str(e))
     
     async def create_session(
-        self, 
+        self,
         user_config: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        pool: str = "default"
     ) -> SessionData:
         """Create new browser session with enhanced configuration"""
-        
+
         async with self.session_lock:
             session_id = f"sess_{uuid.uuid4().hex[:8]}"
-            
+
             try:
                 # Build session configuration
                 config = self._build_session_config(user_config)
-                if len(self.active_sessions) >= settings.max_sessions:
-                    raise ResourceLimitError(
-                        "sessions",
-                        settings.max_sessions,
-                        len(self.active_sessions)
-                    )
-                if config.headed and self._headed_session_count() >= settings.max_headed_sessions:
+                if pool == "search":
+                    search_count = sum(1 for s in self.active_sessions.values() if s.metadata.get("pool") == "search")
+                    if search_count >= settings.max_search_sessions:
+                        raise ResourceLimitError("search_sessions", settings.max_search_sessions, search_count)
+                else:
+                    non_search = sum(1 for s in self.active_sessions.values() if s.metadata.get("pool") != "search")
+                    if non_search >= settings.max_sessions:
+                        raise ResourceLimitError("sessions", settings.max_sessions, non_search)
+                if config.headed and pool != "search" and self._headed_session_count() >= settings.max_headed_sessions:
                     raise ResourceLimitError(
                         "headed_sessions",
                         settings.max_headed_sessions,
@@ -168,7 +171,8 @@ class SessionService:
                         "created_by": "api",
                         "browser_type": config.browser_type,
                         "busy_operations": 0,
-                        "blocker": self._new_blocker_stats(config)
+                        "blocker": self._new_blocker_stats(config),
+                        "pool": pool,
                     },
                     stats=SessionStats()
                 )

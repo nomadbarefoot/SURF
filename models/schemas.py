@@ -650,6 +650,35 @@ class SessionLimits(BaseModel):
 # ENHANCED CONTENT EXTRACTION SCHEMAS
 # ============================================================================
 
+class SearchRequest(BaseModel):
+    """Request model for SearXNG search"""
+    query: str = Field(..., min_length=1, max_length=500)
+    engines: Optional[List[str]] = Field(default=None)
+    categories: Optional[List[str]] = Field(default=None)
+    max_results: int = Field(default=10, ge=1, le=50)
+    language: str = Field(default="en")
+    time_range: Optional[str] = Field(default=None)
+
+
+class SearchExtractRequest(BaseModel):
+    """Request model for parallel deep content extraction"""
+    urls: List[str] = Field(..., min_length=1, max_length=10)
+    content_mode: str = Field(default="reader")
+    max_text_length: int = Field(default=8000, ge=500, le=50000)
+
+
+class SearchResponse(BaseModel):
+    """Search results — minimal wrapper"""
+    success: bool = True
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SearchExtractResponse(BaseModel):
+    """Deep extraction — minimal wrapper"""
+    success: bool = True
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
 class StructuredDataRequest(BaseModel):
     """Request for structured data extraction"""
     session_id: str = Field(..., description="Session ID")

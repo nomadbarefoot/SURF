@@ -449,6 +449,40 @@ def build_mcp_server():
     async def browser_network_stop(session_id: str) -> dict[str, Any]:
         return await app_call("POST", "/browser/network/stop", {"session_id": session_id})
 
+    @mcp.tool(name="browser_search", description="Search via SearXNG. Returns titles, snippets, URLs.")
+    async def browser_search(
+        query: str,
+        max_results: int = 10,
+        engines: list[str] | None = None,
+        categories: list[str] | None = None,
+        language: str = "en",
+        time_range: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "query": query,
+            "max_results": max_results,
+            "language": language,
+        }
+        if engines is not None:
+            data["engines"] = engines
+        if categories is not None:
+            data["categories"] = categories
+        if time_range is not None:
+            data["time_range"] = time_range
+        return await app_call("POST", "/search/query", data)
+
+    @mcp.tool(name="browser_search_extract", description="Deep-extract full page content from URLs in parallel.")
+    async def browser_search_extract(
+        urls: list[str],
+        content_mode: str = "reader",
+        max_text_length: int = 8000,
+    ) -> dict[str, Any]:
+        return await app_call("POST", "/search/extract", {
+            "urls": urls,
+            "content_mode": content_mode,
+            "max_text_length": max_text_length,
+        })
+
     return mcp
 
 

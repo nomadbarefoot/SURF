@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     max_download_size_bytes: int = Field(default=104857600)
     download_retention_seconds: int = Field(default=86400)
     
+    # Search Configuration
+    searxng_base_url: str = Field(default="http://localhost:8080")
+    searxng_engines: List[str] = Field(default=[])
+    searxng_timeout: int = Field(default=10)
+    search_max_results: int = Field(default=20)
+    max_search_sessions: int = Field(default=5)
+    search_extract_timeout: int = Field(default=60)
+    embedding_base_url: str = Field(default="http://127.0.0.1:4000/v1")
+    embedding_api_key: str = Field(default="sk-litellm-master-ayan224603")
+    embedding_model: str = Field(default="embedding")
+
     # Performance & Stealth
     enable_stealth: bool = Field(default=False)
     stealth_strategy: str = Field(default="minimal")

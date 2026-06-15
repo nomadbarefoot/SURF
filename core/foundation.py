@@ -441,6 +441,7 @@ _cache_service: Optional[Any] = None
 _fetch_service: Optional[Any] = None
 _download_service: Optional[Any] = None
 _adblock_service: Optional[Any] = None
+_search_service: Optional[Any] = None
 
 
 async def get_session_service():
@@ -513,6 +514,17 @@ async def get_adblock_service():
     return _adblock_service
 
 
+async def get_search_service():
+    """Get search service instance"""
+    global _search_service
+
+    if _search_service is None:
+        from services.search_service import SearchService
+        _search_service = SearchService()
+
+    return _search_service
+
+
 async def get_session_manager():
     """Alias for get_session_service for backward compatibility"""
     return await get_session_service()
@@ -555,7 +567,7 @@ async def validate_url(url: str) -> str:
 # Cleanup function
 async def cleanup_services():
     """Cleanup all services on shutdown"""
-    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service
+    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service, _search_service
     
     if _session_service:
         await _session_service.cleanup()
@@ -572,3 +584,4 @@ async def cleanup_services():
     _fetch_service = None
     _download_service = None
     _adblock_service = None
+    _search_service = None
