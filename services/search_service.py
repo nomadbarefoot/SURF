@@ -21,6 +21,8 @@ import numpy as np
 import structlog
 
 from config import get_settings
+from services.challenge_resolver import ChallengeResolver
+from services.content_refiner import ContentRefiner
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -162,6 +164,7 @@ class SearchService:
 
     def __init__(self):
         self._semaphore = asyncio.Semaphore(settings.max_search_sessions)
+        self._headed_semaphore = asyncio.Semaphore(settings.max_search_headed_sessions)
         self._stats = {
             "searxng_calls": 0,
             "searxng_successes": 0,
@@ -170,6 +173,7 @@ class SearchService:
             "extract_calls": 0,
             "extract_successes": 0,
             "extract_failures": 0,
+            "extract_headed_retries": 0,
             "avg_searxng_ms": 0.0,
             "avg_extract_ms": 0.0,
             "last_searxng_error": None,
@@ -223,7 +227,6 @@ class SearchService:
 
         results = self._dedup([self._normalize(r) for r in raw])
 
-        # Score & rank (parallel embedding calls)
         scores = await asyncio.gather(*[_relevance(r, query) for r in results])
         for r, s in zip(results, scores):
             r["relevance"] = round(s, 3)
@@ -244,35 +247,60 @@ class SearchService:
         urls: List[str],
         content_mode: str = "reader",
         max_text_length: int = 8000,
+        relevance: Optional[Dict[str, float]] = None,
+        refine_query: Optional[str] = None,
+        *,
+        force_headed: bool = False,
+        skip_headless: bool = False,
     ) -> Dict[str, Any]:
         from core.foundation import get_session_service, get_browser_service
+
         session_service = await get_session_service()
         browser_service = await get_browser_service()
         start = time.monotonic()
+        relevance_map = relevance or {}
 
-        async def _bounded(url: str) -> Dict[str, Any]:
-            async with self._semaphore:
-                return await self._extract_single(
-                    url, session_service, browser_service, content_mode, max_text_length
-                )
-
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*[_bounded(u) for u in urls], return_exceptions=True),
-                timeout=settings.search_extract_timeout,
+        if skip_headless and force_headed:
+            initial_results = [
+                {"url": u, "success": False, "error": ChallengeResolver.agent_error(), "challenge_blocked": True}
+                for u in urls
+            ]
+        elif skip_headless:
+            initial_results = []
+        else:
+            initial_results = await self._extract_batch_headless(
+                urls, session_service, browser_service, content_mode, max_text_length, refine_query
             )
-        except asyncio.TimeoutError:
-            results = [{"url": u, "success": False, "error": "Global timeout"} for u in urls]
+
+        by_url: Dict[str, Dict[str, Any]] = {}
+        for requested, result in zip(urls, initial_results):
+            by_url[requested] = {**result, "url": requested}
+
+        if not skip_headless:
+            retry_urls = [
+                u for u in urls
+                if ChallengeResolver.should_headed_retry(u, by_url.get(u, {"success": False}), relevance_map)
+            ]
+        elif force_headed:
+            retry_urls = list(urls)
+        else:
+            retry_urls = []
+
+        for url in retry_urls:
+            self._stats["extract_headed_retries"] += 1
+            headed_result = await self._extract_single_headed(
+                url, session_service, browser_service, content_mode, max_text_length, refine_query
+            )
+            by_url[url] = {**headed_result, "url": url}
 
         cleaned = []
-        for r in results:
-            if isinstance(r, Exception):
-                cleaned.append({"url": "unknown", "success": False, "error": str(r)})
-            else:
-                cleaned.append(r)
+        for u in urls:
+            result = by_url.get(u)
+            if result is None:
+                result = {"url": u, "success": False, "error": ChallengeResolver.agent_error()}
+            cleaned.append(self._public_result(result))
 
         total_ms = int((time.monotonic() - start) * 1000)
-
         ok = sum(1 for r in cleaned if r.get("success"))
         fail = len(cleaned) - ok
         self._stats["extract_calls"] += 1
@@ -283,52 +311,210 @@ class SearchService:
 
         return {"success": True, "results": cleaned, "total_ms": total_ms}
 
-    # ---- Single page extraction -------------------------------------------
+    async def _extract_batch_headless(
+        self,
+        urls: List[str],
+        session_service,
+        browser_service,
+        content_mode: str,
+        max_text_length: int,
+        refine_query: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        async def _bounded(url: str) -> Dict[str, Any]:
+            async with self._semaphore:
+                try:
+                    return await asyncio.wait_for(
+                        self._extract_single(
+                            url,
+                            session_service,
+                            browser_service,
+                            content_mode,
+                            max_text_length,
+                            refine_query=refine_query,
+                            headed=False,
+                        ),
+                        timeout=settings.search_extract_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("search_extract_headless_timeout", url=url)
+                    return {
+                        "url": url,
+                        "success": False,
+                        "error": "Global timeout",
+                        "ms": settings.search_extract_timeout * 1000,
+                    }
+
+        results = await asyncio.gather(
+            *[_bounded(u) for u in urls], return_exceptions=True
+        )
+
+        cleaned: List[Dict[str, Any]] = []
+        for url, result in zip(urls, results):
+            if isinstance(result, Exception):
+                cleaned.append({"url": url, "success": False, "error": str(result)})
+            else:
+                cleaned.append(result)
+        return cleaned
+
+    async def _extract_single_headed(
+        self,
+        url: str,
+        session_service,
+        browser_service,
+        content_mode: str,
+        max_text_length: int,
+        refine_query: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        async with self._headed_semaphore:
+            try:
+                return await asyncio.wait_for(
+                    self._extract_single(
+                        url,
+                        session_service,
+                        browser_service,
+                        content_mode,
+                        max_text_length,
+                        refine_query=refine_query,
+                        headed=True,
+                    ),
+                    timeout=settings.search_extract_timeout_headed,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("search_extract_headed_timeout", url=url)
+                return {"url": url, "success": False, "error": "Global timeout", "ms": settings.search_extract_timeout_headed * 1000}
 
     async def _extract_single(
-        self, url, session_service, browser_service, content_mode, max_text_length,
+        self,
+        url: str,
+        session_service,
+        browser_service,
+        content_mode: str,
+        max_text_length: int,
+        *,
+        refine_query: Optional[str] = None,
+        headed: bool,
     ) -> Dict[str, Any]:
         start = time.monotonic()
         session = None
+        nav_timeout = settings.search_nav_timeout_headed if headed else settings.search_nav_timeout_headless
         try:
+            user_config: Dict[str, Any] = {
+                "profile_id": f"_search_{uuid.uuid4().hex[:6]}",
+                "persist_profile": False,
+                "headed": headed,
+                "silent": not headed,
+                "background_headed": True,
+                "block_mode": "conservative",
+                "content_mode": content_mode,
+            }
+            if headed and settings.enable_stealth:
+                user_config["stealth"] = True
+
             session = await session_service.create_session(
-                user_config={
-                    "profile_id": f"_search_{uuid.uuid4().hex[:6]}",
-                    "persist_profile": False,
-                    "headed": True,
-                    "silent": False,
-                    "background_headed": True,
-                    "block_mode": "conservative",
-                    "content_mode": content_mode,
-                },
+                user_config=user_config,
                 pool="search",
             )
             sid = session.session_id
+            challenge_outcome = None
             async with session_service.session_operation(sid, "search_extract") as sess:
-                await browser_service.navigate_to_url(sess, url, timeout=20000)
-                await self._wait_past_challenge(sess.page)
-                obs = await browser_service.observe_page(
-                    sess, content_mode=content_mode, max_text_length=max_text_length
+                await browser_service.navigate_to_url(sess, url, timeout=nav_timeout)
+                if headed:
+                    challenge_outcome = await ChallengeResolver.resolve_headed(sess.page)
+                else:
+                    await ChallengeResolver.wait_passive(sess.page, settings.search_challenge_wait_headless)
+                obs = await self._observe_extract(
+                    browser_service, sess, content_mode, max_text_length
                 )
+                structured = await browser_service.observe_structured(sess)
+                refined = await ContentRefiner.refine(
+                    structured,
+                    query=refine_query,
+                    title=_clean_text(structured.get("title", "")),
+                    url=structured.get("url", url),
+                )
+
             ms = int((time.monotonic() - start) * 1000)
-            raw_text = obs.get("visible_text", "")
-            title = _clean_text(obs.get("title", ""))
+            raw_text = refined.get("markdown") or obs.get("visible_text", "")
+            title = _clean_text(refined.get("title") or obs.get("title", ""))
 
-            if self._is_challenge_page(title, raw_text):
-                return {"url": url, "success": False, "error": "Bot protection wall", "ms": ms}
+            if ChallengeResolver.is_challenge_page(title, raw_text):
+                logger.info(
+                    "search_extract_challenge_blocked",
+                    url=url,
+                    headed=headed,
+                    challenge_outcome=challenge_outcome,
+                    page_url=obs.get("url", url),
+                )
+                return {
+                    "url": url,
+                    "success": False,
+                    "error": ChallengeResolver.agent_error(),
+                    "challenge_blocked": True,
+                    "ms": ms,
+                }
 
-            content = self._to_markdown(title, _clean_text(raw_text), obs.get("url", url))
+            cleaned_text = _clean_text(raw_text)
+            use_flat_fallback = (
+                refined.get("section_count", 0) == 0
+                or refined.get("chars", 0) < settings.search_min_content_chars
+            )
+            if use_flat_fallback:
+                fallback_text = _clean_text(obs.get("visible_text", ""))
+                if len(fallback_text) > len(cleaned_text):
+                    logger.info(
+                        "search_extract_structured_fallback",
+                        url=url,
+                        sections=refined.get("section_count"),
+                        refined_chars=refined.get("chars"),
+                        flat_chars=len(fallback_text),
+                    )
+                    cleaned_text = fallback_text
+                    content = self._to_markdown(title, cleaned_text, obs.get("url", url))
+                    tokens = max(1, len(cleaned_text) // 4)
+                elif len(cleaned_text) < settings.search_min_content_chars:
+                    logger.info(
+                        "search_extract_insufficient_content",
+                        url=url,
+                        headed=headed,
+                        chars=len(cleaned_text),
+                        blocks=refined.get("block_count"),
+                        content_mode=obs.get("content_mode", content_mode),
+                    )
+                    return {
+                        "url": url,
+                        "success": False,
+                        "error": "Insufficient content",
+                        "ms": ms,
+                    }
+                else:
+                    content = refined.get("markdown") or self._to_markdown(title, cleaned_text, obs.get("url", url))
+                    tokens = refined.get("tokens") or max(1, len(cleaned_text) // 4)
+            else:
+                content = refined.get("markdown") or self._to_markdown(title, cleaned_text, obs.get("url", url))
+                tokens = refined.get("tokens") or max(1, len(cleaned_text) // 4)
+
+            logger.info(
+                "search_extract_ok",
+                url=url,
+                headed=headed,
+                challenge_outcome=challenge_outcome,
+                page_url=obs.get("url", url),
+                ms=ms,
+                sections=refined.get("section_count"),
+                dropped=refined.get("dropped_sections"),
+            )
             return {
-                "url": obs.get("url", url),
+                "url": url,
                 "title": title,
                 "content": content,
-                "tokens": obs.get("token_estimate", 0),
+                "tokens": tokens,
                 "success": True,
                 "ms": ms,
+                "sections": refined.get("section_count"),
             }
         except Exception as exc:
             ms = int((time.monotonic() - start) * 1000)
-            logger.warning("search_extract_failed", url=url, error=str(exc))
+            logger.warning("search_extract_failed", url=url, headed=headed, error=str(exc))
             return {"url": url, "success": False, "error": str(exc), "ms": ms}
         finally:
             if session:
@@ -343,27 +529,60 @@ class SearchService:
         rate = round(s["searxng_successes"] / total * 100, 1) if total else 0.0
         return {**s, "searxng_success_rate": rate, "embedder_active": _EMBED_AVAILABLE is True}
 
-    # ---- Helpers ----------------------------------------------------------
+    async def _observe_extract(
+        self,
+        browser_service,
+        session,
+        content_mode: str,
+        max_text_length: int,
+    ) -> Dict[str, Any]:
+        """Observe page text, falling back to compact/full when reader output is too thin."""
+        obs = await browser_service.observe_page(
+            session, content_mode=content_mode, max_text_length=max_text_length
+        )
+        if content_mode != "reader":
+            return obs
 
-    @staticmethod
-    async def _wait_past_challenge(page, timeout_ms: int = 12000) -> None:
-        try:
-            title = await page.title()
-            if "just a moment" not in (title or "").lower():
-                return
-            await page.wait_for_function(
-                "() => !document.title.toLowerCase().includes('just a moment')",
-                timeout=timeout_ms,
+        text = _clean_text(obs.get("visible_text", ""))
+        if len(text) >= settings.search_min_content_chars:
+            return obs
+
+        for fallback_mode in ("compact", "full"):
+            fallback = await browser_service.observe_page(
+                session, content_mode=fallback_mode, max_text_length=max_text_length
             )
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
+            fallback_text = _clean_text(fallback.get("visible_text", ""))
+            if len(fallback_text) > len(text):
+                logger.info(
+                    "search_extract_reader_fallback",
+                    url=fallback.get("url"),
+                    from_chars=len(text),
+                    to_chars=len(fallback_text),
+                    fallback_mode=fallback_mode,
+                )
+                obs = fallback
+                text = fallback_text
+            if len(text) >= settings.search_min_content_chars:
+                break
+        return obs
 
     @staticmethod
-    def _is_challenge_page(title: str, text: str) -> bool:
-        low = (title + " " + text).lower()
-        markers = ["just a moment", "checking your browser", "performing security verification"]
-        return any(m in low for m in markers)
+    def _public_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        public = {
+            "url": result.get("url"),
+            "success": bool(result.get("success")),
+            "ms": result.get("ms"),
+        }
+        if result.get("success"):
+            public["title"] = result.get("title", "")
+            public["content"] = result.get("content", "")
+            public["tokens"] = result.get("tokens", 0)
+        else:
+            error = result.get("error") or ChallengeResolver.agent_error()
+            if result.get("challenge_blocked") or ChallengeResolver.is_retryable_failure(result):
+                error = ChallengeResolver.agent_error()
+            public["error"] = error
+        return public
 
     @staticmethod
     def _normalize(raw: Dict[str, Any]) -> Dict[str, Any]:

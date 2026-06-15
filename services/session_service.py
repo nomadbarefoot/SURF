@@ -132,6 +132,17 @@ class SessionService:
                     search_count = sum(1 for s in self.active_sessions.values() if s.metadata.get("pool") == "search")
                     if search_count >= settings.max_search_sessions:
                         raise ResourceLimitError("search_sessions", settings.max_search_sessions, search_count)
+                    if config.headed:
+                        search_headed = sum(
+                            1 for s in self.active_sessions.values()
+                            if s.metadata.get("pool") == "search" and s.config.headed
+                        )
+                        if search_headed >= settings.max_search_headed_sessions:
+                            raise ResourceLimitError(
+                                "search_headed_sessions",
+                                settings.max_search_headed_sessions,
+                                search_headed,
+                            )
                 else:
                     non_search = sum(1 for s in self.active_sessions.values() if s.metadata.get("pool") != "search")
                     if non_search >= settings.max_sessions:

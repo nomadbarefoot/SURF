@@ -476,12 +476,16 @@ def build_mcp_server():
         urls: list[str],
         content_mode: str = "reader",
         max_text_length: int = 8000,
+        relevance: dict[str, float] | None = None,
     ) -> dict[str, Any]:
-        return await app_call("POST", "/search/extract", {
+        data: dict[str, Any] = {
             "urls": urls,
             "content_mode": content_mode,
             "max_text_length": max_text_length,
-        })
+        }
+        if relevance is not None:
+            data["relevance"] = relevance
+        return await app_call("POST", "/search/extract", data)
 
     return mcp
 

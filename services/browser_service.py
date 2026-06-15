@@ -263,16 +263,35 @@ class BrowserService:
                         if (contentMode === 'full') return document.body.innerText || '';
                         const clone = document.body.cloneNode(true);
                         clone.querySelectorAll(noiseSelector + ', script, style, noscript, svg').forEach((el) => el.remove());
+                        const stripChrome = (root) => {
+                            root.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
+                            return (root.innerText || root.textContent || '').trim();
+                        };
                         if (contentMode === 'reader') {
-                            const article = clone.querySelector('main, article, [role=main], .article, .story, .post, .content');
-                            if (article) {
-                                article.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
-                                return article.innerText || article.textContent || '';
+                            const articleSelectors = [
+                                '.entry-content', '.post-content', '.article-content', '.article-body',
+                                '.story-body', 'article .content', 'main article', 'article', 'main',
+                                '[role=main]', '.article', '.story', '.post'
+                            ];
+                            const bodyText = stripChrome(clone.cloneNode(true));
+                            for (const selector of articleSelectors) {
+                                const article = clone.querySelector(selector);
+                                if (!article) continue;
+                                const articleClone = article.cloneNode(true);
+                                const articleText = stripChrome(articleClone);
+                                if (articleText.length < 200 && bodyText.length > articleText.length * 2) {
+                                    continue;
+                                }
+                                if (articleText.length >= 200 || articleText.length >= bodyText.length * 0.35) {
+                                    return articleText;
+                                }
                             }
-                            clone.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
+                            return stripChrome(clone);
                         }
                         if (contentMode === 'data') {
                             clone.querySelectorAll('nav, header, footer, aside, form, button').forEach((el) => el.remove());
+                        } else {
+                            clone.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
                         }
                         return clone.innerText || clone.textContent || '';
                     };
@@ -353,6 +372,138 @@ class BrowserService:
         except Exception as e:
             logger.error("Page observation failed", session_id=session.session_id, error=str(e))
             raise BrowserOperationError("observe", str(e))
+
+    async def observe_structured(
+        self,
+        session: SessionData,
+        *,
+        max_blocks: int = 200,
+        max_table_rows: int = 30,
+    ) -> Dict[str, Any]:
+        """Extract ordered DOM blocks (headings, paragraphs, lists, tables) from article root."""
+        if not self.initialized:
+            raise BrowserOperationError("observe_structured", "Browser service not initialized")
+
+        try:
+            page = self._get_page_from_session(session)
+            payload = await page.evaluate(
+                """
+                ({ maxBlocks, maxTableRows }) => {
+                    const noiseSelector = [
+                        '[class*="ad-"]', '[class*="ads"]', '[id*="ad-"]', '[id*="ads"]',
+                        '[class*="cookie"]', '[id*="cookie"]', '[class*="newsletter"]',
+                        '[class*="subscribe"]', '[aria-label*="advertisement" i]',
+                        '.comments', '#comments', '.comment-respond', '.related-posts',
+                        '.post-navigation', '.related-posts-wrapper', '.you-may-like',
+                        'nav', 'header', 'footer', 'aside', 'form'
+                    ].join(',');
+
+                    const articleSelectors = [
+                        '.entry-content', '.post-content', '.article-content', '.article-body',
+                        '.story-body', 'article .content', 'main article', 'article', 'main',
+                        '[role=main]', '.article', '.story', '.post'
+                    ];
+
+                    const visible = (el) => {
+                        const style = window.getComputedStyle(el);
+                        const rect = el.getBoundingClientRect();
+                        return style && style.visibility !== 'hidden' &&
+                            style.display !== 'none' && rect.width > 0 && rect.height > 0;
+                    };
+
+                    const text = (el) => (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+
+                    let root = document.body;
+                    for (const sel of articleSelectors) {
+                        const candidate = document.querySelector(sel);
+                        if (!candidate) continue;
+                        const t = text(candidate);
+                        if (t.length >= 200) {
+                            root = candidate;
+                            break;
+                        }
+                    }
+
+                    const blocks = [];
+                    const seen = new Set();
+                    const pushBlock = (block) => {
+                        if (blocks.length >= maxBlocks) return;
+                        const key = block.type + ':' + (block.text || JSON.stringify(block.rows || block.items || '')).slice(0, 120);
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        blocks.push(block);
+                    };
+
+                    const walk = (node) => {
+                        if (!node || blocks.length >= maxBlocks) return;
+                        if (node.nodeType !== 1) return;
+                        const isRoot = node === root;
+                        if (!isRoot && node.matches && node.matches(noiseSelector)) return;
+
+                        const tag = node.tagName ? node.tagName.toLowerCase() : '';
+                        if (/^h[1-6]$/.test(tag) && visible(node)) {
+                            const level = parseInt(tag[1], 10);
+                            const t = text(node);
+                            if (t.length >= 3) pushBlock({ type: 'heading', level, text: t });
+                            return;
+                        }
+                        if (tag === 'p' && visible(node)) {
+                            const t = text(node);
+                            if (t.length >= 20) pushBlock({ type: 'paragraph', text: t });
+                            return;
+                        }
+                        if ((tag === 'ul' || tag === 'ol') && visible(node)) {
+                            const items = Array.from(node.querySelectorAll(':scope > li'))
+                                .map((li) => text(li)).filter((t) => t.length >= 8).slice(0, 40);
+                            if (items.length) pushBlock({ type: 'list', ordered: tag === 'ol', items });
+                            return;
+                        }
+                        if (tag === 'table' && visible(node)) {
+                            const rows = Array.from(node.querySelectorAll('tr')).slice(0, maxTableRows).map((row) =>
+                                Array.from(row.cells).map((cell) => text(cell).slice(0, 200))
+                            ).filter((row) => row.some((c) => c.length > 0));
+                            if (rows.length) pushBlock({ type: 'table', rows });
+                            return;
+                        }
+                        if (tag === 'blockquote' && visible(node)) {
+                            const t = text(node);
+                            if (t.length >= 20) pushBlock({ type: 'quote', text: t });
+                            return;
+                        }
+                        if (tag === 'div' && visible(node)) {
+                            const blockChildren = Array.from(node.children).filter((c) =>
+                                /^(p|h[1-6]|ul|ol|table|blockquote|div)$/i.test(c.tagName || '')
+                            );
+                            if (blockChildren.length === 0) {
+                                const t = text(node);
+                                if (t.length >= 40 && t.length <= 5000) {
+                                    pushBlock({ type: 'paragraph', text: t });
+                                    return;
+                                }
+                            }
+                        }
+
+                        for (const child of node.children || []) {
+                            walk(child);
+                        }
+                    };
+
+                    walk(root);
+                    return { blocks, root_selector: root === document.body ? 'body' : (root.tagName || 'body').toLowerCase() };
+                }
+                """,
+                {"maxBlocks": max_blocks, "maxTableRows": max_table_rows},
+            )
+
+            return {
+                "url": page.url,
+                "title": await page.title(),
+                "blocks": payload.get("blocks") or [],
+                "root_selector": payload.get("root_selector", "body"),
+            }
+        except Exception as e:
+            logger.error("Structured observation failed", session_id=session.session_id, error=str(e))
+            raise BrowserOperationError("observe_structured", str(e))
 
     async def click_and_download(
         self,

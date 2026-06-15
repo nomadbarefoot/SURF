@@ -51,6 +51,8 @@ async def search_extract(
             urls=request.urls,
             content_mode=request.content_mode,
             max_text_length=request.max_text_length,
+            relevance=request.relevance,
+            refine_query=request.refine_query,
         )
     except Exception as exc:
         logger.error("search_extract_failed", error=str(exc))

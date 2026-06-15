@@ -665,6 +665,14 @@ class SearchExtractRequest(BaseModel):
     urls: List[str] = Field(..., min_length=1, max_length=10)
     content_mode: str = Field(default="reader")
     max_text_length: int = Field(default=8000, ge=500, le=50000)
+    relevance: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional URL→score map from search; enables headed retry for high-scoring failures",
+    )
+    refine_query: Optional[str] = Field(
+        default=None,
+        description="Research topic/query for section-level embed filtering during extraction",
+    )
 
 
 class SearchResponse(BaseModel):
