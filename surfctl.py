@@ -223,7 +223,12 @@ def build_mcp_server():
 
     mcp = FastMCP(
         "SURF",
-        instructions="Prefer SURF for local browsing, scraping, downloads, and browser-cookie fetches.",
+        instructions=(
+            "SURF provides two tool families: browser_* for browser automation "
+            "(sessions, navigation, interaction) and search_* for web research "
+            "(search engine queries and parallel content extraction). "
+            "Prefer SURF for local browsing, scraping, downloads, browser-cookie fetches, and web research."
+        ),
         log_level="ERROR",
         lifespan=mcp_lifespan,
     )
@@ -449,8 +454,17 @@ def build_mcp_server():
     async def browser_network_stop(session_id: str) -> dict[str, Any]:
         return await app_call("POST", "/browser/network/stop", {"session_id": session_id})
 
-    @mcp.tool(name="browser_search", description="Search via SearXNG. Returns titles, snippets, URLs.")
-    async def browser_search(
+    @mcp.tool(
+        name="search_query",
+        description=(
+            "Run a web search query via SearXNG metasearch. Returns ranked results "
+            "with titles, snippets, URLs, source engine, and relevance scores. "
+            "Use for information retrieval, fact-checking, or finding URLs to "
+            "extract with search_extract. Supports engine/category filtering "
+            "and time-range constraints."
+        ),
+    )
+    async def search_query(
         query: str,
         max_results: int = 10,
         engines: list[str] | None = None,
@@ -471,12 +485,22 @@ def build_mcp_server():
             data["time_range"] = time_range
         return await app_call("POST", "/search/query", data)
 
-    @mcp.tool(name="browser_search_extract", description="Deep-extract full page content from URLs in parallel.")
-    async def browser_search_extract(
+    @mcp.tool(
+        name="search_extract",
+        description=(
+            "Extract full page content from one or more URLs in parallel. Uses "
+            "tiered headless-to-headed retry with Cloudflare challenge resolution "
+            "and markdown formatting. Pass refine_query to enable embedding-based "
+            "section filtering that keeps only content relevant to your research "
+            "topic. Pair with search_query to build a search-then-extract pipeline."
+        ),
+    )
+    async def search_extract(
         urls: list[str],
         content_mode: str = "reader",
         max_text_length: int = 8000,
         relevance: dict[str, float] | None = None,
+        refine_query: str | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {
             "urls": urls,
@@ -485,6 +509,8 @@ def build_mcp_server():
         }
         if relevance is not None:
             data["relevance"] = relevance
+        if refine_query is not None:
+            data["refine_query"] = refine_query
         return await app_call("POST", "/search/extract", data)
 
     return mcp

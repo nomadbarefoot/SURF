@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     download_retention_seconds: int = Field(default=86400)
     
     # Search Configuration
-    searxng_base_url: str = Field(default="http://localhost:8080")
+    searxng_base_url: str = Field(default="http://localhost:8888")
     searxng_engines: List[str] = Field(default=[])
     searxng_timeout: int = Field(default=10)
     search_max_results: int = Field(default=20)
