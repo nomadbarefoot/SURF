@@ -1,0 +1,368 @@
+# Finance Pack source ladders.
+# Each endpoint has one or more market keys (IN, US, country code for macro).
+# Each rung: name, url (with {symbol}/{country} template), selectors dict,
+# as_of (regex pattern), freshness_max_days (optional).
+# Selector type: regex (applied to raw response text).
+# Rung name "search_fallback" triggers SearXNG search instead of direct fetch.
+#
+# moneycontrol_sc_id: true — resolve NSE ticker -> Moneycontrol scId via autosuggest.
+# moneycontrol_supplements: extra estimate API paths appended to response text.
+
+# ---------------------------------------------------------------------------
+# finance_consensus — analyst price targets + EPS estimates
+# ---------------------------------------------------------------------------
+consensus:
+  IN:
+    - name: moneycontrol_estimates
+      moneycontrol_sc_id: true
+      url: "https://api.moneycontrol.com/mcapi/v1/stock/estimates/price-forecast?scId={symbol}&ex=N&deviceType=W"
+      moneycontrol_supplements:
+        analyst_rating: "analyst-rating?deviceType=W&scId={sc_id}&ex=N"
+        earning_forecast: "earning-forecast?scId={sc_id}&ex=N&deviceType=W&frequency=12&financialType=C"
+      selectors:
+        pt_mean:
+          type: regex
+          pattern: '"mean":"([\d,.]+)"'
+        pt_high:
+          type: regex
+          pattern: '"high":"([\d,.]+)"'
+        pt_low:
+          type: regex
+          pattern: '"low":"([\d,.]+)"'
+        analyst_count:
+          type: regex
+          pattern: '"analystCount":"(\d+)"'
+        fy_eps_1:
+          type: regex
+          pattern: '"date":"Mar 2027"[^}]*"avg":"([\d,.]+)"'
+      as_of:
+        type: regex
+        pattern: '"date": "Mar 2027"'
+      freshness_max_days: 5
+      headers:
+        Referer: "https://www.moneycontrol.com/"
+
+    - name: google_finance_nse
+      url: "https://www.google.com/finance/quote/{symbol}:NSE"
+      selectors:
+        pt_mean:
+          type: regex
+          pattern: '(?i)average target price is Rs\s*([\d,]+(?:\.\d+)?)'
+        analyst_count:
+          type: regex
+          pattern: '"analystCount":"(\d+)"'
+        fy_eps_1:
+          type: regex
+          pattern: 'EPS</div><div class="dO6ijd">₹([\d,.]+)'
+      as_of:
+        type: regex
+        pattern: '(?i)(\d{1,2}\s+\w+\s+\d{4})'
+      freshness_max_days: 5
+
+    - name: search_fallback
+      query: "{symbol} NSE analyst target price consensus FY EPS estimate"
+
+  US:
+    - name: google_finance
+      url: "https://www.google.com/finance/quote/{symbol}:NASDAQ"
+      selectors:
+        pt_mean:
+          type: regex
+          pattern: 'CTRKfb">Average</div>[\s\S]*?VcGiaf">\s*<span[\s\S]*?<span>\$([\d,.]+)</span>'
+        pt_high:
+          type: regex
+          pattern: 'CTRKfb">Highest</div>[\s\S]*?VcGiaf">\s*<span[\s\S]*?<span>\$([\d,.]+)</span>'
+        pt_low:
+          type: regex
+          pattern: 'CTRKfb">Lowest</div>[\s\S]*?VcGiaf">\s*<span[\s\S]*?<span>\$([\d,.]+)</span>'
+        analyst_count:
+          type: regex
+          pattern: 'Based on (\d+) Wall Street analysts'
+        fy_eps_1:
+          type: regex
+          pattern: 'EPS</div><div class="dO6ijd">\$([\d,.]+)'
+      as_of:
+        type: regex
+        pattern: '(?i)(\w+\s+\d{1,2},?\s+\d{4})'
+      freshness_max_days: 3
+
+    - name: yahoo_finance
+      url: "https://finance.yahoo.com/quote/{symbol}/analysis/"
+      selectors:
+        pt_mean:
+          type: regex
+          pattern: 'targetMeanPrice\\":\{\\"raw\\":([\d.]+)'
+        pt_high:
+          type: regex
+          pattern: 'targetHighPrice\\":\{\\"raw\\":([\d.]+)'
+        pt_low:
+          type: regex
+          pattern: 'targetLowPrice\\":\{\\"raw\\":([\d.]+)'
+        analyst_count:
+          type: regex
+          pattern: 'numberOfAnalystOpinions\\":\{\\"raw\\":(\d+)'
+      as_of:
+        type: regex
+        pattern: '(\w+\s+\d{1,2},?\s+\d{4})'
+      freshness_max_days: 3
+
+    - name: search_fallback
+      query: "{symbol} analyst price target consensus EPS estimate"
+
+# ---------------------------------------------------------------------------
+# finance_insider — insider / promoter transactions + pledges
+# ---------------------------------------------------------------------------
+insider:
+  IN:
+    - name: nse_insider
+      url: "https://www.nseindia.com/api/corporates-pit?symbol={symbol}&fo_sec_type=EQ&from_date=&to_date="
+      selectors:
+        transactions:
+          type: regex
+          pattern: '"acqMode":"([^"]+)","acqName":"([^"]+)","acqfromDt":"([^"]+)".*?"befAcqSharesNo":"([^"]+)".*?"secAcq":"([^"]+)"'
+        pledge_pct:
+          type: regex
+          pattern: '"totPledge":"([^"]+)"'
+      as_of:
+        type: regex
+        pattern: '"date":"([^"]+)"'
+      freshness_max_days: 7
+      headers:
+        Referer: "https://www.nseindia.com/"
+        Accept: "application/json, */*"
+
+    - name: moneycontrol_insider
+      moneycontrol_sc_id: true
+      url: "https://api.moneycontrol.com/mcapi/v1/stock/broker-research?scId={symbol}"
+      selectors:
+        transactions:
+          type: regex
+          pattern: '"organization":"([^"]+)".*?"target":"([^"]+)".*?"recommend_flag":"([^"]+)".*?"recommend_date":"([^"]+)"'
+      as_of:
+        type: regex
+        pattern: '"recommend_date":"([^"]+)"'
+      freshness_max_days: 7
+      headers:
+        Referer: "https://www.moneycontrol.com/"
+
+    - name: search_fallback
+      query: "{symbol} NSE insider trading promoter pledge 2026"
+
+  US:
+    - name: openinsider
+      url: "http://openinsider.com/search?q={symbol}&dateRange=custom&startDate=&endDate=&filing_types=&transaction_types=P-Purchase%2CS-Sale&action=1"
+      selectors:
+        transactions:
+          type: regex
+          pattern: '(\d{4}-\d{2}-\d{2}).*?([A-Z][^<]+?)\s+(Purchase|Sale)\s+[\d,]+\s+\$\s*([\d,.]+)'
+      as_of:
+        type: regex
+        pattern: '(\d{4}-\d{2}-\d{2})'
+      freshness_max_days: 7
+
+    - name: sec_form4
+      url: "https://efts.sec.gov/LATEST/search-index?q=%22{symbol}%22&dateRange=custom&startdt=&enddt=&forms=4"
+      selectors:
+        transactions:
+          type: regex
+          pattern: '"file_date":"([^"]+)".*?"entity_name":"([^"]+)".*?"form_type":"4"'
+      as_of:
+        type: regex
+        pattern: '"file_date":"(\d{4}-\d{2}-\d{2})"'
+      freshness_max_days: 7
+
+    - name: search_fallback
+      query: "{symbol} SEC Form 4 insider trading 2026"
+
+# ---------------------------------------------------------------------------
+# finance_corp_actions — buybacks, dividends, splits, delistings
+# ---------------------------------------------------------------------------
+corp_actions:
+  IN:
+    - name: nse_corp_actions
+      url: "https://www.nseindia.com/api/corporates-corporateActions?index=equities&symbol={symbol}"
+      selectors:
+        actions:
+          type: regex
+          pattern: '"subject":"([^"]+)".*?"exDate":"([^"]+)"'
+      as_of:
+        type: regex
+        pattern: '"exDate":"(\d{2}-\w{3}-\d{4})"'
+      freshness_max_days: 1
+      headers:
+        Referer: "https://www.nseindia.com/"
+        Accept: "application/json, */*"
+
+    - name: bse_corp_actions
+      url: "https://api.bseindia.com/BseIndiaAPI/api/DefaultData/w?Isin=&scripcode={symbol}&Action=C&DividendType=E&Flag=C&mwcriteria=ALL"
+      selectors:
+        actions:
+          type: regex
+          pattern: '"ANNOUNCEMENT_TYPE":"([^"]+)","ANNOUNCEMENT_DATE":"([^"]+)"'
+      as_of:
+        type: regex
+        pattern: '"ANNOUNCEMENT_DATE":"(\d{2}/\d{2}/\d{4})"'
+      freshness_max_days: 1
+
+    - name: search_fallback
+      query: "{symbol} NSE BSE corporate actions buyback dividend 2026"
+
+# ---------------------------------------------------------------------------
+# finance_macro — sovereign yield, CDS, FX spot, implied vol
+# ---------------------------------------------------------------------------
+macro:
+  IN:
+    - name: tradingeconomics_yield
+      url: "https://tradingeconomics.com/india/government-bond-yield"
+      selectors:
+        yield_10y:
+          type: regex
+          pattern: 'India 10Y Bond Yield[^0-9]*([\d.]+)'
+      as_of:
+        type: regex
+        pattern: 'on (\w+ \d{1,2}, \d{4})'
+      freshness_max_days: 1
+
+    - name: wgb_cds
+      method: POST
+      url: "https://www.worldgovernmentbonds.com/wp-json/cds/v1/main"
+      json_body:
+        slug: "{country_slug}"
+      headers:
+        Origin: "https://www.worldgovernmentbonds.com"
+        Referer: "https://www.worldgovernmentbonds.com/sovereign-cds/"
+        Accept: "application/json"
+        Content-Type: "application/json"
+      selectors:
+        cds_spread:
+          type: regex
+          pattern: '\\"code\\": \\"IN\\",[\s\S]*?\\"value\\": ([\d.]+)'
+      as_of:
+        type: regex
+        pattern: 'lastDataValDesc\\":\\s*\\"([^"]+)\\"'
+      freshness_max_days: 1
+
+    - name: google_finance_fx
+      url: "https://www.google.com/finance/quote/USD-INR"
+      selectors:
+        fx_usd_inr:
+          type: regex
+          pattern: 'USD / INR[\s\S]{0,400}?(\d{2}\.\d{4,6})'
+      as_of:
+        type: regex
+        pattern: '(\w+ \d{1,2}, \d{4})'
+      freshness_max_days: 1
+
+    - name: frankfurter_fx
+      url: "https://api.frankfurter.app/latest?from=USD&to=INR"
+      selectors:
+        fx_usd_inr:
+          type: regex
+          pattern: '"INR":\s*([\d.]+)'
+      as_of:
+        type: regex
+        pattern: '"date":\s*"(\d{4}-\d{2}-\d{2})"'
+      freshness_max_days: 1
+
+    - name: searx_fx_vol
+      search_snippet: true
+      query: "USD INR 1 month implied volatility percent"
+      max_results: 8
+      selectors:
+        fx_implied_vol:
+          type: regex
+          pattern: '(?i)implied volatility[^0-9]*([\d.]+)\s*%'
+
+    - name: search_fallback
+      query: "India 10 year government bond yield CDS spread USD INR 2026"
+
+  US:
+    - name: tradingeconomics_yield_us
+      url: "https://tradingeconomics.com/united-states/government-bond-yield"
+      selectors:
+        yield_10y:
+          type: regex
+          pattern: 'United States 10Y[^0-9]*([\d.]+)'
+        cds_spread:
+          type: regex
+          pattern: '(?i)CDS[^bpsd\d]*([\d.]+)\s*(?:bps|bp)'
+      as_of:
+        type: regex
+        pattern: 'on (\w+ \d{1,2}, \d{4})'
+      freshness_max_days: 1
+
+    - name: search_fallback
+      query: "US 10 year treasury yield CDS spread 2026"
+
+# ---------------------------------------------------------------------------
+# finance_erp — equity risk premia + country default spreads (Damodaran)
+# ---------------------------------------------------------------------------
+erp:
+  IN:
+    - name: damodaran_erp_in
+      url: "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html"
+      selectors:
+        erp_country:
+          type: regex
+          pattern: '>India</td>(?:\s*<td[^>]*>[^<]*</td>){3}\s*<td[^>]*>([\d.]+)%</td>'
+        default_spread:
+          type: regex
+          pattern: '>India</td>(?:\s*<td[^>]*>[^<]*</td>){2}\s*<td[^>]*>([\d.]+)%</td>'
+        erp_mature:
+          type: regex
+          pattern: '>United States</td>(?:\s*<td[^>]*>[^<]*</td>){3}\s*<td[^>]*>([\d.]+)%</td>'
+      as_of:
+        type: regex
+        pattern: '(?i)(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}'
+      freshness_max_days: 400
+
+  US:
+    - name: damodaran_erp_us
+      url: "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html"
+      selectors:
+        erp_mature:
+          type: regex
+          pattern: '>United States</td>(?:\s*<td[^>]*>[^<]*</td>){3}\s*<td[^>]*>([\d.]+)%</td>'
+        default_spread:
+          type: regex
+          pattern: '>United States</td>(?:\s*<td[^>]*>[^<]*</td>){2}\s*<td[^>]*>([\d.]+)%</td>'
+      as_of:
+        type: regex
+        pattern: '(?i)(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}'
+      freshness_max_days: 400
+
+# ---------------------------------------------------------------------------
+# finance_snapshot_us — degraded US-book basics
+# ---------------------------------------------------------------------------
+snapshot_us:
+  US:
+    - name: google_finance_snapshot
+      url: "https://www.google.com/finance/quote/{symbol}:NASDAQ"
+      selectors:
+        price:
+          type: regex
+          pattern: 'N6SYTe"><span jsname="Pdsbrc" class=""><span>\$([\d,.]+)</span>'
+        pe_ratio:
+          type: regex
+          pattern: 'P/E ratio</div><div class="dO6ijd">([\d,.]+)'
+        pct_off_52w:
+          type: regex
+          pattern: '52-wk high</div><div class="dO6ijd">\$([\d,.]+)'
+      as_of:
+        type: regex
+        pattern: '(\w+ \d{1,2}, \d{4})'
+      freshness_max_days: 1
+
+    - name: yahoo_chart
+      url: "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+      selectors:
+        price:
+          type: regex
+          pattern: '"regularMarketPrice":([\d.]+)'
+      as_of:
+        type: regex
+        pattern: '"regularMarketTime":(\d+)'
+      freshness_max_days: 1
+
+    - name: search_fallback
+      query: "{symbol} stock price market cap PE ratio shares outstanding"

@@ -774,3 +774,24 @@ class StructuredContentData(BaseModel):
     metrics: ContentQualityMetrics = Field(..., description="Content quality metrics")
     extracted_elements: Dict[str, Any] = Field(default_factory=dict, description="Type-specific extracted elements")
     page_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Page metadata")
+
+
+# ============================================================================
+# FINANCE PACK SCHEMAS
+# ============================================================================
+
+class FinanceRequest(BaseModel):
+    """Request for symbol-based finance endpoints (consensus, insider, corp_actions)."""
+    symbol: str = Field(..., description="Ticker symbol (e.g. RELIANCE, AAPL)")
+    market: str = Field(default="IN", description="Market code: IN or US")
+
+
+class FinanceMacroRequest(BaseModel):
+    """Request for finance_macro endpoint."""
+    country: str = Field(default="IN", description="Country code: IN, US, etc.")
+
+
+class FinanceErpRequest(BaseModel):
+    """Request for finance_erp endpoint."""
+    home: str = Field(default="IN", description="Home market country code")
+    foreign: str = Field(default="US", description="Foreign/mature market country code")

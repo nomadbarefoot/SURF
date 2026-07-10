@@ -513,6 +513,83 @@ def build_mcp_server():
             data["refine_query"] = refine_query
         return await app_call("POST", "/search/extract", data)
 
+    # ---- Finance Pack -------------------------------------------------------
+
+    @mcp.tool(
+        name="finance_consensus",
+        description=(
+            "Analyst price target (mean + range) and EPS estimates for a stock. "
+            "IN ladder: Trendlyne → Moneycontrol → search fallback. "
+            "US ladder: stockanalysis.com → Yahoo Finance → search fallback. "
+            "Returns structured markdown with PT mean, PT range, analyst count, "
+            "FY EPS estimates, as-of date, and confidence level. "
+            "MISSING lines indicate fields not found on any rung."
+        ),
+    )
+    async def finance_consensus(symbol: str, market: str = "IN") -> dict[str, Any]:
+        return await app_call("POST", "/finance/consensus", {"symbol": symbol, "market": market})
+
+    @mcp.tool(
+        name="finance_insider",
+        description=(
+            "Insider / promoter transactions and pledges, trailing 6-12 months. "
+            "IN ladder: NSE corporate disclosures → Trendlyne. "
+            "US ladder: openinsider.com → SEC Form 4 index. "
+            "Returns structured markdown with transaction dates, parties, buy/sell, "
+            "quantity, value, and promoter pledge percentage."
+        ),
+    )
+    async def finance_insider(symbol: str, market: str = "IN") -> dict[str, Any]:
+        return await app_call("POST", "/finance/insider", {"symbol": symbol, "market": market})
+
+    @mcp.tool(
+        name="finance_corp_actions",
+        description=(
+            "Buyback authorisations + execution pace, dividends declared, splits, delistings. "
+            "IN ladder: NSE corporate announcements → BSE announcements → Moneycontrol. "
+            "Returns structured markdown with action type, announce date, size/ratio, "
+            "and execution status."
+        ),
+    )
+    async def finance_corp_actions(symbol: str, market: str = "IN") -> dict[str, Any]:
+        return await app_call("POST", "/finance/corp_actions", {"symbol": symbol, "market": market})
+
+    @mcp.tool(
+        name="finance_macro",
+        description=(
+            "Macroeconomic observables for a home market: 10Y sovereign yield, "
+            "sovereign CDS / default spread, FX spot rate, FX implied vol. "
+            "Ladder: worldgovernmentbonds.com → RBI / investing.com → search fallback. "
+            "These values lock into STATE.md; cache is daily."
+        ),
+    )
+    async def finance_macro(country: str = "IN") -> dict[str, Any]:
+        return await app_call("POST", "/finance/macro", {"country": country})
+
+    @mcp.tool(
+        name="finance_erp",
+        description=(
+            "Equity risk premia and country default spreads from Damodaran. "
+            "Ladder: Damodaran country risk pages → stale in-memory cache (correct fallback — "
+            "Damodaran updates ~annually; hard-fail is wrong here). "
+            "Returns ERP home, ERP mature market, country default spread, and vintage date."
+        ),
+    )
+    async def finance_erp(home: str = "IN", foreign: str = "US") -> dict[str, Any]:
+        return await app_call("POST", "/finance/erp", {"home": home, "foreign": foreign})
+
+    @mcp.tool(
+        name="finance_snapshot_us",
+        description=(
+            "Degraded US-book basics: price, market cap, % off 52w/ATH, P/E, "
+            "shares outstanding, short interest if shown. "
+            "Ladder: stockanalysis.com → Yahoo Finance. "
+            "Always marked 'degraded: true' in the header — ledger rows carry this flag."
+        ),
+    )
+    async def finance_snapshot_us(symbol: str) -> dict[str, Any]:
+        return await app_call("POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"})
+
     return mcp
 
 

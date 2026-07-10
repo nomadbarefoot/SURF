@@ -23,6 +23,7 @@ import structlog
 from config import get_settings
 from services.challenge_resolver import ChallengeResolver
 from services.content_refiner import ContentRefiner
+from services.searxng_runtime import ensure_searxng
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -209,9 +210,42 @@ class SearchService:
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.ConnectError:
-            self._stats["searxng_failures"] += 1
-            self._stats["last_searxng_error"] = f"Cannot reach SearXNG at {settings.searxng_base_url}"
-            return {"success": False, "error": self._stats["last_searxng_error"]}
+            wake = await ensure_searxng()
+            if wake.get("status") == "ready":
+                try:
+                    async with httpx.AsyncClient(timeout=settings.searxng_timeout) as client:
+                        resp = await client.get(f"{settings.searxng_base_url}/search", params=params)
+                        resp.raise_for_status()
+                        data = resp.json()
+                except httpx.ConnectError:
+                    wake = await ensure_searxng(force=True)
+                    if wake.get("status") == "ready":
+                        try:
+                            async with httpx.AsyncClient(timeout=settings.searxng_timeout) as client:
+                                resp = await client.get(f"{settings.searxng_base_url}/search", params=params)
+                                resp.raise_for_status()
+                                data = resp.json()
+                        except httpx.ConnectError:
+                            self._stats["searxng_failures"] += 1
+                            self._stats["last_searxng_error"] = (
+                                f"Cannot reach SearXNG at {settings.searxng_base_url} after autowake"
+                            )
+                            return {"success": False, "error": self._stats["last_searxng_error"],
+                                    "searxng_wake": wake}
+                    else:
+                        self._stats["searxng_failures"] += 1
+                        self._stats["last_searxng_error"] = (
+                            f"Cannot reach SearXNG at {settings.searxng_base_url}"
+                        )
+                        return {"success": False, "error": self._stats["last_searxng_error"],
+                                "searxng_wake": wake}
+            else:
+                self._stats["searxng_failures"] += 1
+                self._stats["last_searxng_error"] = (
+                    f"Cannot reach SearXNG at {settings.searxng_base_url}"
+                )
+                return {"success": False, "error": self._stats["last_searxng_error"],
+                        "searxng_wake": wake}
         except httpx.HTTPStatusError as exc:
             self._stats["searxng_failures"] += 1
             self._stats["last_searxng_error"] = f"SearXNG returned {exc.response.status_code}"

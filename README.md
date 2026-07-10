@@ -1,8 +1,10 @@
 # SURF
 
-SURF is a local browser substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
+SURF is a local browser and web-research substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
 
-The goal is reliable occasional browsing and scraping. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, and browser-like fetches for one-off work. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
+Beyond single-page browsing, SURF includes **web search** (`search_query` via SearXNG metasearch) and **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
+
+The goal is reliable occasional browsing, scraping, and research. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, browser-like fetches, search-then-extract pipelines, and typed financial extractors. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
 ## Setup
 
@@ -59,7 +61,9 @@ SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runti
 
 ## Quick Agent Flow
 
-Preferred MCP tools:
+SURF exposes three MCP tool families: `browser_*`, `search_*`, and `finance_*`.
+
+### Browser automation
 
 - `browser_create_session`
 - `browser_network_start` when XHR/API discovery matters.
@@ -69,6 +73,38 @@ Preferred MCP tools:
 - `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
 - `browser_download`; pass `output_dir` when the caller needs the file in its own workspace.
 - `browser_close_session`
+
+### Web search and extraction
+
+No session required — search and extract spin up ephemeral browser sessions internally.
+
+1. `search_query` — run a SearXNG metasearch query; returns ranked results with titles, snippets, URLs, source engine, and hybrid relevance scores.
+2. Pick URLs from the results.
+3. `search_extract` — fetch full page content from up to 10 URLs in parallel. Pass `refine_query` to keep only sections relevant to your research topic. Pass a `relevance` map (URL → score from `search_query`) to prioritize headed retries for high-value failures.
+
+Example pipeline:
+
+```json
+{"tool": "search_query", "query": "India Nifty 50 outlook 2026", "max_results": 5}
+{"tool": "search_extract", "urls": ["https://example.com/article"], "refine_query": "Nifty 50 outlook 2026", "content_mode": "reader"}
+```
+
+SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888`). SURF can autostart a Docker container when `SURF_SEARXNG_AUTOWAKE_ENABLED=true`. Check reachability with `GET /health/searxng?autowake=true`.
+
+Optional: set `SURF_EMBEDDING_BASE_URL` and `SURF_EMBEDDING_MODEL` for semantic relevance scoring in search and section filtering during extraction. Without an embedder, search falls back to BM25-only scoring.
+
+### Finance Pack
+
+Typed endpoints that walk curated source ladders and return fixed markdown (source, as-of, confidence). Prefer these over generic search for recurring ledger data. See `FINANCE_PACK.md` for design detail.
+
+- `finance_consensus(symbol, market)` — analyst PT mean/range, EPS estimates
+- `finance_insider(symbol, market)` — insider/promoter transactions and pledges
+- `finance_corp_actions(symbol, market)` — buybacks, dividends, splits
+- `finance_macro(country)` — 10Y yield, CDS, FX spot, FX implied vol
+- `finance_erp(home, foreign)` — Damodaran ERP and country default spreads
+- `finance_snapshot_us(symbol)` — degraded US-book basics (price, mcap, P/E)
+
+Probe ladder health with `GET /health/finance`. Run the harness with `.venv/bin/python scripts/run_finance_tool_harness.py`.
 
 ## API Surface
 
@@ -106,6 +142,21 @@ Downloads:
 - `GET /downloads/{download_id}/content`
 - `DELETE /downloads/{download_id}`
 
+Search:
+
+- `POST /search/query`
+- `POST /search/extract`
+- `GET /search/stats`
+
+Finance:
+
+- `POST /finance/consensus`
+- `POST /finance/insider`
+- `POST /finance/corp_actions`
+- `POST /finance/macro`
+- `POST /finance/erp`
+- `POST /finance/snapshot_us`
+
 Health:
 
 - `GET /health/`
@@ -113,6 +164,8 @@ Health:
 - `GET /health/ready`
 - `GET /health/metrics`
 - `GET /health/runtime`
+- `GET /health/searxng`
+- `GET /health/finance`
 
 ## Session Config
 
@@ -216,9 +269,31 @@ BSE RELIANCE:
 
 Runtime browser profiles, downloads, and filter-list caches live under `data/` and are ignored by Git.
 
+## Search and Extraction
+
+`POST /search/query` accepts:
+
+- `query` (required)
+- `max_results` (default 10, max 50)
+- `engines`, `categories` (optional SearXNG filters)
+- `language` (default `en`)
+- `time_range` (optional: `day`, `week`, `month`, `year`)
+
+Returns `{success, results[], ms}` where each result has `title`, `url`, `snippet`, `engine`, and `relevance` (0–1 hybrid BM25 + semantic score).
+
+`POST /search/extract` accepts:
+
+- `urls` (required, 1–10 URLs)
+- `content_mode` (default `reader`; also `compact`, `data`, `full`)
+- `max_text_length` (default 8000)
+- `relevance` (optional URL→score map from search)
+- `refine_query` (optional topic for embedding-based section filtering)
+
+Extraction runs headless first, then retries failed or challenge-blocked URLs in headed mode. Protected sites may return `challenge_blocked: true` — back off rather than retry aggressively.
+
 ## Agent Integration
 
-Use `surfctl.py mcp` as a stdio MCP server. MCP server instructions mark SURF as the preferred local browsing, scraping, download, and browser-cookie fetch tool.
+Use `surfctl.py mcp` as a stdio MCP server. MCP server instructions mark SURF as the preferred local tool for browsing, scraping, downloads, browser-cookie fetches, web search, content extraction, and structured financial data.
 
 ## Verification
 

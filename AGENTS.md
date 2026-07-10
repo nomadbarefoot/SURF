@@ -1,6 +1,6 @@
 # SURF Agent Guide
 
-SURF gives agents a local Playwright browser through stdio. Use it for one-off browsing, observation, interaction, network capture, browser-cookie fetches, and sandboxed downloads.
+SURF gives agents a local Playwright browser through stdio, plus web search and parallel content extraction. Use it for one-off browsing, observation, interaction, network capture, browser-cookie fetches, sandboxed downloads, search-then-extract research, and typed financial data (`finance_*`).
 
 ## Interface
 
@@ -29,6 +29,22 @@ Do not use the manual HTTP daemon for agent workflows. Do not use localhost curl
 7. Use `browser_fetch` with `backend="browser"` and `session_id` when an endpoint needs browser cookies.
 8. Use `browser_download` for files; pass `output_dir` when downstream tooling must read the artifact directly.
 9. `browser_close_session` when done.
+
+### Web research (no session required)
+
+1. `search_query` — SearXNG metasearch; returns ranked URLs with snippets and relevance scores.
+2. `search_extract` — parallel full-page extraction from selected URLs. Pass `refine_query` to filter sections by topic. Pass `relevance` from step 1 to prioritize headed retries.
+
+SearXNG must be running (default `http://localhost:8888`). SURF can autostart Docker when configured.
+
+### Finance Pack
+
+For recurring market-data needs, prefer `finance_*` over generic search:
+
+- `finance_consensus`, `finance_insider`, `finance_corp_actions`
+- `finance_macro`, `finance_erp`, `finance_snapshot_us`
+
+Each returns structured markdown with source, as-of, and explicit `MISSING` lines for absent fields. See `FINANCE_PACK.md`.
 
 Downloads return `absolute_path`. Existing files in `output_dir` are refused unless `overwrite=true`.
 

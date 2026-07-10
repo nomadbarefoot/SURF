@@ -1,6 +1,6 @@
 # SURF Architecture
 
-SURF is a local FastAPI service around Playwright Chromium. It is designed for agent-driven, occasional browsing and scraping workflows.
+SURF is a local FastAPI service around Playwright Chromium and SearXNG metasearch. It is designed for agent-driven, occasional browsing, scraping, and web-research workflows.
 
 ## Entrypoints
 
@@ -15,7 +15,9 @@ Mounted routers:
 - `/browser`: navigation, observation, interaction, screenshots, network capture, downloads.
 - `/fetch`: one-off HTTP/browser-context fetches.
 - `/downloads`: sandboxed file listing/content/deletion.
-- `/health`: health, liveness, readiness, and metrics.
+- `/search`: SearXNG queries and parallel deep content extraction.
+- `/finance`: Finance Pack typed endpoints (curated source ladders).
+- `/health`: health, liveness, readiness, metrics, SearXNG probe, finance ladder probe.
 
 ## Services
 
@@ -24,6 +26,9 @@ Mounted routers:
 - `FetchService`: `httpx`, browser-context, `curl_cffi`, and optional `cloudscraper` fetches.
 - `DownloadService`: sandboxed download persistence under `data/downloads`.
 - `AdblockService`: ABP-style filter loading and request-block decisions.
+- `SearchService`: SearXNG metasearch with hybrid BM25 + semantic relevance scoring; parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and optional embedding-based section filtering (`ContentRefiner`).
+- `FinanceService`: curated source ladders from `config/finance_sources.yaml`; walks known-good endpoints before search fallback; returns structured markdown via `FinanceRenderer`; daily cache for macro/ERP endpoints.
+- `searxng_runtime`: SearXNG health probe and optional Docker autostart.
 
 ## Runtime Storage
 
@@ -61,6 +66,18 @@ Observe modes:
 - `full`: raw visible body text.
 
 Browser-context `/fetch/request` reuses cookies but is not part of page adblock metrics.
+
+## Search and Extraction
+
+Stage 1 (`SearchService.search`): queries SearXNG at `SURF_SEARXNG_BASE_URL`, deduplicates results, scores with hybrid BM25 + optional semantic embeddings, and returns ranked snippets.
+
+Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures in headed mode when relevance warrants it, and optionally refines output with `refine_query` embedding filters.
+
+Search extraction reuses `BrowserService` observe modes and `ChallengeResolver` for Cloudflare-style blocks. Stats are exposed at `GET /search/stats`.
+
+## Finance Pack
+
+`FinanceService` walks ordered rungs in `config/finance_sources.yaml` per endpoint. Each rung is a known URL + selector map. Search fallback is the last rung. Output is fixed markdown with explicit `MISSING` fields. Ladder health is probed at `GET /health/finance`.
 
 ## Safety Boundary
 

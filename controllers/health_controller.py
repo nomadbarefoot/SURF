@@ -5,9 +5,11 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends
 import structlog
 
-from core.foundation import get_session_service
+from core.foundation import get_session_service, get_finance_service
 from models.schemas import HealthResponse
 from services.session_service import SessionService
+from services.finance_service import FinanceService
+from services.searxng_runtime import ensure_searxng, probe_searxng
 from config.settings import get_settings
 
 logger = structlog.get_logger()
@@ -184,6 +186,50 @@ async def get_metrics(
     except Exception as e:
         logger.error("Failed to get metrics", error=str(e))
         return {"success": False, "error": str(e)}
+
+
+@router.get("/searxng")
+async def searxng_health(autowake: bool = False):
+    """Probe SearXNG reachability; optionally autostart Docker when down."""
+    if autowake:
+        result = await ensure_searxng(force=True)
+    else:
+        probe = await probe_searxng()
+        result = {"status": "ready" if probe.get("reachable") else "down", "probe": probe}
+    return {"success": result.get("status") == "ready", **result}
+
+
+@router.get("/finance")
+async def finance_ladder_probe(
+    finance_service: FinanceService = Depends(get_finance_service),
+):
+    """Probe all finance ladders on one known symbol per market.
+
+    Intended for nightly monitoring — each rung gets a real HTTP request.
+    Do not call on hot paths.
+    """
+    probes = [
+        ("consensus", "RELIANCE", "IN"),
+        ("consensus", "AAPL", "US"),
+        ("insider", "RELIANCE", "IN"),
+        ("corp_actions", "RELIANCE", "IN"),
+        ("macro", "IN", "IN"),
+        ("erp", "IN", "IN"),
+        ("snapshot_us", "AAPL", "US"),
+    ]
+    results = []
+    for endpoint, symbol, market in probes:
+        try:
+            probe = await finance_service.probe_ladder(endpoint, symbol, market)
+            results.append(probe)
+        except Exception as exc:
+            results.append({"endpoint": endpoint, "symbol": symbol, "market": market,
+                            "error": str(exc)})
+    all_ok = all(
+        all(r.get("status") in ("ok", "skipped") for r in p.get("rungs", []))
+        for p in results if "rungs" in p
+    )
+    return {"success": True, "healthy": all_ok, "probes": results}
 
 
 @router.get("/runtime")
