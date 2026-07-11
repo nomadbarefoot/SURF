@@ -11,6 +11,7 @@ from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
 import structlog
 
 from config import get_settings, SecurityConfig
+from config.settings import FREE_TIER_ROUTES
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -194,7 +195,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
 class SecurityMiddleware(BaseHTTPMiddleware):
     """Security middleware for request validation and protection"""
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Check request size
         content_length = request.headers.get("content-length")
@@ -203,7 +204,27 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail="Request too large"
             )
-        
+
+        # Route-tier gate: when running in loopback mode without a bearer token,
+        # restrict access to FREE_TIER_ROUTES (mirrors FREE_TIER_TOOLS on the MCP layer).
+        if settings.auth_mode == "loopback":
+            auth_header = request.headers.get("authorization", "")
+            has_token = auth_header.lower().startswith("bearer ") and len(auth_header) > len("bearer ")
+            if not has_token:
+                path = request.url.path
+                # Always allow the root endpoint
+                if path != "/" and not any(path.startswith(prefix) for prefix in FREE_TIER_ROUTES):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "success": False,
+                            "error": {
+                                "code": "FORBIDDEN",
+                                "message": "This route requires an API token. Set SURF_API_TOKEN and pass it as a Bearer token."
+                            }
+                        }
+                    )
+
         # Add security headers
         response = await call_next(request)
         

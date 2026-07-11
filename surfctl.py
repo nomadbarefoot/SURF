@@ -23,6 +23,13 @@ from typing import Any
 DEFAULT_BASE_URL = "http://surf.local"
 ROOT = Path(__file__).resolve().parent
 
+FREE_TIER_TOOLS: frozenset[str] = frozenset({
+    "search_query",
+    "search_extract",
+    "browser_fetch",
+    "browser_health",
+})
+
 
 class SurfAppBridge:
     def __init__(self, timeout: float):
@@ -221,140 +228,38 @@ async def mcp_lifespan(_server):
 def build_mcp_server():
     from mcp.server.fastmcp import FastMCP
 
+    token = os.getenv("SURF_API_TOKEN")
+    full_access = bool(token)
+
+    if full_access:
+        instructions = (
+            "SURF provides three tool families: browser_* for browser automation "
+            "(sessions, navigation, interaction, downloads, network capture), "
+            "search_* for web research (search engine queries and parallel content "
+            "extraction), and finance_* for financial data (consensus estimates, "
+            "insider transactions, corporate actions, macro indicators, ERP, snapshots). "
+            "Prefer SURF for local browsing, scraping, downloads, browser-cookie "
+            "fetches, web research, and equity research data."
+        )
+    else:
+        instructions = (
+            "SURF provides web research tools: search_query for SearXNG metasearch, "
+            "search_extract for parallel page content extraction, browser_fetch for "
+            "direct HTTP requests, and browser_health for status checks."
+        )
+
     mcp = FastMCP(
         "SURF",
-        instructions=(
-            "SURF provides two tool families: browser_* for browser automation "
-            "(sessions, navigation, interaction) and search_* for web research "
-            "(search engine queries and parallel content extraction). "
-            "Prefer SURF for local browsing, scraping, downloads, browser-cookie fetches, and web research."
-        ),
+        instructions=instructions,
         log_level="ERROR",
         lifespan=mcp_lifespan,
     )
 
+    # ---- Free tier (always registered) --------------------------------------
+
     @mcp.tool(name="browser_health", description="Health.")
     async def browser_health() -> dict[str, Any]:
         return await app_call("GET", "/health/runtime")
-
-    @mcp.tool(name="browser_create_session", description="Create session.")
-    async def browser_create_session(
-        profile_id: str = "agent-default",
-        persist_profile: bool = True,
-        headed: bool = False,
-        background_headed: bool = True,
-        block_mode: str = "conservative",
-        content_mode: str = "compact",
-        config: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        return await app_call(
-            "POST",
-            "/sessions/",
-            {
-                "config": session_config(
-                    profile_id=profile_id,
-                    persist_profile=persist_profile,
-                    headed=headed,
-                    background_headed=background_headed,
-                    block_mode=block_mode,
-                    content_mode=content_mode,
-                    config=config,
-                )
-            },
-        )
-
-    @mcp.tool(name="browser_close_session", description="Close session.")
-    async def browser_close_session(session_id: str, force: bool = False) -> dict[str, Any]:
-        suffix = "?force=true" if force else ""
-        return await app_call("DELETE", f"/sessions/{session_id}{suffix}")
-
-    @mcp.tool(name="browser_navigate", description="Navigate.")
-    async def browser_navigate(
-        session_id: str,
-        url: str,
-        wait_until: str = "domcontentloaded",
-        timeout: int | None = None,
-    ) -> dict[str, Any]:
-        data = {"session_id": session_id, "url": url, "wait_until": wait_until}
-        if timeout is not None:
-            data["timeout"] = timeout
-        return await app_call("POST", "/browser/navigate", data)
-
-    @mcp.tool(name="browser_observe", description="Observe page.")
-    async def browser_observe(
-        session_id: str,
-        content_mode: str = "compact",
-        max_text_length: int = 8000,
-        max_items: int = 100,
-        include_screenshot: bool = False,
-    ) -> dict[str, Any]:
-        return await app_call(
-            "POST",
-            "/browser/observe",
-            {
-                "session_id": session_id,
-                "content_mode": content_mode,
-                "max_text_length": max_text_length,
-                "max_items": max_items,
-                "include_screenshot": include_screenshot,
-            },
-        )
-
-    @mcp.tool(name="browser_click", description="Click.")
-    async def browser_click(session_id: str, selector: str, timeout: int | None = None) -> dict[str, Any]:
-        data: dict[str, Any] = {"session_id": session_id, "action": "click", "selector": selector}
-        if timeout is not None:
-            data["timeout"] = timeout
-        return await app_call("POST", "/browser/interact", data)
-
-    @mcp.tool(name="browser_type", description="Type.")
-    async def browser_type(session_id: str, selector: str, value: str, timeout: int | None = None) -> dict[str, Any]:
-        data: dict[str, Any] = {"session_id": session_id, "action": "type", "selector": selector, "value": value}
-        if timeout is not None:
-            data["timeout"] = timeout
-        return await app_call("POST", "/browser/interact", data)
-
-    @mcp.tool(name="browser_wait", description="Wait.")
-    async def browser_wait(
-        session_id: str,
-        selector: str | None = None,
-        text: str | None = None,
-        url_contains: str | None = None,
-        load_state: str | None = None,
-        timeout: int = 30000,
-    ) -> dict[str, Any]:
-        return await app_call(
-            "POST",
-            "/browser/wait",
-            {
-                "session_id": session_id,
-                "selector": selector,
-                "text": text,
-                "url_contains": url_contains,
-                "load_state": load_state,
-                "timeout": timeout,
-            },
-        )
-
-    @mcp.tool(name="browser_links", description="Extract links.")
-    async def browser_links(
-        session_id: str,
-        selector: str | None = None,
-        contains: str | None = None,
-        max_items: int = 5000,
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {"session_id": session_id, "extract_type": "links"}
-        if selector:
-            data["selector"] = selector
-        result = await app_call("POST", "/browser/extract", data)
-        links = result.get("data", {}).get("content") or result.get("data", {}).get("data", {}).get("raw_content", {}).get("links") or []
-        if contains:
-            needle = contains.lower()
-            links = [
-                link for link in links
-                if needle in (link.get("url", "") + " " + link.get("href", "") + " " + link.get("text", "")).lower()
-            ]
-        return {"success": True, "count": len(links), "links": links[:max_items]}
 
     @mcp.tool(name="browser_fetch", description="Fetch.")
     async def browser_fetch(
@@ -386,73 +291,6 @@ def build_mcp_server():
             "timeout": timeout,
         }
         return await app_call("POST", "/fetch/request", data)
-
-    @mcp.tool(name="browser_download", description="Download.")
-    async def browser_download(
-        url: str | None = None,
-        session_id: str | None = None,
-        selector: str | None = None,
-        filename: str | None = None,
-        output_dir: str | None = None,
-        overwrite: bool = False,
-        timeout: int = 60000,
-    ) -> dict[str, Any]:
-        if url:
-            return await app_call(
-                "POST",
-                "/fetch/request",
-                {
-                    "method": "GET",
-                    "url": url,
-                    "session_id": session_id,
-                    "backend": "browser" if session_id else "auto",
-                    "save_to_downloads": True,
-                    "download_filename": filename,
-                    "output_dir": output_dir,
-                    "overwrite": overwrite,
-                    "timeout": timeout,
-                },
-            )
-        if session_id and selector:
-            return await app_call(
-                "POST",
-                "/browser/download/click",
-                {
-                    "session_id": session_id,
-                    "selector": selector,
-                    "filename": filename,
-                    "output_dir": output_dir,
-                    "overwrite": overwrite,
-                    "timeout": timeout,
-                },
-            )
-        return {"ok": False, "error": "provide url or session_id+selector"}
-
-    @mcp.tool(name="browser_network_start", description="Start network.")
-    async def browser_network_start(
-        session_id: str,
-        url_contains: str | None = None,
-        include_body: bool = False,
-        max_body_bytes: int = 65536,
-    ) -> dict[str, Any]:
-        return await app_call(
-            "POST",
-            "/browser/network/start",
-            {
-                "session_id": session_id,
-                "url_contains": url_contains,
-                "include_body": include_body,
-                "max_body_bytes": max_body_bytes,
-            },
-        )
-
-    @mcp.tool(name="browser_network_events", description="Read network.")
-    async def browser_network_events(session_id: str) -> dict[str, Any]:
-        return await app_call("GET", f"/browser/network/events/{session_id}")
-
-    @mcp.tool(name="browser_network_stop", description="Stop network.")
-    async def browser_network_stop(session_id: str) -> dict[str, Any]:
-        return await app_call("POST", "/browser/network/stop", {"session_id": session_id})
 
     @mcp.tool(
         name="search_query",
@@ -513,82 +351,272 @@ def build_mcp_server():
             data["refine_query"] = refine_query
         return await app_call("POST", "/search/extract", data)
 
-    # ---- Finance Pack -------------------------------------------------------
+    # ---- Full tier (requires SURF_API_TOKEN) --------------------------------
 
-    @mcp.tool(
-        name="finance_consensus",
-        description=(
-            "Analyst price target (mean + range) and EPS estimates for a stock. "
-            "IN ladder: Trendlyne → Moneycontrol → search fallback. "
-            "US ladder: stockanalysis.com → Yahoo Finance → search fallback. "
-            "Returns structured markdown with PT mean, PT range, analyst count, "
-            "FY EPS estimates, as-of date, and confidence level. "
-            "MISSING lines indicate fields not found on any rung."
-        ),
-    )
-    async def finance_consensus(symbol: str, market: str = "IN") -> dict[str, Any]:
-        return await app_call("POST", "/finance/consensus", {"symbol": symbol, "market": market})
+    if full_access:
 
-    @mcp.tool(
-        name="finance_insider",
-        description=(
-            "Insider / promoter transactions and pledges, trailing 6-12 months. "
-            "IN ladder: NSE corporate disclosures → Trendlyne. "
-            "US ladder: openinsider.com → SEC Form 4 index. "
-            "Returns structured markdown with transaction dates, parties, buy/sell, "
-            "quantity, value, and promoter pledge percentage."
-        ),
-    )
-    async def finance_insider(symbol: str, market: str = "IN") -> dict[str, Any]:
-        return await app_call("POST", "/finance/insider", {"symbol": symbol, "market": market})
+        @mcp.tool(name="browser_create_session", description="Create session.")
+        async def browser_create_session(
+            profile_id: str = "agent-default",
+            persist_profile: bool = True,
+            headed: bool = False,
+            background_headed: bool = True,
+            block_mode: str = "conservative",
+            content_mode: str = "compact",
+            config: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            return await app_call(
+                "POST",
+                "/sessions/",
+                {
+                    "config": session_config(
+                        profile_id=profile_id,
+                        persist_profile=persist_profile,
+                        headed=headed,
+                        background_headed=background_headed,
+                        block_mode=block_mode,
+                        content_mode=content_mode,
+                        config=config,
+                    )
+                },
+            )
 
-    @mcp.tool(
-        name="finance_corp_actions",
-        description=(
-            "Buyback authorisations + execution pace, dividends declared, splits, delistings. "
-            "IN ladder: NSE corporate announcements → BSE announcements → Moneycontrol. "
-            "Returns structured markdown with action type, announce date, size/ratio, "
-            "and execution status."
-        ),
-    )
-    async def finance_corp_actions(symbol: str, market: str = "IN") -> dict[str, Any]:
-        return await app_call("POST", "/finance/corp_actions", {"symbol": symbol, "market": market})
+        @mcp.tool(name="browser_close_session", description="Close session.")
+        async def browser_close_session(session_id: str, force: bool = False) -> dict[str, Any]:
+            suffix = "?force=true" if force else ""
+            return await app_call("DELETE", f"/sessions/{session_id}{suffix}")
 
-    @mcp.tool(
-        name="finance_macro",
-        description=(
-            "Macroeconomic observables for a home market: 10Y sovereign yield, "
-            "sovereign CDS / default spread, FX spot rate, FX implied vol. "
-            "Ladder: worldgovernmentbonds.com → RBI / investing.com → search fallback. "
-            "These values lock into STATE.md; cache is daily."
-        ),
-    )
-    async def finance_macro(country: str = "IN") -> dict[str, Any]:
-        return await app_call("POST", "/finance/macro", {"country": country})
+        @mcp.tool(name="browser_navigate", description="Navigate.")
+        async def browser_navigate(
+            session_id: str,
+            url: str,
+            wait_until: str = "domcontentloaded",
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data = {"session_id": session_id, "url": url, "wait_until": wait_until}
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/navigate", data)
 
-    @mcp.tool(
-        name="finance_erp",
-        description=(
-            "Equity risk premia and country default spreads from Damodaran. "
-            "Ladder: Damodaran country risk pages → stale in-memory cache (correct fallback — "
-            "Damodaran updates ~annually; hard-fail is wrong here). "
-            "Returns ERP home, ERP mature market, country default spread, and vintage date."
-        ),
-    )
-    async def finance_erp(home: str = "IN", foreign: str = "US") -> dict[str, Any]:
-        return await app_call("POST", "/finance/erp", {"home": home, "foreign": foreign})
+        @mcp.tool(name="browser_observe", description="Observe page.")
+        async def browser_observe(
+            session_id: str,
+            content_mode: str = "compact",
+            max_text_length: int = 8000,
+            max_items: int = 100,
+            include_screenshot: bool = False,
+        ) -> dict[str, Any]:
+            return await app_call(
+                "POST",
+                "/browser/observe",
+                {
+                    "session_id": session_id,
+                    "content_mode": content_mode,
+                    "max_text_length": max_text_length,
+                    "max_items": max_items,
+                    "include_screenshot": include_screenshot,
+                },
+            )
 
-    @mcp.tool(
-        name="finance_snapshot_us",
-        description=(
-            "Degraded US-book basics: price, market cap, % off 52w/ATH, P/E, "
-            "shares outstanding, short interest if shown. "
-            "Ladder: stockanalysis.com → Yahoo Finance. "
-            "Always marked 'degraded: true' in the header — ledger rows carry this flag."
-        ),
-    )
-    async def finance_snapshot_us(symbol: str) -> dict[str, Any]:
-        return await app_call("POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"})
+        @mcp.tool(name="browser_click", description="Click.")
+        async def browser_click(session_id: str, selector: str, timeout: int | None = None) -> dict[str, Any]:
+            data: dict[str, Any] = {"session_id": session_id, "action": "click", "selector": selector}
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/interact", data)
+
+        @mcp.tool(name="browser_type", description="Type.")
+        async def browser_type(session_id: str, selector: str, value: str, timeout: int | None = None) -> dict[str, Any]:
+            data: dict[str, Any] = {"session_id": session_id, "action": "type", "selector": selector, "value": value}
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/interact", data)
+
+        @mcp.tool(name="browser_wait", description="Wait.")
+        async def browser_wait(
+            session_id: str,
+            selector: str | None = None,
+            text: str | None = None,
+            url_contains: str | None = None,
+            load_state: str | None = None,
+            timeout: int = 30000,
+        ) -> dict[str, Any]:
+            return await app_call(
+                "POST",
+                "/browser/wait",
+                {
+                    "session_id": session_id,
+                    "selector": selector,
+                    "text": text,
+                    "url_contains": url_contains,
+                    "load_state": load_state,
+                    "timeout": timeout,
+                },
+            )
+
+        @mcp.tool(name="browser_links", description="Extract links.")
+        async def browser_links(
+            session_id: str,
+            selector: str | None = None,
+            contains: str | None = None,
+            max_items: int = 5000,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {"session_id": session_id, "extract_type": "links"}
+            if selector:
+                data["selector"] = selector
+            result = await app_call("POST", "/browser/extract", data)
+            links = result.get("data", {}).get("content") or result.get("data", {}).get("data", {}).get("raw_content", {}).get("links") or []
+            if contains:
+                needle = contains.lower()
+                links = [
+                    link for link in links
+                    if needle in (link.get("url", "") + " " + link.get("href", "") + " " + link.get("text", "")).lower()
+                ]
+            return {"success": True, "count": len(links), "links": links[:max_items]}
+
+        @mcp.tool(name="browser_download", description="Download.")
+        async def browser_download(
+            url: str | None = None,
+            session_id: str | None = None,
+            selector: str | None = None,
+            filename: str | None = None,
+            output_dir: str | None = None,
+            overwrite: bool = False,
+            timeout: int = 60000,
+        ) -> dict[str, Any]:
+            if url:
+                return await app_call(
+                    "POST",
+                    "/fetch/request",
+                    {
+                        "method": "GET",
+                        "url": url,
+                        "session_id": session_id,
+                        "backend": "browser" if session_id else "auto",
+                        "save_to_downloads": True,
+                        "download_filename": filename,
+                        "output_dir": output_dir,
+                        "overwrite": overwrite,
+                        "timeout": timeout,
+                    },
+                )
+            if session_id and selector:
+                return await app_call(
+                    "POST",
+                    "/browser/download/click",
+                    {
+                        "session_id": session_id,
+                        "selector": selector,
+                        "filename": filename,
+                        "output_dir": output_dir,
+                        "overwrite": overwrite,
+                        "timeout": timeout,
+                    },
+                )
+            return {"ok": False, "error": "provide url or session_id+selector"}
+
+        @mcp.tool(name="browser_network_start", description="Start network.")
+        async def browser_network_start(
+            session_id: str,
+            url_contains: str | None = None,
+            include_body: bool = False,
+            max_body_bytes: int = 65536,
+        ) -> dict[str, Any]:
+            return await app_call(
+                "POST",
+                "/browser/network/start",
+                {
+                    "session_id": session_id,
+                    "url_contains": url_contains,
+                    "include_body": include_body,
+                    "max_body_bytes": max_body_bytes,
+                },
+            )
+
+        @mcp.tool(name="browser_network_events", description="Read network.")
+        async def browser_network_events(session_id: str) -> dict[str, Any]:
+            return await app_call("GET", f"/browser/network/events/{session_id}")
+
+        @mcp.tool(name="browser_network_stop", description="Stop network.")
+        async def browser_network_stop(session_id: str) -> dict[str, Any]:
+            return await app_call("POST", "/browser/network/stop", {"session_id": session_id})
+
+        # ---- Finance Pack ---------------------------------------------------
+
+        @mcp.tool(
+            name="finance_consensus",
+            description=(
+                "Analyst price target (mean + range) and EPS estimates for a stock. "
+                "IN ladder: Trendlyne → Moneycontrol → search fallback. "
+                "US ladder: stockanalysis.com → Yahoo Finance → search fallback. "
+                "Returns structured markdown with PT mean, PT range, analyst count, "
+                "FY EPS estimates, as-of date, and confidence level. "
+                "MISSING lines indicate fields not found on any rung."
+            ),
+        )
+        async def finance_consensus(symbol: str, market: str = "IN") -> dict[str, Any]:
+            return await app_call("POST", "/finance/consensus", {"symbol": symbol, "market": market})
+
+        @mcp.tool(
+            name="finance_insider",
+            description=(
+                "Insider / promoter transactions and pledges, trailing 6-12 months. "
+                "IN ladder: NSE corporate disclosures → Trendlyne. "
+                "US ladder: openinsider.com → SEC Form 4 index. "
+                "Returns structured markdown with transaction dates, parties, buy/sell, "
+                "quantity, value, and promoter pledge percentage."
+            ),
+        )
+        async def finance_insider(symbol: str, market: str = "IN") -> dict[str, Any]:
+            return await app_call("POST", "/finance/insider", {"symbol": symbol, "market": market})
+
+        @mcp.tool(
+            name="finance_corp_actions",
+            description=(
+                "Buyback authorisations + execution pace, dividends declared, splits, delistings. "
+                "IN ladder: NSE corporate announcements → BSE announcements → Moneycontrol. "
+                "Returns structured markdown with action type, announce date, size/ratio, "
+                "and execution status."
+            ),
+        )
+        async def finance_corp_actions(symbol: str, market: str = "IN") -> dict[str, Any]:
+            return await app_call("POST", "/finance/corp_actions", {"symbol": symbol, "market": market})
+
+        @mcp.tool(
+            name="finance_macro",
+            description=(
+                "Macroeconomic observables for a home market: 10Y sovereign yield, "
+                "sovereign CDS / default spread, FX spot rate, FX implied vol. "
+                "Ladder: worldgovernmentbonds.com → RBI / investing.com → search fallback. "
+                "These values lock into STATE.md; cache is daily."
+            ),
+        )
+        async def finance_macro(country: str = "IN") -> dict[str, Any]:
+            return await app_call("POST", "/finance/macro", {"country": country})
+
+        @mcp.tool(
+            name="finance_erp",
+            description=(
+                "Equity risk premia and country default spreads from Damodaran. "
+                "Ladder: Damodaran country risk pages → stale in-memory cache (correct fallback — "
+                "Damodaran updates ~annually; hard-fail is wrong here). "
+                "Returns ERP home, ERP mature market, country default spread, and vintage date."
+            ),
+        )
+        async def finance_erp(home: str = "IN", foreign: str = "US") -> dict[str, Any]:
+            return await app_call("POST", "/finance/erp", {"home": home, "foreign": foreign})
+
+        @mcp.tool(
+            name="finance_snapshot_us",
+            description=(
+                "Degraded US-book basics: price, market cap, % off 52w/ATH, P/E, "
+                "shares outstanding, short interest if shown. "
+                "Ladder: stockanalysis.com → Yahoo Finance. "
+                "Always marked 'degraded: true' in the header — ledger rows carry this flag."
+            ),
+        )
+        async def finance_snapshot_us(symbol: str) -> dict[str, Any]:
+            return await app_call("POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"})
 
     return mcp
 

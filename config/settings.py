@@ -244,3 +244,7 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
+# Route prefixes accessible without a bearer token when auth_mode == "loopback".
+# Mirrors the MCP-level FREE_TIER_TOOLS gate for the HTTP layer.
+FREE_TIER_ROUTES: frozenset = frozenset({"/search/", "/fetch/", "/health/"})
