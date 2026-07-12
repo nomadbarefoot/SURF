@@ -1,0 +1,83 @@
+[
+  {
+    "probe": "/health/live",
+    "error": "All connection attempts failed"
+  },
+  {
+    "probe": "/health/searxng",
+    "error": "All connection attempts failed"
+  },
+  {
+    "probe": "/health/finance",
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_consensus",
+    "slug": "consensus-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_consensus",
+    "slug": "consensus-aapl-us",
+    "request": {
+      "symbol": "AAPL",
+      "market": "US"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_insider",
+    "slug": "insider-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_corp_actions",
+    "slug": "corp_actions-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_macro",
+    "slug": "macro-in",
+    "request": {
+      "country": "IN"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_erp",
+    "slug": "erp-in-us",
+    "request": {
+      "home": "IN",
+      "foreign": "US"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  },
+  {
+    "tool": "finance_snapshot_us",
+    "slug": "snapshot_us-aapl-us",
+    "request": {
+      "symbol": "AAPL",
+      "market": "US"
+    },
+    "success": false,
+    "error": "All connection attempts failed"
+  }
+]

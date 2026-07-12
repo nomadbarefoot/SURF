@@ -1,0 +1,256 @@
+[
+  {
+    "probe": "/health/live",
+    "status": 200,
+    "body": {
+      "status": "alive",
+      "timestamp": 1783421332.0116951
+    }
+  },
+  {
+    "probe": "/health/searxng",
+    "status": 200,
+    "body": {
+      "success": true,
+      "status": "ready",
+      "probe": {
+        "reachable": true,
+        "url": "http://localhost:8888/healthz",
+        "status_code": 200,
+        "body": "OK",
+        "ms": 22
+      }
+    }
+  },
+  {
+    "probe": "/health/finance",
+    "status": 200,
+    "body": {
+      "success": true,
+      "healthy": true,
+      "probes": [
+        {
+          "endpoint": "consensus",
+          "symbol": "RELIANCE",
+          "market": "IN",
+          "rungs": [
+            {
+              "rung": "moneycontrol_estimates",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "google_finance_nse",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        },
+        {
+          "endpoint": "consensus",
+          "symbol": "AAPL",
+          "market": "US",
+          "rungs": [
+            {
+              "rung": "google_finance",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "yahoo_finance",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        },
+        {
+          "endpoint": "insider",
+          "symbol": "RELIANCE",
+          "market": "IN",
+          "rungs": [
+            {
+              "rung": "nse_insider",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "moneycontrol_insider",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        },
+        {
+          "endpoint": "corp_actions",
+          "symbol": "RELIANCE",
+          "market": "IN",
+          "rungs": [
+            {
+              "rung": "nse_corp_actions",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "bse_corp_actions",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        },
+        {
+          "endpoint": "macro",
+          "symbol": "IN",
+          "market": "IN",
+          "rungs": [
+            {
+              "rung": "tradingeconomics_yield",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "rbi_reference_rate",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        },
+        {
+          "endpoint": "erp",
+          "symbol": "IN",
+          "market": "IN",
+          "rungs": [
+            {
+              "rung": "damodaran_erp_in",
+              "status": "ok",
+              "http_status": 200
+            }
+          ]
+        },
+        {
+          "endpoint": "snapshot_us",
+          "symbol": "AAPL",
+          "market": "US",
+          "rungs": [
+            {
+              "rung": "google_finance_snapshot",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "yahoo_chart",
+              "status": "ok",
+              "http_status": 200
+            },
+            {
+              "rung": "search_fallback",
+              "status": "skipped"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "tool": "finance_consensus",
+    "slug": "consensus-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-consensus-reliance-in.md",
+    "markdown_preview": "## finance_consensus \u00b7 RELIANCE \u00b7 IN\n\nsource: api.moneycontrol.com \u00b7 confidence: medium\n\n| field | value |\n|---|---|\n| PT mean | \u20b91694 |\n| PT high | \u20b91910 |\n| PT low | \u20b91510 |\n| analysts | 31 |\n| FY EPS est | \u20b964 |"
+  },
+  {
+    "tool": "finance_consensus",
+    "slug": "consensus-aapl-us",
+    "request": {
+      "symbol": "AAPL",
+      "market": "US"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-consensus-aapl-us.md",
+    "markdown_preview": "## finance_consensus \u00b7 AAPL \u00b7 US\n\nsource: www.google.com \u00b7 as-of: 2026-05-11 \u00b7 confidence: medium\n\n| field | value |\n|---|---|\n| PT mean | $324.40 |\n| PT high | $400.00 |\n| PT low | $250.00 |\n| analysts | 30 |\n| FY EPS est | $8.27 |"
+  },
+  {
+    "tool": "finance_insider",
+    "slug": "insider-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-insider-reliance-in.md",
+    "markdown_preview": "## finance_insider \u00b7 RELIANCE \u00b7 IN\n\nsource: www.nseindia.com \u00b7 as-of: 18-Feb-2026 19:06 \u00b7 confidence: medium\n\n| field | value |\n|---|---|\n| transactions (raw) | Off Market |\n| promoter pledge % | N/A |\n\nMISSING: pledge % \u2014 not found"
+  },
+  {
+    "tool": "finance_corp_actions",
+    "slug": "corp_actions-reliance-in",
+    "request": {
+      "symbol": "RELIANCE",
+      "market": "IN"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-corp_actions-reliance-in.md",
+    "markdown_preview": "## finance_corp_actions \u00b7 RELIANCE \u00b7 IN\n\nsource: www.nseindia.com \u00b7 as-of: 05-Jun-2026 \u00b7 confidence: medium\n\n| field | value |\n|---|---|\n| actions (raw) | Dividend - Rs 6 Per Share |"
+  },
+  {
+    "tool": "finance_macro",
+    "slug": "macro-in",
+    "request": {
+      "country": "IN"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-macro-in.md",
+    "markdown_preview": "## finance_macro \u00b7 IN \u00b7 IN\n\nsource: tradingeconomics.com \u00b7 as-of: 2026-07-07 \u00b7 confidence: high\n\n| field | value |\n|---|---|\n| 10Y sovereign yield | 6.68% |\n| CDS spread | N/A bps |\n| FX USD/local | N/A |\n| FX implied vol | N/A |\n\nMISSING: CDS spread \u2014 not found\nMISSING: FX spot \u2014 not found on primary rung\nMISSING: FX implied vol \u2014 not found \u2014 check investing.com rung"
+  },
+  {
+    "tool": "finance_erp",
+    "slug": "erp-in-us",
+    "request": {
+      "home": "IN",
+      "foreign": "US"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-erp-in-us.md",
+    "markdown_preview": "## finance_erp \u00b7 IN/US \u00b7 US\n\nsource: pages.stern.nyu.edu \u00b7 as-of: 2026-02-01 \u00b7 confidence: high\n\n| field | value |\n|---|---|\n| ERP home | 7.08% |\n| ERP mature market | 4.46% |\n| country default spread | 2.85% |\n| vintage | 2026-02-01 |"
+  },
+  {
+    "tool": "finance_snapshot_us",
+    "slug": "snapshot_us-aapl-us",
+    "request": {
+      "symbol": "AAPL",
+      "market": "US"
+    },
+    "success": true,
+    "cached": false,
+    "output_file": "research/finance-tools/20260707-104851-snapshot_us-aapl-us.md",
+    "markdown_preview": "## finance_snapshot_us \u00b7 AAPL \u00b7 US\ndegraded: true\n\nsource: www.google.com \u00b7 as-of: 2026-05-11 \u00b7 confidence: medium\n\n| field | value |\n|---|---|\n| price | $312.66 |\n| mktcap | N/A |\n| % off 52w | 1.49% |\n| P/E | 37.82 |\n| shares outstanding | N/A |\n\nMISSING: mktcap \u2014 not extracted\nMISSING: shares outstanding \u2014 not extracted"
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "started_at": "2026-06-15T20:48:47.434914+00:00",
+  "candidates": [
+    {
+      "name": "longforecast_alt",
+      "headless": {
+        "url": "https://longforecast.com/sensex",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 11744,
+        "likely_cf": false
+      },
+      "headed": null
+    },
+    {
+      "name": "nowsecure",
+      "headless": {
+        "url": "https://nowsecure.nl/",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 27222,
+        "likely_cf": false
+      },
+      "headed": null
+    },
+    {
+      "name": "crunchbase",
+      "headless": {
+        "url": "https://www.crunchbase.com/",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 30848,
+        "likely_cf": false
+      },
+      "headed": null
+    }
+  ],
+  "cf_like": [],
+  "finished_at": "2026-06-15T20:49:57.832588+00:00"
+}

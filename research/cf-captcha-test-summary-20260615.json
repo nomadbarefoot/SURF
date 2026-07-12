@@ -1,0 +1,56 @@
+{
+  "tested_at": "2026-06-15T20:23:08+00:00",
+  "purpose": "Headed challenge resolver on known Cloudflare / bot-wall pages",
+  "results": [
+    {
+      "name": "nopecha_demo",
+      "url": "https://nopecha.com/demo/cloudflare",
+      "cf_confirmed": true,
+      "headless": {"success": false, "challenge_blocked": true, "ms": 21422},
+      "headed": {"success": false, "challenge_outcome": "timeout", "ms": 109085, "error": "Page unavailable"},
+      "notes": "Intentional CF Turnstile demo. Passive wait + click attempts did not clear within 2 attempts."
+    },
+    {
+      "name": "nowsecure",
+      "url": "https://nowsecure.nl/",
+      "cf_confirmed": false,
+      "headless": {"success": true, "ms": 27432, "content_chars": 6},
+      "headed": {"success": true, "challenge_outcome": "passive", "ms": 66719, "title": "nowsecure.nl"},
+      "notes": "Classic CF test site; currently serves nodriver demo page, not active interstitial."
+    },
+    {
+      "name": "longforecast_sensex",
+      "url": "https://longforecast.com/sensex",
+      "cf_confirmed": false,
+      "headless": {"success": true, "ms": 11744, "title": "SENSEX FORECAST 2026, 2027, 2028-2030"},
+      "headed": {"success": true, "challenge_outcome": "passive", "ms": 9991},
+      "notes": "Previously showed Robot Challenge on /sensex-forecast (404 now). /sensex loads clean."
+    },
+    {
+      "name": "longforecast_404",
+      "url": "https://www.longforecast.com/sensex-forecast",
+      "cf_confirmed": false,
+      "headed": {"success": true, "ms": 14706, "title": "Error 404 - Page not found"},
+      "notes": "Redirects to 404; no captcha on this path today."
+    },
+    {
+      "name": "timesofindia_section",
+      "url": "https://timesofindia.indiatimes.com/markets/stocks/news",
+      "cf_confirmed": false,
+      "headless": {"success": true, "ms": 23892, "title": "Page Not Found"},
+      "notes": "Section URL 404; article URLs from search work."
+    },
+    {
+      "name": "fortuneindia",
+      "url": "https://www.fortuneindia.com/investing",
+      "cf_confirmed": false,
+      "headless": {"success": true, "ms": 10036},
+      "notes": "Loads in headless without challenge."
+    }
+  ],
+  "verdict": {
+    "captcha_resolver_works_on": ["passive interstitials that clear naturally (TOI article, longforecast/sensex, nowsecure)"],
+    "captcha_resolver_fails_on": ["nopecha.com/demo/cloudflare — deliberate Turnstile demo designed to resist automation"],
+    "recommendation": "Use nopecha demo as negative control; for positive CF click tests need live Turnstile pages (rate-limited, may vary by IP)."
+  }
+}

@@ -1,0 +1,690 @@
+{
+  "started_at": "2026-06-15T20:36:37.059331+00:00",
+  "queries": [
+    {
+      "query": "India stock market outlook 2026 Nifty Sensex forecast",
+      "success": true,
+      "ms": 2834,
+      "result_count": 8,
+      "error": null
+    },
+    {
+      "query": "India bond market RBI monetary policy 2026",
+      "success": true,
+      "ms": 1690,
+      "result_count": 8,
+      "error": null
+    },
+    {
+      "query": "India FII DII flows equity market 2025 2026",
+      "success": true,
+      "ms": 2003,
+      "result_count": 8,
+      "error": null
+    },
+    {
+      "query": "India financial sector banking NBFC outlook 2026",
+      "success": true,
+      "ms": 2107,
+      "result_count": 8,
+      "error": null
+    },
+    {
+      "query": "India IPO market SME listings 2026",
+      "success": true,
+      "ms": 1640,
+      "result_count": 8,
+      "error": null
+    },
+    {
+      "query": "India rupee outlook debt yields 2026",
+      "success": true,
+      "ms": 1913,
+      "result_count": 8,
+      "error": null
+    }
+  ],
+  "search_hits": [
+    {
+      "url": "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+      "title": "SME IPOs in 2026 for SME IPO listing history in India SME IPOs in 2026 for SME IPO listing history in India",
+      "snippet": "SME IPO 2026 for SME stock list on NSE Emerge and BSE SME. Get a list of all SME IPOs in 2026 with IPO details, PE ratio, merchant bankers. SME IPO 2026 for SME stock list on NSE Emerge and BSE SME. Get a list of all SME IPOs in 2026 with I",
+      "relevance": 0.912
+    },
+    {
+      "url": "https://ipowatch.in/upcoming-sme-ipo-list/",
+      "title": "Upcoming SME IPO 2026, BSE and NSE SME IPO List - IPO Watch",
+      "snippet": "SME IPO investors can apply for the upcoming IPO in India through ASBA or UPI-based IPO applications or by submitting forms to brokers or banks. Here is the list of SME IPOs in 2026. The list includes the past SME IPO and the Upcoming SME I",
+      "relevance": 0.907
+    },
+    {
+      "url": "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+      "title": "Banks vs NBFCs: Who\u2019s Driving India\u2019s Financial Growth in 2026? | Wright Blogs",
+      "snippet": "NBFCs are expected to grow at 15-17% in FY26, driven by consumption demand, gold loan formalization, and MSME lending expansion. The sector's AUM will reach approximately \u20b948-50 lakh crore by March 2026, crossing \u20b950 lakh crore by March 202",
+      "relevance": 0.89
+    },
+    {
+      "url": "https://www.ipoplatform.com/main-board/by-year/2026",
+      "title": "IPO 2026 for Mainboard listing in India. 2026 IPO list",
+      "snippet": "IPO listing 2026 with IPO details, PE ratio, Offer price and CMP. IPO update on New IPO 2026. IPO listed in 2026 on NSE snd BSE Exchange",
+      "relevance": 0.89
+    },
+    {
+      "url": "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+      "title": "SME IPOs in India: 2026",
+      "snippet": "The upcoming SME IPOs in India this week and coming weeks are Vahh Chemicals IPO, UHM Vacation IPO, Genxai Analytics IPO. The current active SME IPOs are SMR Jewels IPO, Aureate Tradde IPO, Merritronix IPO. SME IPO listing today is Harikant",
+      "relevance": 0.889
+    },
+    {
+      "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+      "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+      "snippet": "In the bull case scenario, NSE benchmark Nifty is expected to reach 29,800 by the end of 2026 while BSE Sensex is expected at 98,000, Vijaykumar predicted.According to Soni, the NSE benchmark is expected to touch 28,000 in financial year 20",
+      "relevance": 0.888
+    },
+    {
+      "url": "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+      "title": "Indian Stock Market Prediction: Nifty Outlook for June 15-19",
+      "snippet": "Indian Stock Market Prediction: Weekly Market Review (June 15-19, 2026) \u00b7 Market Summary: Sensex & Nifty 50 Performance \u00b7 Share Market Live News: ...",
+      "relevance": 0.885
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=tBvstdNcrvw",
+      "title": "Banking & NBFC Outlook 2026 | Nitin Aggarwal | ET Now - YouTube",
+      "snippet": "India's banking and NBFC sector is entering a decisive phase. In this conversation, Nitin Agarwal, Head of BFSI Institutional Equities at ...",
+      "relevance": 0.885
+    },
+    {
+      "url": "https://www.bajajfinserv.in/investments/upcoming-ipo",
+      "title": "Check Upcoming IPO List Mainline and SME in 2026",
+      "snippet": "Get key details like issue size, price band, subscription dates, and listing status. Explore this comprehensive list to track companies entering the stock market. Stocks \u00b7 IPOs \u00b7 Share Market News \u00b7 3 \u00b7 SME \u00b7 SUSAN ELECTRICALS INDIA LIMITED",
+      "relevance": 0.885
+    },
+    {
+      "url": "https://enrichmoney.in/blog/fii-dii-trends-november-2025",
+      "title": "FII vs DII Trends November 2025 | Market Flow Analysis",
+      "snippet": "The dynamics between FII and DII in Indian capital markets have been very different in 2025. Essentially, the FIIs have traditionally driven ...",
+      "relevance": 0.882
+    },
+    {
+      "url": "https://www.motilaloswal.com/learning-centre/2026/3/best-nbfc-stocks-to-invest-in-india-2026",
+      "title": "Best NBFC Stocks to Invest in India 2026 - Motilal Oswal",
+      "snippet": "NBFCs (Non-Banking Financial Companies) are the unsung heroes of India's financial sector reaching borrowers that traditional banks can't ...",
+      "relevance": 0.882
+    },
+    {
+      "url": "https://www.multibagg.ai/market-pulse/articles/fii-outflows-india-2026-drivers-cmq1wiqzbgfuzps0julkww05w",
+      "title": "FII outflows from India: what\u2019s driving 2026 selloff | Market News & Analysis",
+      "snippet": "Several discussions noted that ... of the outflows. A separate data point shared in posts put 2026 equity flows at FIIs pulling out \u20b92.08 lakh crore while DIIs infused \u20b92.71 lakh crore....",
+      "relevance": 0.881
+    },
+    {
+      "url": "https://ipocentral.in/ipo-2026/",
+      "title": "IPO 2026 List: All IPOs In 2026 In India At NSE, BSE",
+      "snippet": "Check out the list of all IPOs in 2026 in India at IPO Central. IPO 2026 list contains all mainboard equity IPOs listed at NSE and BSE platforms.",
+      "relevance": 0.88
+    },
+    {
+      "url": "https://upstox.com/ipo/sme/recently-listed-sme-ipo/",
+      "title": "SME IPO Listing Today 2026: Discover Recently Listed SME IPOs | Upstox",
+      "snippet": "The top SME IPOs of 2026 include Apsis Aerocom, Avana Electrosystems, Accretion Nutraveda, Tipco Engineering India, Speciality Medicines and KRM Ayurveda, among others.",
+      "relevance": 0.877
+    },
+    {
+      "url": "https://ticker.finology.in/ipo/sme",
+      "title": "SME IPO 2026 Details - GMP, Allotment & News.",
+      "snippet": "Track all about SME IPOs '2026' latest news, price, gmp, dates, performance and IPO analysis on Ticker.",
+      "relevance": 0.877
+    },
+    {
+      "url": "https://bfsi.economictimes.indiatimes.com/blog/banks-and-nbfcs-show-cautious-optimism-for-2026-growth/126163539",
+      "title": "Banking: Banks and NBFCs Show Cautious Optimism for 2026 Growth, ETBFSI",
+      "snippet": "The banking sector is poised for stable growth in 2026, with moderate credit and deposit growth expected despite challenges in asset quality. The NBFC sector continues to flourish, focusing on secured lending as regulations evolve.",
+      "relevance": 0.872
+    },
+    {
+      "url": "https://www.instagram.com/reel/DZM4uyIhbAs/",
+      "title": "Highlights from RBI's Bi-Monthly Monetary Policy Statement, 2026 ...",
+      "snippet": "... India's bond market and attract long-term global investors. RBI's message is clear: While staying cautious on inflation and global risks ...",
+      "relevance": 0.867
+    },
+    {
+      "url": "https://www.indiabonds.com/bonduni/news/february-2026-rbi-monetary-policy-highlights/",
+      "title": "RBI Monetary Policy February 2026 Highlights | IndiaBonds",
+      "snippet": "Development of corporate bond market: In the Union Budget speech on February 1, 2026, the government announced the introduction of total return swaps on corporate bonds and derivatives on corporate bond indices.",
+      "relevance": 0.866
+    },
+    {
+      "url": "https://www.businessupturn.com/brand-post/leading-nbfc-executives-shaping-indias-lending-and-financial-services-sector-in-2026",
+      "title": "Leading NBFC Executives Shaping India\u2019s Lending and Financial Services Sector in 2026 | Business Upturn",
+      "snippet": "Key Profile Comparison: Top NBFC ... ... The NBFC sector in India has seen record AUM growth, tighter RBI governance norms, and a rapid shift toward digital lending platforms....",
+      "relevance": 0.865
+    },
+    {
+      "url": "https://www.reuters.com/world/india/record-central-bank-intervention-buys-indian-bonds-limited-relief-going-into-2025-12-31/",
+      "title": "Record central bank intervention buys Indian bonds limited relief going into 2026 | Reuters",
+      "snippet": "India RBI has been in an aggressive ... central bank monetary policy decision, both due in February. \"RBI is likely to remain on a long pause in 2026 as inflation ......",
+      "relevance": 0.864
+    },
+    {
+      "url": "https://www.livemint.com/market/stock-market-news/dii-inflows-fii-outflows-hit-record-levels-in-2025-will-the-tug-of-war-continue-in-2026-11767356681062.html",
+      "title": "DII inflows, FII outflows hit record levels in 2025: Will the tug of war continue in 2026? | Stock Market News",
+      "snippet": "As brokerage firm Motilal Oswal ... of nearly $19 billion in 2025. \"DII flows into equities were the highest ever at $90.1 billion in calendar year 2025 (CY25) versus inflows of $62.9 billion in CY24....",
+      "relevance": 0.864
+    },
+    {
+      "url": "https://choiceindia.com/blog/indian-stock-market-prediction-for-next-week",
+      "title": "Indian Stock Market Prediction For Next Week (15th - 19th June 2026)| Choice",
+      "snippet": "Nifty Prediction For Tomorrow By An Expert Indian equity benchmark Nifty index witnessed a positive close on 11th June 2026. The index opened with a gap-down of 110.55 points at 23,104.40 compared to the previous close of 23,214.95.",
+      "relevance": 0.862
+    },
+    {
+      "url": "https://www.whalesbook.com/news/English/Stock-Investment-Ideas/Indian-Market-2026-Experts-Reveal-SHOCKING-Outlook-as-Global-Rivals-SOAR-What-Lies-Ahead/6953186d4342f77179e4c3e0",
+      "title": "Indian Market 2026: Experts Reveal SHOCKING Outlook as Global Rivals SOAR - What Lies Ahead? | Whalesbook",
+      "snippet": "However, it warns of a potential sharp correction in small and mid-cap stocks if downside risks materialize. BofA forecasts the Nifty 50 to rise approximately 11% in 2026, with large-caps expected to outperform small and mid-caps.",
+      "relevance": 0.862
+    },
+    {
+      "url": "https://maxiomwealth.com/blog/fii-ownership-14-year-low-dii-dominance-india-2026/",
+      "title": "FII Ownership 14 Year Low 2026: Why Rising DII Flows Are Good",
+      "snippet": "FII ownership of Indian equities fell to 14.7% in April 2026, a 14-year low, while DII ownership reached 18.9%, a record high, per JM Financial\u2019s May 2026 report. DIIs increased their stake in 39 out of 41 Nifty stocks where FIIs sold - act",
+      "relevance": 0.861
+    },
+    {
+      "url": "https://timesofindia.indiatimes.com/business/india-business/banking-sector-budget-2026-live-bfsi-announcements-sbi-sebi-tax-clarity-and-liquidity-standard-deduction-banking-governance-bill/articleshow/127833859.cms",
+      "title": "Banking Sector Budget 2026: Nirmala Sitharaman announces high-level panel, NBFC overhaul and market reforms - The Times of India",
+      "snippet": "Reform Over Rhetoric: FM Sitharaman's Budget 2026 Charts India\u2019s Growth Path Amid Global Trade War The committee will examine the sector\u2019s structure and readiness as India seeks to scale up growth while protecting consumers and maintaining ",
+      "relevance": 0.861
+    },
+    {
+      "url": "https://www.gripinvest.in/blog/sensex-returns-outlook",
+      "title": "Sensex Today: Returns, History & 2026 Outlook - Grip Invest",
+      "snippet": "Based on current market trends, analyst estimates, and India's GDP growth trajectory, the Sensex is expected to reach 90,000-1,07,000 by the end ...",
+      "relevance": 0.858
+    },
+    {
+      "url": "https://economictimes.indiatimes.com/markets/expert-view/fii-flows-could-return-in-2026-markets-not-pricing-in-the-upside-yet-vikas-khemani/articleshow/126248702.cms?from=mdr",
+      "title": "FII flows could return in 2026, markets not pricing in the upside yet: Vikas Khemani - The Economic Times",
+      "snippet": "Khemani expects that to improve as global conditions evolve. \u201cDII flows have been very robust, driven by steady SIP inflows. On FIIs, 2026 should be better as US interest rates start coming down and emerging markets attract flows again.",
+      "relevance": 0.858
+    },
+    {
+      "url": "https://www.bankbazaar.com/finance-tools/emi-calculator/monetary-policy.html",
+      "title": "RBI Monetary Policy 2026 - Latest Rate and Policy Update",
+      "snippet": "RBI Monetary Policy 2026 - Find out about repo rate changes, inflation control tools, and RBI\u2019s role in managing liquidity and economic stability.",
+      "relevance": 0.857
+    },
+    {
+      "url": "https://www.business-standard.com/finance/news/nbfc-s-assets-growth-to-sharply-decline-to-15-17-in-fy25-and-fy26-124120200402_1.html",
+      "title": "NBFC's asset growth to sharply decline to 15-17% in FY 2025, 2026 | Finance News - Business Standard",
+      "snippet": "The growth in assets of non-banking finance companies (NBFCs) in India is expected to sharply decline to 15-17 per cent year-on-year (Y-o-Y) in the current (FY25) and next financial year (FY26) from 23 per cent in FY24.",
+      "relevance": 0.857
+    },
+    {
+      "url": "https://panchalsk.com/blog/nbfc-list",
+      "title": "NBFC List 2026 India: RBI Approved Companies & Full Guide",
+      "snippet": "Based on the RBI's systemic importance tracking and market performance heading into 2026, here are the top NBFCs leading the charge: Bajaj Finance Limited is a prominent Indian Non-Banking Financial Company (NBFC) classified under the RBI's",
+      "relevance": 0.857
+    },
+    {
+      "url": "https://timesofindia.indiatimes.com/business/india-business/sensex-nifty-at-lifetime-highs-where-are-indian-markets-headed-in-2026-will-they-outperform-gold-ems-heres-the-outlook/articleshow/125716774.cms",
+      "title": "Sensex, Nifty at lifetime highs: Where are Indian markets headed in 2026 & will they outperform gold & EMs? Here\u2019s the outlook - The Times of India",
+      "snippet": "With consistent monthly flows and a structurally growing investor base, domestic capital is set to play an even larger role in driving market resilience and shaping return outcomes in the year ahead,\u201d he adds.But 2025 has been a year when f",
+      "relevance": 0.856
+    },
+    {
+      "url": "https://timesofindia.indiatimes.com/business/india-business/rupee-outlook-2026-why-the-rupee-may-stay-under-stress-next-year-heres-what-experts-say/articleshow/126277094.cms",
+      "title": "Rupee outlook 2026: Why the rupee may stay under stress next year; here\u2019s what experts say - The Times of India",
+      "snippet": "The record $17.5-billion exit by foreign institutional investors in 2025 has added to dollar demand, intensifying pressure on the rupee.Analysts expect the current account deficit to widen to around 2% or more in 2026 as the full impact of ",
+      "relevance": 0.855
+    },
+    {
+      "url": "https://www.5paisa.com/news/fii-equity-outflows-in-2026-surpass-full-year-2025-levels",
+      "title": "FII Equity Outflows In 2026 Surpass Full-Year 2025 Levels | 5paisa",
+      "snippet": "The FIIs have made investments worth \u20b915,473 crore in primary issues till now in 2026, which is considerably lower compared to \u20b973,914 crore invested in 2025. For perspective, FIIs sold \u20b91.29 lakh crore worth of shares in the secondary ...",
+      "relevance": 0.854
+    },
+    {
+      "url": "https://www.multibagg.ai/market-pulse/articles/india-fii-flows-em-valuation-cmqbsct4l01rks60joxx6bf8i",
+      "title": "India FII Flows: Why Investors Turned Cautious in 2026 | Market News & Analysis",
+      "snippet": "On the structural side, the build-up in bond index inclusion provides a separate channel for steady foreign participation, even if ownership rises only gradually. Investors will be watching for clearer earnings signals and any confirmed pol",
+      "relevance": 0.851
+    },
+    {
+      "url": "https://www.cnbctv18.com/economy/rbi-mpc-meeting-june-2026-live-updates-governor-sanjay-malhotra-monetary-policy-repo-rate-decision-inflation-outlook-growth-forecasts-key-announcements-liveblog-ws-l-19919888.htm",
+      "title": "RBI Monetary Policy Meeting Highlights: RBI holds repo rate at 5.25%; India Inc shares policy views",
+      "snippet": "RBI MPC meet June 2026 Highlights: The Reserve Bank of India's Monetary Policy Committee (MPC) unanimously voted to keep the benchmark repo rate unchanged at 5.25%, while maintaining its neutral policy stance, in line with market expectatio",
+      "relevance": 0.85
+    },
+    {
+      "url": "https://www.businesstoday.in/markets/stocks/story/sensex-nifty-in-2026-bulls-likely-to-stage-a-stronger-rally-heres-why-508119-2025-12-25",
+      "title": "Sensex, Nifty in 2026: Bulls likely to stage a stronger rally, here's why - BusinessToday",
+      "snippet": "Sensex ended 116 pts lower at 85,408 and Nifty fell 37 pts to 26,139 on Wednesday. According to HSBC Mutual fund, there are four positive factors on the economic front, which may support market performance in 2026.",
+      "relevance": 0.848
+    },
+    {
+      "url": "https://indiamacroindicators.co.in/resources/blogs/india-debt-market-outlook-2026",
+      "title": "India Debt Market Outlook 2026: What Happens After Rate Cuts End",
+      "snippet": "By the textbook, the 10-year government bond yield should have fallen 150 to 175 basis points. It has fallen barely 60 to 70, and the benchmark, ...",
+      "relevance": 0.848
+    },
+    {
+      "url": "https://www.livemint.com/market/stock-market-news/indian-stock-market-outlook-five-factors-that-could-make-2026-better-than-2025-explained-11766537780946.html",
+      "title": "Indian stock market outlook: Five factors that suggest 2026 could be better than 2025 for domestic markets- Explained | Stock Market News",
+      "snippet": "Pandey expects the Nifty earnings per share (EPS) to grow at a CAGR of 15% over FY26-28E, led by telecom, BFSI and capital goods space. He pegs a two-year EPS CAGR for midcaps and small caps at 19-21%. US tariffs on Indian goods have been a",
+      "relevance": 0.844
+    },
+    {
+      "url": "https://www.mufgresearch.com/fx/india-shoring-up-the-indian-rupee-rbi-june-2026-measures-8-june-2026/",
+      "title": "India: Shoring up the Indian Rupee - RBI June 2026 Measures",
+      "snippet": "The Reserve Bank of India kept its key repo rate on hold at 5.25% in its 5th June 2026 meeting, and kept a neutral stance on monetary policy.",
+      "relevance": 0.844
+    },
+    {
+      "url": "https://www.livemint.com/market/bonds/bond-yields-slip-after-rbis-fii-push-why-indias-bond-markets-could-be-the-biggest-winner-of-this-policy-11780643503233.html",
+      "title": "Bond yields slip after RBI's FII push: Why India's bond markets could be the biggest winner of this policy? | Stock Market News",
+      "snippet": "The measures included scrapping capital gains tax for foreign investors in government bonds, removing the 20% tax on interest earned from such investments with effect from April 1, 2026, offering concessional forex swaps until September 30,",
+      "relevance": 0.844
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=z01RGOV-ZNw",
+      "title": "February 2026 Debt Market Outlook: Yields, Borrowings & Global ...",
+      "snippet": "February 2026 Debt Market Outlook: Yields, Borrowings & Global Spillovers Global bond markets edge higher amid US-Japan yield spikes, rupee ...",
+      "relevance": 0.843
+    },
+    {
+      "url": "https://www.republicworld.com/business/rbi-monetary-policy-preview-indian-bonds-rupee-impact-2026-06-04-126906",
+      "title": "RBI Monetary Policy Preview: Impact on Indian Bond Yields and Rupee | Republic World",
+      "snippet": "The upcoming RBI monetary policy meeting will steer the Indian debt and currency markets. Read how the repo rate decision will impact bond yields and the rupee.",
+      "relevance": 0.842
+    },
+    {
+      "url": "https://www.reuters.com/world/india/indian-rupee-enters-2026-back-foot-after-worst-annual-drop-three-years-2025-12-31/",
+      "title": "Indian rupee enters 2026 on the back foot after worst annual drop in three years | Reuters",
+      "snippet": "Foreign investors withdrew a record $18 billion from Indian equities in 2025, while debt, external commercial borrowing and foreign direct investment flows were subdued. FPI outflows from Indian stocks hits highest on record in 2025 \u00b7 Prolo",
+      "relevance": 0.841
+    },
+    {
+      "url": "https://www.sahi.com/blogs/fii-dii-data-meaning-how-to-read",
+      "title": "FII & DII Data Explained: How to Read & Use It for Trading (2026)",
+      "snippet": "FII DII data is the daily record of net buying and selling activity by Foreign Institutional Investors (FIIs) and Domestic Institutional Investors (DIIs) in the Indian equity cash segment. NSE and BSE publish this data after every trading s",
+      "relevance": 0.837
+    },
+    {
+      "url": "https://www.assetmanagement.hsbc.co.in/assets/documents/mutual-funds/en/40b9f1cb-7633-4627-bccb-f434488fe4e7/fixed-income-india-outlook-2026-december-2025.pdf",
+      "title": "Fixed Income India Outlook 2026 - A Fine Balancing Act",
+      "snippet": "2025 was clearly a tale of two halves as far as India rates and currency is concerned. The first half was marked by a largely stable rupee ...",
+      "relevance": 0.822
+    },
+    {
+      "url": "https://www.invesco.com/apac/en/institutional/insights/fixed-income/emerging-market-debt-2026-investment-outlook.html",
+      "title": "Emerging Market Debt 2026 Investment Outlook - AP Institutional",
+      "snippet": "Indonesia and Thailand eased more aggressively, while the Philippines and India ... Local currency EM debt returns and flows are highly correlated ...",
+      "relevance": 0.821
+    },
+    {
+      "url": "https://www.oecd.org/en/publications/global-debt-report-2026_e9d80efd-en/full-report/corporate-debt-market-outlook-in-a-transforming-world_cf86a220.html",
+      "title": "Corporate debt market outlook in a transforming world - OECD",
+      "snippet": "Global Debt Report 2026 \u00b7 Full Report; Corporate debt market outlook ... currency basis effects that would arise if yields reflected mixed ...",
+      "relevance": 0.819
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=61ejgq2F4Yw",
+      "title": "Debt Outlook | Jan 2026 | Siddharth Chaudhary, Head - YouTube",
+      "snippet": "India's fixed income markets closed December 2025 navigating a ... yields remained elevated; US 10Y yields rose even as the Fed cut ...",
+      "relevance": 0.814
+    }
+  ],
+  "extract_plan": {
+    "url_count": 10,
+    "relevance_threshold": 0.7,
+    "urls": [
+      "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+      "https://ipowatch.in/upcoming-sme-ipo-list/",
+      "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+      "https://www.ipoplatform.com/main-board/by-year/2026",
+      "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+      "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+      "https://www.youtube.com/watch?v=tBvstdNcrvw",
+      "https://www.bajajfinserv.in/investments/upcoming-ipo",
+      "https://enrichmoney.in/blog/fii-dii-trends-november-2025"
+    ],
+    "relevance": {
+      "https://www.ipoplatform.com/ipo-insights/by-year/2026": 0.912,
+      "https://ipowatch.in/upcoming-sme-ipo-list/": 0.907,
+      "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/": 0.89,
+      "https://www.ipoplatform.com/main-board/by-year/2026": 0.89,
+      "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026": 0.889,
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms": 0.888,
+      "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/": 0.885,
+      "https://www.youtube.com/watch?v=tBvstdNcrvw": 0.885,
+      "https://www.bajajfinserv.in/investments/upcoming-ipo": 0.885,
+      "https://enrichmoney.in/blog/fii-dii-trends-november-2025": 0.882
+    },
+    "headed_retry_urls": [
+      "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+      "https://ipowatch.in/upcoming-sme-ipo-list/",
+      "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+      "https://www.ipoplatform.com/main-board/by-year/2026",
+      "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+      "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+      "https://www.youtube.com/watch?v=tBvstdNcrvw",
+      "https://www.bajajfinserv.in/investments/upcoming-ipo",
+      "https://enrichmoney.in/blog/fii-dii-trends-november-2025"
+    ],
+    "headed_retry_reasons": {
+      "https://www.ipoplatform.com/ipo-insights/by-year/2026": {
+        "relevance": 0.912,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://ipowatch.in/upcoming-sme-ipo-list/": {
+        "relevance": 0.907,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/": {
+        "relevance": 0.89,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://www.ipoplatform.com/main-board/by-year/2026": {
+        "relevance": 0.89,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026": {
+        "relevance": 0.889,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms": {
+        "relevance": 0.888,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/": {
+        "relevance": 0.885,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://www.youtube.com/watch?v=tBvstdNcrvw": {
+        "relevance": 0.885,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://www.bajajfinserv.in/investments/upcoming-ipo": {
+        "relevance": 0.885,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      },
+      "https://enrichmoney.in/blog/fii-dii-trends-november-2025": {
+        "relevance": 0.882,
+        "headless_success": false,
+        "headless_error": "Global timeout",
+        "challenge_blocked": false,
+        "retryable": true
+      }
+    }
+  },
+  "stages": {
+    "headless": [
+      {
+        "url": "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://ipowatch.in/upcoming-sme-ipo-list/",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.ipoplatform.com/main-board/by-year/2026",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=tBvstdNcrvw",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.bajajfinserv.in/investments/upcoming-ipo",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://enrichmoney.in/blog/fii-dii-trends-november-2025",
+        "success": false,
+        "ms": null,
+        "error": "Global timeout"
+      }
+    ],
+    "headed_retry": [
+      {
+        "url": "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+        "success": true,
+        "ms": 78060,
+        "title": "SME IPOs in 2026 for SME IPO listing history in India",
+        "tokens": 23,
+        "content": "# SME IPOs in 2026 for SME IPO listing history in India\n\nIs your business IPO-ready? Get expert guidance for a smooth SME IPO process! Contact Us Us\n\n*Source: https://www.ipoplatform.com/ipo-insights/by-year/2026*"
+      },
+      {
+        "url": "https://ipowatch.in/upcoming-sme-ipo-list/",
+        "success": true,
+        "ms": 11066,
+        "title": "Upcoming SME IPO 2026, BSE and NSE SME IPO List - IPO Watch",
+        "tokens": 10,
+        "content": "# Upcoming SME IPO 2026, BSE and NSE SME IPO List - IPO Watch\n\nRazorpay Files Confidential DRHP for IPO\n\n*Source: https://ipowatch.in/upcoming-sme-ipo-list/*"
+      },
+      {
+        "url": "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+        "success": false,
+        "ms": 180000,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://www.ipoplatform.com/main-board/by-year/2026",
+        "success": true,
+        "ms": 68421,
+        "title": "IPO 2026 for Mainboard listing in India. 2026 IPO list",
+        "tokens": 22,
+        "content": "# IPO 2026 for Mainboard listing in India. 2026 IPO list\n\nIs your business IPO-ready? Get expert guidance for a smooth IPO process! Contact Us Us\n\n*Source: https://www.ipoplatform.com/main-board/by-year/2026*"
+      },
+      {
+        "url": "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+        "success": true,
+        "ms": 20689,
+        "title": "SME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026",
+        "tokens": 1363,
+        "content": "# SME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026\n\nA-AA+Unlimited Trades \u20b9899 Monthlywww.ProStocks.comLoading...Mainboard IPOSME IPO NCD (Bonds) Rights Issue OFS BuybacksFeatured BrokersTop picks for quick accountsZerodha\u20b920 / TradeAngel One\u20b920 / TradeKotak Neo\u20b910 / TradePopular BrokersUpstox\u20b920 / TradeProStocks\u20b9899 UnlimitedPaytm Money\u20b920 / TradeFyers\u20b920 / Trade More Brokers Compare Brokers Zerodha vs Upstox Zerodha vs Groww Zerodha vs Angel OneQuick LinksIntroduction to IPOSME IPO Guide for companiesNCD (Non-convertible debentures)Buyback of SharesQuick LinksStock Market HomeStock Message BoardStock Trading HolidaysTop Gainer/LoserBonus ShareDividend Share52 Weeks High/LowMore Stock ReportsIPO Report ListStock Broker Report ListStock Market ListOther Report ListOptions Trading HomeOptions OverviewBenefits & Risks of OptionsOptions PricingOptions Trading FAQsOptions Trading GlossaryTrading StrategiesSide-by-Side ComparisonOptions Strategy FAQsNRI HomepageBest NRI Trading AccountBest NRI 3-in-1 AccountTop 10 NRI Discount BrokersTop 10 NRI Full-Service BrokersHistory of ChittorgarhMaharana PratapFort of ChittorgarhPhoto GalleryAround ChittorgarhHotels / ResortsContact usSME IPOs in India: 2026The upcoming SME IPOs in India this week and coming weeks are Saffron Speciality Papers IPO, Leapfrog Engineering IPO, Liotech Industries IPO, Diksha Polymers IPO, Clay Craft IPO, Avience Biomedicals IPO. The current active SME IPOs are Susan Electricals India IPO, Horizon Reclaim (India) IPO. Issue open Yet to List Listing today All IPOsMainboard IPOsSME IPOsMainboard FPOsSME FPOsSME IPOs: 2026Total Records: 78Company\u25b2\u25bcPricing Method\u25b2\u25bcOpening Date\u25b2\u25bcClosing Date\u25b2\u25bcListing Date\u25b2\u25bcIssue Price (Rs.)\u25b2\u25bcTotal Issue Amount (Incl.Firm reservations) (Rs.cr.)\u25b2\u25bcListing at\u25b2\u25bcLead Manager\u25b2\u25bcCompareSaffron Speciality Papers Ltd.Bookbuilding0.00BSE SMEBOI Merchant BankersAnubhav Plast Ltd.Bookbuilding19-Jun-202623-Jun-20260.00BSE SMECapital SquareAvience Biomedicals Ltd.Bookbuilding18-Jun-202622-Jun-2026196.00 to 208.0030.24NSE SMEFintellectual CorporateRiyaasat Lifestyle Ltd.Bookbuilding18-Jun-202622-Jun-20260.00BSE SMEMark CorporateDiksha Polymers Ltd.Fixed Price17-Jun-202619-Jun-2026112.0017.90BSE SMEAryaman FinancialLiotech Industries Ltd.Fixed Price17-Jun-202619-Jun-2026321.0036.02BSE SMEWealth Mine NetworksLeapfrog Engineering Services Ltd.Bookbuilding17-Jun-202619-Jun-202621.00 to 23.0088.51BSE SMEFinshore ManagementClay Craft India Ltd.Bookbuilding17-Jun-202619-Jun-2026193.00 to 203.00110.11NSE SMEHem SecuritiesHorizon Reclaim (India) Ltd. OBookbuilding12-Jun-202616-Jun-2026103.0054.27BSE SMEGYR CapitalSusan Electricals India Ltd. CTBookbuilding11-Jun-202615-Jun-2026127.0070.38BSE SMESeren CapitalUtkal Speciality Industries India Ltd. PBookbuilding10-Jun-202612-Jun-202617-Jun-2026T62.00 to 66.0034.54NSE SMEAffinity GlobalGenxai Analytics Ltd.Bookbuilding05-Jun-202609-Jun-202612-Jun-2026116.0054.84NSE SMEChoice CapitalVahh Chemicals Ltd.Fixed Price04-Jun-202608-Jun-202611-Jun-202660.0013.45BSE SMEMarwadi Chandarana IntermediariesUHM Vacation Ltd.Bookbuilding04-Jun-202608-Jun-202611-Jun-2026166.0036.00BSE SMESobhagya CapitalMerritronix Ltd.Bookbuilding01-Jun-202603-Jun-202608-Jun-2026149.0070.03BSE SMEGYR CapitalAureate Tradde Ltd.Fixed Price29-May-202602-Jun-202605-Jun-202670.0027.29BSE SMECorporate MakersSMR Jewels Ltd.Bookbuilding26-May-202603-Jun-202608-Jun-2026128.0063.74BSE SMEWealth Mine NetworksRajnandini Fashion India Ltd.Bookbuilding26-May-202629-May-202603-Jun-202663.0018.21BSE SMESeren CapitalYaashvi Jewellers Ltd.Fixed Price25-May-202627-May-202602-Jun-202683.0043.88BSE SMESmart Horizon CapitalM R Maniveni Foods Ltd.Bookbuilding22-May-202626-May-202601-Jun-202652.0027.04BSE SMECapital SquareBio Medica Laboratories Ltd.Bookbuilding21-May-202625-May-202629-May-2026139.0052.43NSE SMENarnolia FinancialAutofurnish Ltd.Fixed Price21-May-202625-May-202629-May-202641.0014.60BSE SMENovus CapitalQ-Line Biotech Ltd.Bookbuilding21-May-202625-May-202629-May-2026343.00214.48NSE SMEHem SecuritiesHarikanta Overseas Ltd.Bookbuilding20-May-202627-May-202602-Jun-202691.0024.30BSE SMEInteractive FinancialVegorama Punjabi Angithi Ltd.Bookbuilding20-May-202622-May-202627-May-202677.0038.38BSE SMECorporate MakersShowing 1 to 25 of 78 entries\ud83d\ude80 SME IPO ConsultingPlanning an SME IPO?End-to-end support from preparation to listing.Note: Closing Date: Closing day of the IPO subscription period for investors. Listing Date: Date when shares allotted to investors start trading on the stock exchange (NSE/BSE). Investors can sell or buy shares from this day. Issue Price: Price at which company\u2019s shares are offered to the public. Total Issue Amount (Including Firm reservations): The total monetary value of all the shares being offered to the public in an issue. It is arrived at by multiplying the number of shares offered with the issue price per share. Listing at: Stock exchange where the IPO shares are proposed to be listed. Mainboard IPOs are listed on BSE and NSE. The SME IPOs are listed on NSE EMERGE or BSE SME platform of the respective exchanges. Lead Manager: SEBI registered merchant banker responsible for managing the entire IPO process for a company. Striked '' represents that the initial public offer (IPOs) was withdrawn and didn't list on the stock market.\ud83d\udcd1View All IPO ReportsAccess the complete list of research reports and insights for better investment decisions. View ReportsSME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026\n\n*Source: https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026*"
+      },
+      {
+        "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+        "success": true,
+        "ms": 73052,
+        "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+        "tokens": 2000,
+        "content": "# Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India\n\nEditionININUSEnglishEnglish\u0939\u093f\u0928\u094d\u0926\u0940\u092e\u0930\u093e\u0920\u0940\u0c95\u0ca8\u0ccd\u0ca8\u0ca1\u0ba4\u0bae\u0bbf\u0bb4\u0bcd\u09ac\u09be\u0982\u09b2\u09be\u0d2e\u0d32\u0d2f\u0d3e\u0d33\u0d02\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0WeatherSign InTOIToday's ePaperNewsBusiness NewsIndia Business NewsStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowTrendingAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowShivanghi Payal / TIMESOFINDIA.COM / Updated: Jan 01, 2026, 10:30 ISTShareAAText SizeSmallMediumLarge If global markets ran a marathon in 2025, Indian equities were clearly trailing the pack. While South Korea saw Kospi skyrocketed nearly 76%, Japan\u2019s Nikkei soared over 25%, and Hong Kong\u2019s Hang Seng climbed almost 30%, China\u2019s Shanghai Composite posted gains of over 16%. In the west, Wall Street also bagged doubled digit gains with tech heavy Nasdaq up 21%, S&P 500 rising 17.5%, and the Dow Jones advancing over 14%. Indian benchmark indices, Nifty50 and BSE Sensex, however, struggled to keep pace. Against these strong gains in global markets, India\u2019s benchmarks posted more modest returns, with the Nifty 50 rising over 10% and the Sensex ending the year 8.55% higher. On December 31, the Sensex closed at 85,220.60, up 545.52 points, while the NSE\u2019s Nifty 50 finished in the green at 26,129, gaining 190 points.Despite the Nifty 50 and Sensex recently touching record highs, broader market sentiment remained muted, with nearly half of the NSE\u2019s top 500 stocks still trading below the benchmark. Though the indices ended 2025 in green, the relative underperformance has left investors struggling with two key questions as the calendar turns: Why did Dalal Street remain muted in 2025? And importantly, what\u2019s the outlook for Nifty50 and Sensex in 2026?So, what dragged Indian benchmarks down? According to experts that TOI spoke to, the stock market was dragged down by a combination of factors, both internal and external. Factors like US-India trade deal delay, not participating in the AI race, muted corporate earnings, and FII selling weighed the market down.Earnings slowdownMuted corporate earnings emerged as one of the major reasons behind the stock market\u2019s underperformance. VK Vijayakumar, chief investment strategist at Geojit Investments, told TOI that \u201cduring the last six quarters, earnings growth has been in single digits. In the long run, the market is a slave of earnings.\u201d So the drag down was, ultimately, the market's response to weak earnings.Despite the benchmarks trading near lifetime highs, the overall market appeared weak, weighed down by the deceleration in earnings momentum since the June 2024 quarter, following a robust 18% CAGR during FY20-FY25, said Sunny Agrawal, head of fundamental research at SBI Securities. Sharp divergenceAccording to Ankit Soni, associate vice president - fundamental research at Mirae Asset Sharekhan, market returns over the last one-and-a-half years remained largely single-digit, with a stark gap across segments.\u201cLarge-cap indices delivered around single-digit returns, while mid and small caps underperformed by nearly 10%,\u201d he said, highlighting the high variability in returns and sustained weakness in the broader market. Agrawal also noted that \u201cdespite benchmark indices trading close to lifetime highs, the broader market continued to trade on weaker footing.\u201dFII sellingMarkets hit new highs towards the end of the year, but failed to hold those levels. Soni pointed out that \u201cthere is always a pullback of around 2-4% from the 52-week highs,\u201d largely due to foreign institutional investor (FII) selling. Agrawal added that persistent selling by Foreign Portfolio Investors (FPI), promoters and PE firms, despite strong domestic liquidity enabling smooth exits, weighed heavily on sentiment.According to Nikhil Khandelwal, managing director at Systematix Group, uncertainty around global interest-rate trajectories, currency volatility and geopolitical tensions led to intermittent foreign portfolio outflows.Valuation concerns versus global peersSeveral experts flagged stretched valuations as a key deterrent for foreign investors. Sunny Agrawal said Indian markets looked relatively expensive compared to other emerging markets, prompting capital outflows. Siddarth Bhamre, head of institutional research at Asit C Mehta Investment Intermediates Limited said that while Indian markets delivered higher single-digit returns, the valuation premium made the underperformance stark when compared with global equities and other asset classes.Missing the AI rallyOne of the defining features of global markets in 2025 was the AI-led rally, which India largely missed. Vijayakumar described India as an \u201cAI loser\u201d in a year when \u201cAI winners like the US, China, Taiwan and South Korea gained substantially.\u201d The lack of a pure-play AI story reduced India\u2019s attractiveness for global fund managers, Agrawal pointed out.Currency volatilityRupee instability emerged as another headwind, as the currency is hovering around 90 per US dollar levels. Vijayakumar explained that FII selling weakened the rupee, which in turn triggered further FPI outflows, creating a negative feedback loop. This year the currency has fallen over 5%, depreciating past the 91 per US dollar mark, before recovering to 89. Tariff tensions and geopolitical risksFears linked to geopolitical tensions combined with US President Donald Trump\u2019s imposition of trade tariffs worsened the sentiment and disrupted global business dynamics.India\u2019s export competitiveness also came under strain. Khandelwal pointed out that India became \u201cone of the most tariffed countries by the US under the new tariff regime,\u201d impacting export-oriented industries. Ankit Soni further cited the non-closure of key trade deals as one of the factors preventing markets from sustaining rallies.The United States imposed a total of 50% tariffs on India - with a 25% tariff on Indian imports for purchases of Russian oil. Muted domestic capex and policy-related concernsDomestically, muted government capital expenditure added to the pressure, particularly in sectors dependent on public spending, according to Nikhil Khandelwal. Policy changes such as an increase in capital gains tax also dented investor sentiment during the year, Agrawal flagged.\u201cValuations have turned comfortable for Nifty50, which is trading at a 1-year forward P/E multiple of 19-20x vs 22x-23x during the last peak in Sept\u201924. During the last 14 months, there has been notable compression in the valuation premium of Nifty50 over MSCI EM index from 80% in September 2024 to 47% in December 2025, which is below the 10 year average of 57%. Barring few pockets, valuations have turned comfortable across mid and small caps,\u201d Agrawal told TOI.Now that we know why Dalal Street\u2019s performance was muted in 2025, it is time to dive into how the stock market is likely to perform in 2026. The answer depends on many factors including FII performance, earnings, balance sheets and much more! What about 2026 - Will Dalal Street stand stronger?A short answer to if the Indian stock market is expected to perform better than their global peers in 2026 would be, Yes. Here\u2019s why:Just a consolidation phaseSoni told TOI that the stock markets gave a strong rally from 2022 to 2025 and hence this subdued momentum was just a pause.\u201cA good set of rallies we have seen, so there is always a gap of one year or two with respect to your continuation of the rally, and this we feel is good for the market to consolidate for some time and then give us a good set of rallies,\" he added.\u201dIndia has structural growth driversAs compared to ot\n\n*Source: https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms*"
+      },
+      {
+        "url": "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+        "success": true,
+        "ms": 8427,
+        "title": "Indian Stock Market Prediction: Nifty Outlook for June 15-19",
+        "tokens": 1230,
+        "content": "# Indian Stock Market Prediction: Nifty Outlook for June 15-19\n\nThe Indian stock market ended in the green, snapping a volatile two-week losing streak as the bulls made a strong comeback on D-Street.Before the opening bell rings on Monday, let\u2019s unpack the critical macroeconomic triggers, institutional flows and technical levels shaping the Indian stock market prediction for the coming week in this comprehensive Weekly Market Review.Market Summary: Sensex & Nifty 50 PerformanceThe bulls returned to form last week, reasserting control to drive the Nifty 50 upward by 1.1% over the course of the trading week.Improving global geopolitical sentiment triggered broad-based buying across major sectors.Concurrently, the India VIX fear gauge dropped noticeably, cooling down by 6.8% and signaling a sharp relief in market anxiety compared to recent weeks.Nifty, Sensex Weekly PerformanceShare Market Live News: The Big Macro Triggers This Week1. US-Iran Peace Talks & Strait of HormuzThe defining story of the week broke on Friday with news of an imminent finalization of a peace deal between the U.S. and Iran.The proposed deal aims to formally halt hostilities and completely reopen the economically vital Strait of Hormuz, bringing immediate relief to global energy corridors.2. Rising US Inflation & Rate Hike BetsIn the United States, a structurally resilient jobs report fuelled market bets that the Federal Reserve will be forced to hike interest rates at its upcoming policy meeting.Driven by the recent Iran oil shock, U.S. retail inflation climbed back above the 4% mark, touching a fresh three-year high of 4.2% for May.3. Domestic HeadwindsSimilar inflationary pressures are surfacing in the domestic economy. India\u2019s retail inflation recorded its fifth consecutive monthly rise, hitting 3.93% for May.This comes at a time when India's FY27 GDP growth forecast is cooling down toward a projected 6.6%.Top Nifty Gainers & Losers Last WeekTop Gainers & LosersStock Analysis: Why They MovedPrivate Banking: Emerged as the week's undisputed sectoral winner, led by heavyweights Kotak Mahindra Bank and Axis Bank. The massive rally was triggered by the Reserve Bank of India (RBI) publishing fresh guidelines aimed at attracting foreign currency inflows to defend a domestic rupee under structural pressure.WIPRO: Plunged over 9% to become the top loser. This sharp price correction was driven by short-term traders aggressively exiting their positions following the completion of the company's scheduled stock buyback program.ONGC: Fell 7% as Brent crude oil prices collapsed in tandem with the fast-progressing U.S.-Iran diplomatic peace negotiations.Sector Performance: Gainers Vs LosersTop Gainers & LosersInstitutional Activity: FIIs vs. DIIsThe tug-of-war between institutional investors continued. Foreign Institutional Investors (FIIs) remained net sellers, while Domestic Institutional Investors (DIIs) acted as the market's safety net.FII, DII ActivityMarket Outlook & Nifty Prediction for 15 - 19 JuneMarket momentum next week will hinge heavily on whether the anticipated U.S.-Iran peace deal and the formal reopening of the Strait of Hormuz materialize over the weekend.Because of these moving parts, equity benchmarks will remain highly sensitive to real-time global news headlines.Nifty 50 Trading Range: We anticipate a volatile yet structurally bullish bias for the index next week, forecasting a trading range between 23,400 and 24,100.Key Triggers to WatchDomestic Data Points: Traders will closely track India's latest Consumer Price Index (CPI) inflation data alongside the upcoming Wholesale Price Index (WPI) print.Global Cues: The upcoming U.S. Federal Reserve policy decision, industrial production data, crude oil prices and FII flows will dictate market direction.Stocks to Watch & Investment OpportunitiesThis week, we are tracking tactical opportunities across Banking and Financial Services based on technical setups. You could add these stocks to your watchlist:Motilal Oswal Financial Services (MOTILALOFS)State Bank of India (SBIN)ICICI Bank (ICICIBANK)AU Small Finance Bank (AUBANK)InterGlobe Aviation (INDIGO)\ud83d\udca1 Pro-Tip: Want a real-time technical analysis for these stocks? Ask LiMo, our AI co-pilot, for an instant buy/sell rating.Discover Investment Opportunities with LiquideAvailable on both Google Play Store and Apple Appstore, Liquide offers up-to-date market analysis, expert recommendations and real-time insights to guide your investment decisions.Download the Liquide App today and enhance your financial journey.Disclaimer: The information provided in this article is for informational and educational purposes only and does not constitute financial, investment or trading advice.Stock, commodity and currency markets involve significant risk. Readers are strongly advised to consult with their financial advisors before making any investment decisions.For a detailed Disclaimer, please visit our website https://liquide.life/\n\n*Source: https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/*"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=tBvstdNcrvw",
+        "success": true,
+        "ms": 13542,
+        "title": "Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now - YouTube",
+        "tokens": 1771,
+        "content": "# Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now - YouTube\n\nBanking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now2xBanking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET NowMotilal Oswal Financial Services 35,199 views 5 months agoIf playback doesn't begin shortly, try restarting your device.\u2022You're signed outVideos you watch may be added to the TV's watch history and influence TV recommendations. To avoid this, cancel and sign in to YouTube on your computer.Up nextLiveUpcomingPlay NowShareInclude playlistAn error occurred while retrieving sharing information. Please try again later.0:000:00 / 12:32\u2022Watch full video47:47'Stop SIPs, Investing In Equities; Let The Stock Market Fall': Shankar Sharma's Viral InterviewNDTV Profit209K views \u2022 6 days agoLivePlaylist ()Mix (50+)41:17How a Salaried Employee Built Ultra Wealth From ZERO : One Mindset Switch | Anshul Saigal | FWS 120Finance With Sharan57K views \u2022 1 day agoLivePlaylist ()Mix (50+)7:41Akshay Kumar CAN\u2019T STOP LAUGHING At Sunil Grover\u2019s Comedy \ud83e\udd23 | TGIKS | Netflix IndiaNetflix India266K views \u2022 12 hours agoLivePlaylist ()Mix (50+)1:36:10Nobel Laureate Explains India\u2019s Economy, Poverty, GDP & AI | Abhijit Banerjee | FO521 Raj ShamaniRaj Shamani593K views \u2022 4 days agoLivePlaylist ()Mix (50+)22:35Finding The Next Multibagger Opportunities | Vijay Kedia, Private Investor | ET Now Market SummitET Now47K views \u2022 3 days agoLivePlaylist ()Mix (50+)15:28Plot or Flat - E\u00b2 Rule ExplainedZero1 by Zerodha450K views \u2022 2 days agoLivePlaylist ()Mix (50+)12:46Trump Calls The Shots! Why Netanyahu Is Rebelling Against The New US-Iran Peace Deal | US-Iran |N18GCNN-News18508 views \u2022 44 minutes agoLivePlaylist ()Mix (50+)40:15Raamdeo Agrawal on India's Evolving Investment Landscape | Passive Funds Conclave 2026 | CNBC TV18CNBC-TV1861K views \u2022 Streamed 3 days agoLivePlaylist ()Mix (50+)8:36Sunil Grover & Samay Raina's MOST HILARIOUS News Debate \ud83d\udc40\ud83e\udd23 | TGIKS | Netflix IndiaNetflix India1.5M views \u2022 3 days agoLivePlaylist ()Mix (50+)44:12The Ugly Truth Behind \u20b915Cr Trading : Luck, Skill, Survival & Success | Ashwin Raghavan | FWS 102Finance With Sharan634K views \u2022 3 months agoLivePlaylist ()Mix (50+)59:54Worst Decision Of RBI, Demonetisation, PM Modi & Indian Economy - Raghuram Rajan | FO151 Raj ShamaniRaj Shamani3M views \u2022 2 years agoLivePlaylist ()Mix (50+)21:56\u091c\u092c Weight Loss \u092c\u0928\u093e Startup Idea! | Shark Tank India S4 | Male EntrepreneursShark Tank India5.8K views \u2022 9 hours agoLivePlaylist ()Mix (50+) Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now 35K views 5 months ago 35,199 views \u2022 Jan 5, 2026 India\u2019s banking and NBFC sector is entering a decisive phase. In this conversation, Nitin Agarwal, Head of BFSI Institutional Equities at Motilal Oswal Financial Services, decodes Q3 trends showing resilient 12% credit growth, strong momentum in PSU and mid-sized banks, early signs of margin bottoming, and stabilising asset quality across unsecured and microfinance portfolios. He explains why retail credit is reviving, how vehicle finance and gold loan financiers are benefiting from the next cycle, and why select names across private banks, PSU lenders and NBFCs could shape sector leadership into FY26. \u2026...more ...more Transcript Follow along using the transcript. Motilal Oswal Financial Services 525K subscribers VideosAboutInstagramTwitterFacebook Show less Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now35,199 views35K viewsJan 5, 2026 Comments are turned off. Learn more In this video Description Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now 14Likes35,199ViewsJan 52026 India\u2019s banking and NBFC sector is entering a decisive phase. In this conversation, Nitin Agarwal, Head of BFSI Institutional Equities at Motilal Oswal Financial Services, decodes Q3 trends showing resilient 12% credit growth, strong momentum in PSU and mid-sized banks, early signs of margin bottoming, and stabilising asset quality across unsecured and microfinance portfolios. He explains why retail credit is reviving, how vehicle finance and gold loan financiers are benefiting from the next cycle, and why select names across private banks, PSU lenders and NBFCs could shape sector leadership into FY26. \u2026...more ...more Show less Transcript Follow along using the transcript. Motilal Oswal Financial Services 525K subscribers VideosAboutInstagramTwitterFacebook Transcript NaN / NaN 47:47'Stop SIPs, Investing In Equities; Let The Stock Market Fall': Shankar Sharma's Viral InterviewNDTV Profit209K views \u2022 6 days agoNew41:17How a Salaried Employee Built Ultra Wealth From ZERO : One Mindset Switch | Anshul Saigal | FWS 120Finance With Sharan57K views \u2022 1 day agoNew7:41Akshay Kumar CAN\u2019T STOP LAUGHING At Sunil Grover\u2019s Comedy \ud83e\udd23 | TGIKS | Netflix IndiaNetflix India266K views \u2022 12 hours agoNew1:36:10Nobel Laureate Explains India\u2019s Economy, Poverty, GDP & AI | Abhijit Banerjee | FO521 Raj ShamaniRaj Shamani593K views \u2022 4 days agoNew22:35Finding The Next Multibagger Opportunities | Vijay Kedia, Private Investor | ET Now Market SummitET Now47K views \u2022 3 days agoNew15:28Plot or Flat - E\u00b2 Rule ExplainedZero1 by Zerodha450K views \u2022 2 days agoNew12:46Trump Calls The Shots! Why Netanyahu Is Rebelling Against The New US-Iran Peace Deal | US-Iran |N18GCNN-News18508 views \u2022 44 minutes agoNew40:15Raamdeo Agrawal on India's Evolving Investment Landscape | Passive Funds Conclave 2026 | CNBC TV18CNBC-TV1861K views \u2022 Streamed 3 days agoNew8:36Sunil Grover & Samay Raina's MOST HILARIOUS News Debate \ud83d\udc40\ud83e\udd23 | TGIKS | Netflix IndiaNetflix India1.5M views \u2022 3 days agoNew44:12The Ugly Truth Behind \u20b915Cr Trading : Luck, Skill, Survival & Success | Ashwin Raghavan | FWS 102Finance With Sharan634K views \u2022 3 months ago59:54Worst Decision Of RBI, Demonetisation, PM Modi & Indian Economy - Raghuram Rajan | FO151 Raj ShamaniRaj Shamani3M views \u2022 2 years ago21:56\u091c\u092c Weight Loss \u092c\u0928\u093e Startup Idea! | Shark Tank India S4 | Male EntrepreneursShark Tank India5.8K views \u2022 9 hours agoNew20:18Elon\u2019s Dirty Secret : Whats wrong with SPACEX IPO? (Its worse than you Think) | Business Case StudyThink School315K views \u2022 1 day agoNew21:04Can PM Modi save India\u2019s economy? | Abhi and NiyuAbhi and Niyu366K views \u2022 1 day agoNew51:40Don't Invest in Indian Stocks Until You Watch This 2026 Microcap Strategy! Pawan Bharaddia ExplainsSonia Shenoy104K views \u2022 12 days ago26:06NIFTY @ 30K? Episode 1P R Sundar72K views \u2022 2 days agoNew22:18Akshay Kumar, Rajpal Yadav& Priyadarshan UNFILTERED Bhooth Bangla Podcast with @FarahKhanK | NetflixNetflix India257K views \u2022 8 hours agoNew34:42Can an Average Indian Salary Make You Financially Free? | Ft. Vijai MantriINDmoney82K views \u2022 2 weeks ago16:15Iran-US truce:Gains & concerns for India,weakened US,Netanyahu's setback,Pakistan's role | 10 pointsThePrint14K views \u2022 3 hours agoNew18:52Best Long Term Stocks to Buy: Anshul Jain \u0928\u0947 \u092c\u0924\u093e\u090f 4 \u0927\u092e\u093e\u0915\u0947\u0926\u093e\u0930 \u0936\u0947\u092f\u0930\u094d\u0938! Multi-bagger Returns?Jagran Business5K views \u2022 8 hours agoNew\n\n*Source: https://www.youtube.com/watch?v=tBvstdNcrvw*"
+      },
+      {
+        "url": "https://www.bajajfinserv.in/investments/upcoming-ipo",
+        "success": false,
+        "ms": 180000,
+        "error": "Global timeout"
+      },
+      {
+        "url": "https://enrichmoney.in/blog/fii-dii-trends-november-2025",
+        "success": true,
+        "ms": 13882,
+        "title": "FII vs DII Trends November 2025 | Market Flow Analysis",
+        "tokens": 2000,
+        "content": "# FII vs DII Trends November 2025 | Market Flow Analysis\n\nBlog NewsFII and DII Activity Trends in November 2025FII and DII Activity Trends in November 2025 Overview of FII and DII Influence on Indian Markets The dynamics between FII and DII in Indian capital markets have been very different in 2025. Essentially, the FIIs have traditionally driven the Indian equity market through liquidity and price momentum, and this segment has often led market sentiment. But a remarkable rise in domestic institutional participation has balanced the equation, with DIIs gradually increasing their holding and market influence. November 2025 has also reflected these trends-while FIIs have net outflows due to global uncertainties, DIIs continue to be strong buyers, hence bringing stability to the market. This article discusses the changing patterns of FII and DII activities in November, studies the trends and consequences of the same on the market, and talks about how the same can be interpreted by traders trading through platforms like ORCA. FII and DII Activity Trends in November 2025: An Overview of Data FIIs: Net Selling Amid Global Risk Aversion In November, FIIs have continued to remain cautious about Indian equities. Data as of early November shows cumulative net selling of around Rs.12,500 crore by FIIs during this month so far. This is partly because of the selling momentum created by FIIs' reallocating global portfolios towards perceived strong beneficiaries of the AI-driven tech rally, such as the US, China, and South Korea. Except for occasional buying sprees, like the pronounced Rs.4,581 crore purchase on the 7th of November, the overall net positioning remains negative. The total gross purchases by FIIs in November stood at around Rs.58,000 crore against gross sales of about Rs.60,000 crore, thus reflecting a net outflow of nearly Rs.1,600 crore in early November figures. DIIs: Continued Robust Buying Supporting Indian Markets Domestic Institutional Investors have been a source of strength amid FII selling pressure. November data reveals DIIs buying shares worth roughly Rs. 16,600 crore net. The gross buying sum is approximately Rs. 70,000 crores, while gross sales tally near Rs. 53,500 crore during the same period. The strong buying by DIIs, mainly propelled by mutual funds and insurance companies on the back of retail SIPs, reflects confidence in India's domestic growth story. This increasing DII impact has pushed NSE-listed stock holdings to all-time highs of 18.26% while FII ownership is at 13-year lows around 16.71%. Detailed Analysis of Trends Market Control Shifts: Domestic Investors in the Driver's Seat A milestone of 2025 was when DII holdings outpaced those of FIIs in the March quarter, marking a critical juncture in the ownership pattern of the Indian market. That gap has now widened, underscoring the increasing reliance on home-grown investment flows. This surge by domestic investors is attributed to regular SIP inflows, good foreign exchange reserves, and conducive reforms initiated by the government. Importantly, DIIs have been selectively buying fundamentally strong sectors such as financial services, FMCG, tech, and healthcare. Two Sides of the Coin: FIIs Selling in Secondary, Buying in Primary Markets The nuance in this behavior is that while FIIs have been net sellers in the secondary market, they have shown aggressive buying in the primary market via IPOs. According to preliminary data, FIIs invested around Rs.10,700 crore in new IPO issuances last month, the second highest monthly figure in 2025, signaling their continued confidence in India's growth story despite exit pressures in the secondary market. Tabular Representation of FII-DII Trends: Date Nov 3, 2025 Nov 6, 2025 Nov 7, 2025 FII Gross Purchase (INR Cr) 13,187 16,791 18,485 FII Gross Sales (INR Cr) 14,254 20,054 13,903 FII Net (INR Cr) -1,067 -3,263 4,581 DII Gross Purchase (INR Cr) 19,470 19,418 19,470 DII Gross Sales (INR Cr) 12,795 14,134 12,795 DII Net (INR Cr) 6,675 5,284 6,675 Note: Data reflects cash market activity only These table point to the relentless sell-off by FIIs against a robust buying interest from DIIs, together dictating the trend in the market. Impact on Market Sentiment and Trading Strategies Market Sentiment The differential activity between FIIs and DIIs is shaping the market outlook, with increased domestic participation cushioning volatility induced by foreign fund outflows. According to market analysts, this trend is good because it portends increasing self-sufficiency and stability for the Indian markets against global turmoil. Trading Strategy Implications This dynamic is important for traders and investors alike. The modern functionality embodied in platforms like ORCA, with different modes such as Trade Mode, Scalper Mode, and AI Strategy Mode, lets traders take up different nuanced approaches. The ORCA AI Option Strategy Builder, featuring more than 37 strategies, has different strategies for bullish, bearish, neutral, and sideways markets that may help users anticipate market moves dictated by institutional investor activity. Investors may consider the following: Utilizing AI-powered insight from platforms like ORCA to determine when trades match up with institutional buying. Monitor IPO subscription activity separately as FIIs remain active buyers in primary markets. Utilizing real-time FII/DII data to adjust portfolio exposure and hedge in periods of volatility. Conclusion: The Evolving Role of FIIs and DIIs in India's Market November 2025 underlines the continuing transformation in India's equity market ownership. While FIIs have reduced their secondary market exposure due to macroeconomic concerns and sector rotation towards AI-heavy markets globally, DIIs have decisively stepped in to provide stability and growth impetus. This shift represents the maturation of India's financial markets, with increased domestic investor participation complemented by professional and retail savings channeled via mutual funds and insurance companies. Whether a trader or investor, being aware of these emerging trends, via sophisticated AI-powered trading systems such as ORCA, becomes essential for informed decision-making and returns optimization in the evolving financial landscape of India. Frequently Asked Questions What has been the trend of Foreign Institutional Investors in November 2025? FIIs have kept net selling, with the total outflow close to Rs. 12,500 crore amid global portfolio rebalancing. How have domestic institutional investors acted in November 2025? The DIIs have been strong net buyers, buying shares worth close to Rs.16,600 crore in support of the stability of the market. Why are DIIs increasingly becoming important in the Indian equity markets? Increasing retail SIP inflows and government reforms have propelled DII holdings to a 13-year high, surpassing the stake of FIIs. During November 2025, do FIIs still actively participate in the Indian market? Yes, despite selling in the secondary market, FIIs invested around Rs.10,700 crore in IPOs, showing confidence in the primary markets. How can FII and DII activity data be utilized effectively by traders? Traders can use AI-powered features on mobile trading apps like ORCA app to align their trading strategies with those of institutional investor patterns for better performance. Disclaimer: This blog is dedicated exclusively for educational purposes. Please note that the securities and investments mentioned here are provided for informative purposes only and should not be construed as recommendations. Kindly ensure thorough research prior to making any investment decisions. Participation in the securities market carries inherent risks, and it's important to carefully review all associated documents before committing to investments. Please be aware that the attainment of investment objectives is not guaranteed. It's important to note that the past performance of securities and instruments does not reliably predict future performance.Related PostsChe\n\n*Source: https://enrichmoney.in/blog/fii-dii-trends-november-2025*"
+      }
+    ]
+  },
+  "final": {
+    "results": [
+      {
+        "url": "https://www.ipoplatform.com/ipo-insights/by-year/2026",
+        "success": true,
+        "ms": 78060,
+        "title": "SME IPOs in 2026 for SME IPO listing history in India",
+        "tokens": 23,
+        "content": "# SME IPOs in 2026 for SME IPO listing history in India\n\nIs your business IPO-ready? Get expert guidance for a smooth SME IPO process! Contact Us Us\n\n*Source: https://www.ipoplatform.com/ipo-insights/by-year/2026*"
+      },
+      {
+        "url": "https://ipowatch.in/upcoming-sme-ipo-list/",
+        "success": true,
+        "ms": 11066,
+        "title": "Upcoming SME IPO 2026, BSE and NSE SME IPO List - IPO Watch",
+        "tokens": 10,
+        "content": "# Upcoming SME IPO 2026, BSE and NSE SME IPO List - IPO Watch\n\nRazorpay Files Confidential DRHP for IPO\n\n*Source: https://ipowatch.in/upcoming-sme-ipo-list/*"
+      },
+      {
+        "url": "https://www.wrightresearch.in/blog/banks-vs-nbfcs-whos-driving-indias-financial-growth-in-2026/",
+        "success": false,
+        "ms": 180000,
+        "error": "Page unavailable"
+      },
+      {
+        "url": "https://www.ipoplatform.com/main-board/by-year/2026",
+        "success": true,
+        "ms": 68421,
+        "title": "IPO 2026 for Mainboard listing in India. 2026 IPO list",
+        "tokens": 22,
+        "content": "# IPO 2026 for Mainboard listing in India. 2026 IPO list\n\nIs your business IPO-ready? Get expert guidance for a smooth IPO process! Contact Us Us\n\n*Source: https://www.ipoplatform.com/main-board/by-year/2026*"
+      },
+      {
+        "url": "https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026",
+        "success": true,
+        "ms": 20689,
+        "title": "SME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026",
+        "tokens": 1363,
+        "content": "# SME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026\n\nA-AA+Unlimited Trades \u20b9899 Monthlywww.ProStocks.comLoading...Mainboard IPOSME IPO NCD (Bonds) Rights Issue OFS BuybacksFeatured BrokersTop picks for quick accountsZerodha\u20b920 / TradeAngel One\u20b920 / TradeKotak Neo\u20b910 / TradePopular BrokersUpstox\u20b920 / TradeProStocks\u20b9899 UnlimitedPaytm Money\u20b920 / TradeFyers\u20b920 / Trade More Brokers Compare Brokers Zerodha vs Upstox Zerodha vs Groww Zerodha vs Angel OneQuick LinksIntroduction to IPOSME IPO Guide for companiesNCD (Non-convertible debentures)Buyback of SharesQuick LinksStock Market HomeStock Message BoardStock Trading HolidaysTop Gainer/LoserBonus ShareDividend Share52 Weeks High/LowMore Stock ReportsIPO Report ListStock Broker Report ListStock Market ListOther Report ListOptions Trading HomeOptions OverviewBenefits & Risks of OptionsOptions PricingOptions Trading FAQsOptions Trading GlossaryTrading StrategiesSide-by-Side ComparisonOptions Strategy FAQsNRI HomepageBest NRI Trading AccountBest NRI 3-in-1 AccountTop 10 NRI Discount BrokersTop 10 NRI Full-Service BrokersHistory of ChittorgarhMaharana PratapFort of ChittorgarhPhoto GalleryAround ChittorgarhHotels / ResortsContact usSME IPOs in India: 2026The upcoming SME IPOs in India this week and coming weeks are Saffron Speciality Papers IPO, Leapfrog Engineering IPO, Liotech Industries IPO, Diksha Polymers IPO, Clay Craft IPO, Avience Biomedicals IPO. The current active SME IPOs are Susan Electricals India IPO, Horizon Reclaim (India) IPO. Issue open Yet to List Listing today All IPOsMainboard IPOsSME IPOsMainboard FPOsSME FPOsSME IPOs: 2026Total Records: 78Company\u25b2\u25bcPricing Method\u25b2\u25bcOpening Date\u25b2\u25bcClosing Date\u25b2\u25bcListing Date\u25b2\u25bcIssue Price (Rs.)\u25b2\u25bcTotal Issue Amount (Incl.Firm reservations) (Rs.cr.)\u25b2\u25bcListing at\u25b2\u25bcLead Manager\u25b2\u25bcCompareSaffron Speciality Papers Ltd.Bookbuilding0.00BSE SMEBOI Merchant BankersAnubhav Plast Ltd.Bookbuilding19-Jun-202623-Jun-20260.00BSE SMECapital SquareAvience Biomedicals Ltd.Bookbuilding18-Jun-202622-Jun-2026196.00 to 208.0030.24NSE SMEFintellectual CorporateRiyaasat Lifestyle Ltd.Bookbuilding18-Jun-202622-Jun-20260.00BSE SMEMark CorporateDiksha Polymers Ltd.Fixed Price17-Jun-202619-Jun-2026112.0017.90BSE SMEAryaman FinancialLiotech Industries Ltd.Fixed Price17-Jun-202619-Jun-2026321.0036.02BSE SMEWealth Mine NetworksLeapfrog Engineering Services Ltd.Bookbuilding17-Jun-202619-Jun-202621.00 to 23.0088.51BSE SMEFinshore ManagementClay Craft India Ltd.Bookbuilding17-Jun-202619-Jun-2026193.00 to 203.00110.11NSE SMEHem SecuritiesHorizon Reclaim (India) Ltd. OBookbuilding12-Jun-202616-Jun-2026103.0054.27BSE SMEGYR CapitalSusan Electricals India Ltd. CTBookbuilding11-Jun-202615-Jun-2026127.0070.38BSE SMESeren CapitalUtkal Speciality Industries India Ltd. PBookbuilding10-Jun-202612-Jun-202617-Jun-2026T62.00 to 66.0034.54NSE SMEAffinity GlobalGenxai Analytics Ltd.Bookbuilding05-Jun-202609-Jun-202612-Jun-2026116.0054.84NSE SMEChoice CapitalVahh Chemicals Ltd.Fixed Price04-Jun-202608-Jun-202611-Jun-202660.0013.45BSE SMEMarwadi Chandarana IntermediariesUHM Vacation Ltd.Bookbuilding04-Jun-202608-Jun-202611-Jun-2026166.0036.00BSE SMESobhagya CapitalMerritronix Ltd.Bookbuilding01-Jun-202603-Jun-202608-Jun-2026149.0070.03BSE SMEGYR CapitalAureate Tradde Ltd.Fixed Price29-May-202602-Jun-202605-Jun-202670.0027.29BSE SMECorporate MakersSMR Jewels Ltd.Bookbuilding26-May-202603-Jun-202608-Jun-2026128.0063.74BSE SMEWealth Mine NetworksRajnandini Fashion India Ltd.Bookbuilding26-May-202629-May-202603-Jun-202663.0018.21BSE SMESeren CapitalYaashvi Jewellers Ltd.Fixed Price25-May-202627-May-202602-Jun-202683.0043.88BSE SMESmart Horizon CapitalM R Maniveni Foods Ltd.Bookbuilding22-May-202626-May-202601-Jun-202652.0027.04BSE SMECapital SquareBio Medica Laboratories Ltd.Bookbuilding21-May-202625-May-202629-May-2026139.0052.43NSE SMENarnolia FinancialAutofurnish Ltd.Fixed Price21-May-202625-May-202629-May-202641.0014.60BSE SMENovus CapitalQ-Line Biotech Ltd.Bookbuilding21-May-202625-May-202629-May-2026343.00214.48NSE SMEHem SecuritiesHarikanta Overseas Ltd.Bookbuilding20-May-202627-May-202602-Jun-202691.0024.30BSE SMEInteractive FinancialVegorama Punjabi Angithi Ltd.Bookbuilding20-May-202622-May-202627-May-202677.0038.38BSE SMECorporate MakersShowing 1 to 25 of 78 entries\ud83d\ude80 SME IPO ConsultingPlanning an SME IPO?End-to-end support from preparation to listing.Note: Closing Date: Closing day of the IPO subscription period for investors. Listing Date: Date when shares allotted to investors start trading on the stock exchange (NSE/BSE). Investors can sell or buy shares from this day. Issue Price: Price at which company\u2019s shares are offered to the public. Total Issue Amount (Including Firm reservations): The total monetary value of all the shares being offered to the public in an issue. It is arrived at by multiplying the number of shares offered with the issue price per share. Listing at: Stock exchange where the IPO shares are proposed to be listed. Mainboard IPOs are listed on BSE and NSE. The SME IPOs are listed on NSE EMERGE or BSE SME platform of the respective exchanges. Lead Manager: SEBI registered merchant banker responsible for managing the entire IPO process for a company. Striked '' represents that the initial public offer (IPOs) was withdrawn and didn't list on the stock market.\ud83d\udcd1View All IPO ReportsAccess the complete list of research reports and insights for better investment decisions. View ReportsSME IPOs Watch 2026 | SME IPOs List | New SME IPOs 2026\n\n*Source: https://www.chittorgarh.com/report/ipo-in-india-list-main-board-sme/82/sme/?year=2026*"
+      },
+      {
+        "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+        "success": true,
+        "ms": 73052,
+        "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+        "tokens": 2000,
+        "content": "# Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India\n\nEditionININUSEnglishEnglish\u0939\u093f\u0928\u094d\u0926\u0940\u092e\u0930\u093e\u0920\u0940\u0c95\u0ca8\u0ccd\u0ca8\u0ca1\u0ba4\u0bae\u0bbf\u0bb4\u0bcd\u09ac\u09be\u0982\u09b2\u09be\u0d2e\u0d32\u0d2f\u0d3e\u0d33\u0d02\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0WeatherSign InTOIToday's ePaperNewsBusiness NewsIndia Business NewsStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowTrendingAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashPAN-Aadhaar link statusTop stocks todayStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowShivanghi Payal / TIMESOFINDIA.COM / Updated: Jan 01, 2026, 10:30 ISTShareAAText SizeSmallMediumLarge If global markets ran a marathon in 2025, Indian equities were clearly trailing the pack. While South Korea saw Kospi skyrocketed nearly 76%, Japan\u2019s Nikkei soared over 25%, and Hong Kong\u2019s Hang Seng climbed almost 30%, China\u2019s Shanghai Composite posted gains of over 16%. In the west, Wall Street also bagged doubled digit gains with tech heavy Nasdaq up 21%, S&P 500 rising 17.5%, and the Dow Jones advancing over 14%. Indian benchmark indices, Nifty50 and BSE Sensex, however, struggled to keep pace. Against these strong gains in global markets, India\u2019s benchmarks posted more modest returns, with the Nifty 50 rising over 10% and the Sensex ending the year 8.55% higher. On December 31, the Sensex closed at 85,220.60, up 545.52 points, while the NSE\u2019s Nifty 50 finished in the green at 26,129, gaining 190 points.Despite the Nifty 50 and Sensex recently touching record highs, broader market sentiment remained muted, with nearly half of the NSE\u2019s top 500 stocks still trading below the benchmark. Though the indices ended 2025 in green, the relative underperformance has left investors struggling with two key questions as the calendar turns: Why did Dalal Street remain muted in 2025? And importantly, what\u2019s the outlook for Nifty50 and Sensex in 2026?So, what dragged Indian benchmarks down? According to experts that TOI spoke to, the stock market was dragged down by a combination of factors, both internal and external. Factors like US-India trade deal delay, not participating in the AI race, muted corporate earnings, and FII selling weighed the market down.Earnings slowdownMuted corporate earnings emerged as one of the major reasons behind the stock market\u2019s underperformance. VK Vijayakumar, chief investment strategist at Geojit Investments, told TOI that \u201cduring the last six quarters, earnings growth has been in single digits. In the long run, the market is a slave of earnings.\u201d So the drag down was, ultimately, the market's response to weak earnings.Despite the benchmarks trading near lifetime highs, the overall market appeared weak, weighed down by the deceleration in earnings momentum since the June 2024 quarter, following a robust 18% CAGR during FY20-FY25, said Sunny Agrawal, head of fundamental research at SBI Securities. Sharp divergenceAccording to Ankit Soni, associate vice president - fundamental research at Mirae Asset Sharekhan, market returns over the last one-and-a-half years remained largely single-digit, with a stark gap across segments.\u201cLarge-cap indices delivered around single-digit returns, while mid and small caps underperformed by nearly 10%,\u201d he said, highlighting the high variability in returns and sustained weakness in the broader market. Agrawal also noted that \u201cdespite benchmark indices trading close to lifetime highs, the broader market continued to trade on weaker footing.\u201dFII sellingMarkets hit new highs towards the end of the year, but failed to hold those levels. Soni pointed out that \u201cthere is always a pullback of around 2-4% from the 52-week highs,\u201d largely due to foreign institutional investor (FII) selling. Agrawal added that persistent selling by Foreign Portfolio Investors (FPI), promoters and PE firms, despite strong domestic liquidity enabling smooth exits, weighed heavily on sentiment.According to Nikhil Khandelwal, managing director at Systematix Group, uncertainty around global interest-rate trajectories, currency volatility and geopolitical tensions led to intermittent foreign portfolio outflows.Valuation concerns versus global peersSeveral experts flagged stretched valuations as a key deterrent for foreign investors. Sunny Agrawal said Indian markets looked relatively expensive compared to other emerging markets, prompting capital outflows. Siddarth Bhamre, head of institutional research at Asit C Mehta Investment Intermediates Limited said that while Indian markets delivered higher single-digit returns, the valuation premium made the underperformance stark when compared with global equities and other asset classes.Missing the AI rallyOne of the defining features of global markets in 2025 was the AI-led rally, which India largely missed. Vijayakumar described India as an \u201cAI loser\u201d in a year when \u201cAI winners like the US, China, Taiwan and South Korea gained substantially.\u201d The lack of a pure-play AI story reduced India\u2019s attractiveness for global fund managers, Agrawal pointed out.Currency volatilityRupee instability emerged as another headwind, as the currency is hovering around 90 per US dollar levels. Vijayakumar explained that FII selling weakened the rupee, which in turn triggered further FPI outflows, creating a negative feedback loop. This year the currency has fallen over 5%, depreciating past the 91 per US dollar mark, before recovering to 89. Tariff tensions and geopolitical risksFears linked to geopolitical tensions combined with US President Donald Trump\u2019s imposition of trade tariffs worsened the sentiment and disrupted global business dynamics.India\u2019s export competitiveness also came under strain. Khandelwal pointed out that India became \u201cone of the most tariffed countries by the US under the new tariff regime,\u201d impacting export-oriented industries. Ankit Soni further cited the non-closure of key trade deals as one of the factors preventing markets from sustaining rallies.The United States imposed a total of 50% tariffs on India - with a 25% tariff on Indian imports for purchases of Russian oil. Muted domestic capex and policy-related concernsDomestically, muted government capital expenditure added to the pressure, particularly in sectors dependent on public spending, according to Nikhil Khandelwal. Policy changes such as an increase in capital gains tax also dented investor sentiment during the year, Agrawal flagged.\u201cValuations have turned comfortable for Nifty50, which is trading at a 1-year forward P/E multiple of 19-20x vs 22x-23x during the last peak in Sept\u201924. During the last 14 months, there has been notable compression in the valuation premium of Nifty50 over MSCI EM index from 80% in September 2024 to 47% in December 2025, which is below the 10 year average of 57%. Barring few pockets, valuations have turned comfortable across mid and small caps,\u201d Agrawal told TOI.Now that we know why Dalal Street\u2019s performance was muted in 2025, it is time to dive into how the stock market is likely to perform in 2026. The answer depends on many factors including FII performance, earnings, balance sheets and much more! What about 2026 - Will Dalal Street stand stronger?A short answer to if the Indian stock market is expected to perform better than their global peers in 2026 would be, Yes. Here\u2019s why:Just a consolidation phaseSoni told TOI that the stock markets gave a strong rally from 2022 to 2025 and hence this subdued momentum was just a pause.\u201cA good set of rallies we have seen, so there is always a gap of one year or two with respect to your continuation of the rally, and this we feel is good for the market to consolidate for some time and then give us a good set of rallies,\" he added.\u201dIndia has structural growth driversAs compared to ot\n\n*Source: https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms*"
+      },
+      {
+        "url": "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+        "success": true,
+        "ms": 8427,
+        "title": "Indian Stock Market Prediction: Nifty Outlook for June 15-19",
+        "tokens": 1230,
+        "content": "# Indian Stock Market Prediction: Nifty Outlook for June 15-19\n\nThe Indian stock market ended in the green, snapping a volatile two-week losing streak as the bulls made a strong comeback on D-Street.Before the opening bell rings on Monday, let\u2019s unpack the critical macroeconomic triggers, institutional flows and technical levels shaping the Indian stock market prediction for the coming week in this comprehensive Weekly Market Review.Market Summary: Sensex & Nifty 50 PerformanceThe bulls returned to form last week, reasserting control to drive the Nifty 50 upward by 1.1% over the course of the trading week.Improving global geopolitical sentiment triggered broad-based buying across major sectors.Concurrently, the India VIX fear gauge dropped noticeably, cooling down by 6.8% and signaling a sharp relief in market anxiety compared to recent weeks.Nifty, Sensex Weekly PerformanceShare Market Live News: The Big Macro Triggers This Week1. US-Iran Peace Talks & Strait of HormuzThe defining story of the week broke on Friday with news of an imminent finalization of a peace deal between the U.S. and Iran.The proposed deal aims to formally halt hostilities and completely reopen the economically vital Strait of Hormuz, bringing immediate relief to global energy corridors.2. Rising US Inflation & Rate Hike BetsIn the United States, a structurally resilient jobs report fuelled market bets that the Federal Reserve will be forced to hike interest rates at its upcoming policy meeting.Driven by the recent Iran oil shock, U.S. retail inflation climbed back above the 4% mark, touching a fresh three-year high of 4.2% for May.3. Domestic HeadwindsSimilar inflationary pressures are surfacing in the domestic economy. India\u2019s retail inflation recorded its fifth consecutive monthly rise, hitting 3.93% for May.This comes at a time when India's FY27 GDP growth forecast is cooling down toward a projected 6.6%.Top Nifty Gainers & Losers Last WeekTop Gainers & LosersStock Analysis: Why They MovedPrivate Banking: Emerged as the week's undisputed sectoral winner, led by heavyweights Kotak Mahindra Bank and Axis Bank. The massive rally was triggered by the Reserve Bank of India (RBI) publishing fresh guidelines aimed at attracting foreign currency inflows to defend a domestic rupee under structural pressure.WIPRO: Plunged over 9% to become the top loser. This sharp price correction was driven by short-term traders aggressively exiting their positions following the completion of the company's scheduled stock buyback program.ONGC: Fell 7% as Brent crude oil prices collapsed in tandem with the fast-progressing U.S.-Iran diplomatic peace negotiations.Sector Performance: Gainers Vs LosersTop Gainers & LosersInstitutional Activity: FIIs vs. DIIsThe tug-of-war between institutional investors continued. Foreign Institutional Investors (FIIs) remained net sellers, while Domestic Institutional Investors (DIIs) acted as the market's safety net.FII, DII ActivityMarket Outlook & Nifty Prediction for 15 - 19 JuneMarket momentum next week will hinge heavily on whether the anticipated U.S.-Iran peace deal and the formal reopening of the Strait of Hormuz materialize over the weekend.Because of these moving parts, equity benchmarks will remain highly sensitive to real-time global news headlines.Nifty 50 Trading Range: We anticipate a volatile yet structurally bullish bias for the index next week, forecasting a trading range between 23,400 and 24,100.Key Triggers to WatchDomestic Data Points: Traders will closely track India's latest Consumer Price Index (CPI) inflation data alongside the upcoming Wholesale Price Index (WPI) print.Global Cues: The upcoming U.S. Federal Reserve policy decision, industrial production data, crude oil prices and FII flows will dictate market direction.Stocks to Watch & Investment OpportunitiesThis week, we are tracking tactical opportunities across Banking and Financial Services based on technical setups. You could add these stocks to your watchlist:Motilal Oswal Financial Services (MOTILALOFS)State Bank of India (SBIN)ICICI Bank (ICICIBANK)AU Small Finance Bank (AUBANK)InterGlobe Aviation (INDIGO)\ud83d\udca1 Pro-Tip: Want a real-time technical analysis for these stocks? Ask LiMo, our AI co-pilot, for an instant buy/sell rating.Discover Investment Opportunities with LiquideAvailable on both Google Play Store and Apple Appstore, Liquide offers up-to-date market analysis, expert recommendations and real-time insights to guide your investment decisions.Download the Liquide App today and enhance your financial journey.Disclaimer: The information provided in this article is for informational and educational purposes only and does not constitute financial, investment or trading advice.Stock, commodity and currency markets involve significant risk. Readers are strongly advised to consult with their financial advisors before making any investment decisions.For a detailed Disclaimer, please visit our website https://liquide.life/\n\n*Source: https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/*"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=tBvstdNcrvw",
+        "success": true,
+        "ms": 13542,
+        "title": "Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now - YouTube",
+        "tokens": 1771,
+        "content": "# Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now - YouTube\n\nBanking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now2xBanking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET NowMotilal Oswal Financial Services 35,199 views 5 months agoIf playback doesn't begin shortly, try restarting your device.\u2022You're signed outVideos you watch may be added to the TV's watch history and influence TV recommendations. To avoid this, cancel and sign in to YouTube on your computer.Up nextLiveUpcomingPlay NowShareInclude playlistAn error occurred while retrieving sharing information. Please try again later.0:000:00 / 12:32\u2022Watch full video47:47'Stop SIPs, Investing In Equities; Let The Stock Market Fall': Shankar Sharma's Viral InterviewNDTV Profit209K views \u2022 6 days agoLivePlaylist ()Mix (50+)41:17How a Salaried Employee Built Ultra Wealth From ZERO : One Mindset Switch | Anshul Saigal | FWS 120Finance With Sharan57K views \u2022 1 day agoLivePlaylist ()Mix (50+)7:41Akshay Kumar CAN\u2019T STOP LAUGHING At Sunil Grover\u2019s Comedy \ud83e\udd23 | TGIKS | Netflix IndiaNetflix India266K views \u2022 12 hours agoLivePlaylist ()Mix (50+)1:36:10Nobel Laureate Explains India\u2019s Economy, Poverty, GDP & AI | Abhijit Banerjee | FO521 Raj ShamaniRaj Shamani593K views \u2022 4 days agoLivePlaylist ()Mix (50+)22:35Finding The Next Multibagger Opportunities | Vijay Kedia, Private Investor | ET Now Market SummitET Now47K views \u2022 3 days agoLivePlaylist ()Mix (50+)15:28Plot or Flat - E\u00b2 Rule ExplainedZero1 by Zerodha450K views \u2022 2 days agoLivePlaylist ()Mix (50+)12:46Trump Calls The Shots! Why Netanyahu Is Rebelling Against The New US-Iran Peace Deal | US-Iran |N18GCNN-News18508 views \u2022 44 minutes agoLivePlaylist ()Mix (50+)40:15Raamdeo Agrawal on India's Evolving Investment Landscape | Passive Funds Conclave 2026 | CNBC TV18CNBC-TV1861K views \u2022 Streamed 3 days agoLivePlaylist ()Mix (50+)8:36Sunil Grover & Samay Raina's MOST HILARIOUS News Debate \ud83d\udc40\ud83e\udd23 | TGIKS | Netflix IndiaNetflix India1.5M views \u2022 3 days agoLivePlaylist ()Mix (50+)44:12The Ugly Truth Behind \u20b915Cr Trading : Luck, Skill, Survival & Success | Ashwin Raghavan | FWS 102Finance With Sharan634K views \u2022 3 months agoLivePlaylist ()Mix (50+)59:54Worst Decision Of RBI, Demonetisation, PM Modi & Indian Economy - Raghuram Rajan | FO151 Raj ShamaniRaj Shamani3M views \u2022 2 years agoLivePlaylist ()Mix (50+)21:56\u091c\u092c Weight Loss \u092c\u0928\u093e Startup Idea! | Shark Tank India S4 | Male EntrepreneursShark Tank India5.8K views \u2022 9 hours agoLivePlaylist ()Mix (50+) Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now 35K views 5 months ago 35,199 views \u2022 Jan 5, 2026 India\u2019s banking and NBFC sector is entering a decisive phase. In this conversation, Nitin Agarwal, Head of BFSI Institutional Equities at Motilal Oswal Financial Services, decodes Q3 trends showing resilient 12% credit growth, strong momentum in PSU and mid-sized banks, early signs of margin bottoming, and stabilising asset quality across unsecured and microfinance portfolios. He explains why retail credit is reviving, how vehicle finance and gold loan financiers are benefiting from the next cycle, and why select names across private banks, PSU lenders and NBFCs could shape sector leadership into FY26. \u2026...more ...more Transcript Follow along using the transcript. Motilal Oswal Financial Services 525K subscribers VideosAboutInstagramTwitterFacebook Show less Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now35,199 views35K viewsJan 5, 2026 Comments are turned off. Learn more In this video Description Banking & NBFC Outlook 2026 | Credit Growth, Margin Bottoms, & Smart Bets | Nitin Aggarwal | ET Now 14Likes35,199ViewsJan 52026 India\u2019s banking and NBFC sector is entering a decisive phase. In this conversation, Nitin Agarwal, Head of BFSI Institutional Equities at Motilal Oswal Financial Services, decodes Q3 trends showing resilient 12% credit growth, strong momentum in PSU and mid-sized banks, early signs of margin bottoming, and stabilising asset quality across unsecured and microfinance portfolios. He explains why retail credit is reviving, how vehicle finance and gold loan financiers are benefiting from the next cycle, and why select names across private banks, PSU lenders and NBFCs could shape sector leadership into FY26. \u2026...more ...more Show less Transcript Follow along using the transcript. Motilal Oswal Financial Services 525K subscribers VideosAboutInstagramTwitterFacebook Transcript NaN / NaN 47:47'Stop SIPs, Investing In Equities; Let The Stock Market Fall': Shankar Sharma's Viral InterviewNDTV Profit209K views \u2022 6 days agoNew41:17How a Salaried Employee Built Ultra Wealth From ZERO : One Mindset Switch | Anshul Saigal | FWS 120Finance With Sharan57K views \u2022 1 day agoNew7:41Akshay Kumar CAN\u2019T STOP LAUGHING At Sunil Grover\u2019s Comedy \ud83e\udd23 | TGIKS | Netflix IndiaNetflix India266K views \u2022 12 hours agoNew1:36:10Nobel Laureate Explains India\u2019s Economy, Poverty, GDP & AI | Abhijit Banerjee | FO521 Raj ShamaniRaj Shamani593K views \u2022 4 days agoNew22:35Finding The Next Multibagger Opportunities | Vijay Kedia, Private Investor | ET Now Market SummitET Now47K views \u2022 3 days agoNew15:28Plot or Flat - E\u00b2 Rule ExplainedZero1 by Zerodha450K views \u2022 2 days agoNew12:46Trump Calls The Shots! Why Netanyahu Is Rebelling Against The New US-Iran Peace Deal | US-Iran |N18GCNN-News18508 views \u2022 44 minutes agoNew40:15Raamdeo Agrawal on India's Evolving Investment Landscape | Passive Funds Conclave 2026 | CNBC TV18CNBC-TV1861K views \u2022 Streamed 3 days agoNew8:36Sunil Grover & Samay Raina's MOST HILARIOUS News Debate \ud83d\udc40\ud83e\udd23 | TGIKS | Netflix IndiaNetflix India1.5M views \u2022 3 days agoNew44:12The Ugly Truth Behind \u20b915Cr Trading : Luck, Skill, Survival & Success | Ashwin Raghavan | FWS 102Finance With Sharan634K views \u2022 3 months ago59:54Worst Decision Of RBI, Demonetisation, PM Modi & Indian Economy - Raghuram Rajan | FO151 Raj ShamaniRaj Shamani3M views \u2022 2 years ago21:56\u091c\u092c Weight Loss \u092c\u0928\u093e Startup Idea! | Shark Tank India S4 | Male EntrepreneursShark Tank India5.8K views \u2022 9 hours agoNew20:18Elon\u2019s Dirty Secret : Whats wrong with SPACEX IPO? (Its worse than you Think) | Business Case StudyThink School315K views \u2022 1 day agoNew21:04Can PM Modi save India\u2019s economy? | Abhi and NiyuAbhi and Niyu366K views \u2022 1 day agoNew51:40Don't Invest in Indian Stocks Until You Watch This 2026 Microcap Strategy! Pawan Bharaddia ExplainsSonia Shenoy104K views \u2022 12 days ago26:06NIFTY @ 30K? Episode 1P R Sundar72K views \u2022 2 days agoNew22:18Akshay Kumar, Rajpal Yadav& Priyadarshan UNFILTERED Bhooth Bangla Podcast with @FarahKhanK | NetflixNetflix India257K views \u2022 8 hours agoNew34:42Can an Average Indian Salary Make You Financially Free? | Ft. Vijai MantriINDmoney82K views \u2022 2 weeks ago16:15Iran-US truce:Gains & concerns for India,weakened US,Netanyahu's setback,Pakistan's role | 10 pointsThePrint14K views \u2022 3 hours agoNew18:52Best Long Term Stocks to Buy: Anshul Jain \u0928\u0947 \u092c\u0924\u093e\u090f 4 \u0927\u092e\u093e\u0915\u0947\u0926\u093e\u0930 \u0936\u0947\u092f\u0930\u094d\u0938! Multi-bagger Returns?Jagran Business5K views \u2022 8 hours agoNew\n\n*Source: https://www.youtube.com/watch?v=tBvstdNcrvw*"
+      },
+      {
+        "url": "https://www.bajajfinserv.in/investments/upcoming-ipo",
+        "success": false,
+        "ms": 180000,
+        "error": "Page unavailable"
+      },
+      {
+        "url": "https://enrichmoney.in/blog/fii-dii-trends-november-2025",
+        "success": true,
+        "ms": 13882,
+        "title": "FII vs DII Trends November 2025 | Market Flow Analysis",
+        "tokens": 2000,
+        "content": "# FII vs DII Trends November 2025 | Market Flow Analysis\n\nBlog NewsFII and DII Activity Trends in November 2025FII and DII Activity Trends in November 2025 Overview of FII and DII Influence on Indian Markets The dynamics between FII and DII in Indian capital markets have been very different in 2025. Essentially, the FIIs have traditionally driven the Indian equity market through liquidity and price momentum, and this segment has often led market sentiment. But a remarkable rise in domestic institutional participation has balanced the equation, with DIIs gradually increasing their holding and market influence. November 2025 has also reflected these trends-while FIIs have net outflows due to global uncertainties, DIIs continue to be strong buyers, hence bringing stability to the market. This article discusses the changing patterns of FII and DII activities in November, studies the trends and consequences of the same on the market, and talks about how the same can be interpreted by traders trading through platforms like ORCA. FII and DII Activity Trends in November 2025: An Overview of Data FIIs: Net Selling Amid Global Risk Aversion In November, FIIs have continued to remain cautious about Indian equities. Data as of early November shows cumulative net selling of around Rs.12,500 crore by FIIs during this month so far. This is partly because of the selling momentum created by FIIs' reallocating global portfolios towards perceived strong beneficiaries of the AI-driven tech rally, such as the US, China, and South Korea. Except for occasional buying sprees, like the pronounced Rs.4,581 crore purchase on the 7th of November, the overall net positioning remains negative. The total gross purchases by FIIs in November stood at around Rs.58,000 crore against gross sales of about Rs.60,000 crore, thus reflecting a net outflow of nearly Rs.1,600 crore in early November figures. DIIs: Continued Robust Buying Supporting Indian Markets Domestic Institutional Investors have been a source of strength amid FII selling pressure. November data reveals DIIs buying shares worth roughly Rs. 16,600 crore net. The gross buying sum is approximately Rs. 70,000 crores, while gross sales tally near Rs. 53,500 crore during the same period. The strong buying by DIIs, mainly propelled by mutual funds and insurance companies on the back of retail SIPs, reflects confidence in India's domestic growth story. This increasing DII impact has pushed NSE-listed stock holdings to all-time highs of 18.26% while FII ownership is at 13-year lows around 16.71%. Detailed Analysis of Trends Market Control Shifts: Domestic Investors in the Driver's Seat A milestone of 2025 was when DII holdings outpaced those of FIIs in the March quarter, marking a critical juncture in the ownership pattern of the Indian market. That gap has now widened, underscoring the increasing reliance on home-grown investment flows. This surge by domestic investors is attributed to regular SIP inflows, good foreign exchange reserves, and conducive reforms initiated by the government. Importantly, DIIs have been selectively buying fundamentally strong sectors such as financial services, FMCG, tech, and healthcare. Two Sides of the Coin: FIIs Selling in Secondary, Buying in Primary Markets The nuance in this behavior is that while FIIs have been net sellers in the secondary market, they have shown aggressive buying in the primary market via IPOs. According to preliminary data, FIIs invested around Rs.10,700 crore in new IPO issuances last month, the second highest monthly figure in 2025, signaling their continued confidence in India's growth story despite exit pressures in the secondary market. Tabular Representation of FII-DII Trends: Date Nov 3, 2025 Nov 6, 2025 Nov 7, 2025 FII Gross Purchase (INR Cr) 13,187 16,791 18,485 FII Gross Sales (INR Cr) 14,254 20,054 13,903 FII Net (INR Cr) -1,067 -3,263 4,581 DII Gross Purchase (INR Cr) 19,470 19,418 19,470 DII Gross Sales (INR Cr) 12,795 14,134 12,795 DII Net (INR Cr) 6,675 5,284 6,675 Note: Data reflects cash market activity only These table point to the relentless sell-off by FIIs against a robust buying interest from DIIs, together dictating the trend in the market. Impact on Market Sentiment and Trading Strategies Market Sentiment The differential activity between FIIs and DIIs is shaping the market outlook, with increased domestic participation cushioning volatility induced by foreign fund outflows. According to market analysts, this trend is good because it portends increasing self-sufficiency and stability for the Indian markets against global turmoil. Trading Strategy Implications This dynamic is important for traders and investors alike. The modern functionality embodied in platforms like ORCA, with different modes such as Trade Mode, Scalper Mode, and AI Strategy Mode, lets traders take up different nuanced approaches. The ORCA AI Option Strategy Builder, featuring more than 37 strategies, has different strategies for bullish, bearish, neutral, and sideways markets that may help users anticipate market moves dictated by institutional investor activity. Investors may consider the following: Utilizing AI-powered insight from platforms like ORCA to determine when trades match up with institutional buying. Monitor IPO subscription activity separately as FIIs remain active buyers in primary markets. Utilizing real-time FII/DII data to adjust portfolio exposure and hedge in periods of volatility. Conclusion: The Evolving Role of FIIs and DIIs in India's Market November 2025 underlines the continuing transformation in India's equity market ownership. While FIIs have reduced their secondary market exposure due to macroeconomic concerns and sector rotation towards AI-heavy markets globally, DIIs have decisively stepped in to provide stability and growth impetus. This shift represents the maturation of India's financial markets, with increased domestic investor participation complemented by professional and retail savings channeled via mutual funds and insurance companies. Whether a trader or investor, being aware of these emerging trends, via sophisticated AI-powered trading systems such as ORCA, becomes essential for informed decision-making and returns optimization in the evolving financial landscape of India. Frequently Asked Questions What has been the trend of Foreign Institutional Investors in November 2025? FIIs have kept net selling, with the total outflow close to Rs. 12,500 crore amid global portfolio rebalancing. How have domestic institutional investors acted in November 2025? The DIIs have been strong net buyers, buying shares worth close to Rs.16,600 crore in support of the stability of the market. Why are DIIs increasingly becoming important in the Indian equity markets? Increasing retail SIP inflows and government reforms have propelled DII holdings to a 13-year high, surpassing the stake of FIIs. During November 2025, do FIIs still actively participate in the Indian market? Yes, despite selling in the secondary market, FIIs invested around Rs.10,700 crore in IPOs, showing confidence in the primary markets. How can FII and DII activity data be utilized effectively by traders? Traders can use AI-powered features on mobile trading apps like ORCA app to align their trading strategies with those of institutional investor patterns for better performance. Disclaimer: This blog is dedicated exclusively for educational purposes. Please note that the securities and investments mentioned here are provided for informative purposes only and should not be construed as recommendations. Kindly ensure thorough research prior to making any investment decisions. Participation in the securities market carries inherent risks, and it's important to carefully review all associated documents before committing to investments. Please be aware that the attainment of investment objectives is not guaranteed. It's important to note that the past performance of securities and instruments does not reliably predict future performance.Related PostsChe\n\n*Source: https://enrichmoney.in/blog/fii-dii-trends-november-2025*"
+      }
+    ],
+    "success_count": 8,
+    "failure_count": 2
+  },
+  "stats": {
+    "searxng_calls": 6,
+    "searxng_successes": 6,
+    "searxng_failures": 0,
+    "searxng_empty": 0,
+    "extract_calls": 0,
+    "extract_successes": 0,
+    "extract_failures": 0,
+    "extract_headed_retries": 0,
+    "avg_searxng_ms": 2031.2,
+    "avg_extract_ms": 0.0,
+    "last_searxng_error": null,
+    "searxng_success_rate": 100.0,
+    "embedder_active": true
+  },
+  "finished_at": "2026-06-15T20:48:37.464269+00:00",
+  "topic": "indian financial markets outlook 2026"
+}

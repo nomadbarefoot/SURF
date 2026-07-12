@@ -1,0 +1,205 @@
+{
+  "started_at": "2026-06-15T21:01:48.644386+00:00",
+  "queries": [
+    {
+      "query": "India stock market outlook 2026 Nifty Sensex forecast",
+      "success": true,
+      "ms": 3305,
+      "result_count": 5,
+      "error": null
+    },
+    {
+      "query": "India bond market RBI monetary policy 2026",
+      "success": true,
+      "ms": 1559,
+      "result_count": 5,
+      "error": null
+    }
+  ],
+  "search_hits": [
+    {
+      "url": "https://swapxtimes.com/india-stock-market-2026.html",
+      "title": "India's Stock Market in 2026: Sensex, Nifty Outlook and Investment ...",
+      "snippet": "India's Sensex and stock market outlook in 2026: Nifty 50 performance, sectoral trends, FII investment patterns, retail participation, and expert predictions for Indian equities.",
+      "relevance": 0.918
+    },
+    {
+      "url": "https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/",
+      "title": "Indian Stock Market Trends: Sensex, Nifty Insights & 2026 Predictions ...",
+      "snippet": "Indian Market Overview BSE Sensex closed at 83,817.69 on February 4, 2026, up slightly by 0.09% amid mixed global cues. NSE Nifty 50 ended at 25,776, gaining 0.19%, reflecting bullish breadth with 1,630 advancers on NSE. Bank Nifty traded u",
+      "relevance": 0.893
+    },
+    {
+      "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+      "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+      "snippet": "In the bull case scenario, NSE benchmark Nifty is expected to reach 29,800 by the end of 2026 while BSE Sensex is expected at 98,000, Vijaykumar predicted.According to Soni, the NSE benchmark is expected to touch 28,000 in financial year 20",
+      "relevance": 0.888
+    },
+    {
+      "url": "https://taxguru.in/rbi/rbi-policy-february-2026-key-rates-measures.html",
+      "title": "RBI Policy February 2026 - Key Rates and Measures",
+      "snippet": "Market reforms include enabling corporate bond derivatives and easing FPI debt investment rules. Overall, the policy balances growth support with consumer protection, financial inclusion, and market development. RBI Governor Sh. Sanjay Malh",
+      "relevance": 0.888
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3",
+      "title": "PDF RBI MONETARY POLICY - axis.bank.in",
+      "snippet": "India's debt market enters 2026 with a stable but cautious undertone as the RBI kept the repo rate unchanged at 5.25% and maintained a neutral stance, balancing resilient domestic growth against global uncertainties.",
+      "relevance": 0.887
+    },
+    {
+      "url": "https://blog.liquide.life/indian-stock-market-prediction-nifty-june-15-19/",
+      "title": "Indian Stock Market Prediction: Nifty Outlook for June 15-19",
+      "snippet": "Indian Stock Market Prediction: Weekly Market Review (June 15-19, 2026) \u00b7 Market Summary: Sensex & Nifty 50 Performance \u00b7 Share Market Live News: ...",
+      "relevance": 0.885
+    },
+    {
+      "url": "https://in.tradingview.com/chart/BTCUSD/rlfFFrWV-India-equity-market-outlook-2026-Sensex-Nifty-projections/",
+      "title": "India equity market outlook 2026 (Sensex & Nifty projections)",
+      "snippet": "TradingView India. \ud83d\udcc81. Broad Market Outlook: 2025 Recap and 2026 Expectations \ud83e\udded Where Things Stand Indian equities (Sensex and Nifty 50) have had a mixed performance over 2025: Markets underperformed global peers and emerging markets, with ",
+      "relevance": 0.884
+    },
+    {
+      "url": "https://www.multibagg.ai/market-pulse/articles/rbi-bond-forex-measures-2026-cmq35hpm2y7p0ps0jajc7sn1v",
+      "title": "RBI measures to attract $75bn bond inflows in 2026",
+      "snippet": "What RBI announced on June 5 The Reserve Bank of India (RBI) on June 5 announced a package of bond-market and foreign exchange measures aimed at drawing more dollars into India and easing foreign currency liquidity strains. The central bank",
+      "relevance": 0.882
+    },
+    {
+      "url": "https://www.instagram.com/reel/DZM4uyIhbAs/",
+      "title": "Highlights from RBI's Bi-Monthly Monetary Policy Statement, 2026 ...",
+      "snippet": "... India's bond market and attract long-term global investors. RBI's message is clear: While staying cautious on inflation and global risks ...",
+      "relevance": 0.867
+    },
+    {
+      "url": "https://www.rbi.org.in/scripts/Annualpolicy.aspx",
+      "title": "Monetary Policy - Reserve Bank of India",
+      "snippet": "Monetary Policy - Reserve Bank of India Back to previous page Last Updated On: Jun 09, 2026",
+      "relevance": 0.866
+    }
+  ],
+  "extract_plan": {
+    "url_count": 5,
+    "relevance_threshold": 0.7,
+    "urls": [
+      "https://swapxtimes.com/india-stock-market-2026.html",
+      "https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/",
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+      "https://taxguru.in/rbi/rbi-policy-february-2026-key-rates-measures.html",
+      "https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3"
+    ],
+    "relevance": {
+      "https://swapxtimes.com/india-stock-market-2026.html": 0.918,
+      "https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/": 0.893,
+      "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms": 0.888,
+      "https://taxguru.in/rbi/rbi-policy-february-2026-key-rates-measures.html": 0.888,
+      "https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3": 0.887
+    },
+    "headed_retry_urls": [],
+    "headed_retry_reasons": {}
+  },
+  "stages": {
+    "headless": [
+      {
+        "url": "https://swapxtimes.com/india-stock-market-2026.html",
+        "success": true,
+        "ms": 8633,
+        "title": "India's Stock Market in 2026: Sensex, Nifty Outlook and Investment Strategy | SwapXTimes",
+        "tokens": 1625,
+        "content_preview": "# India's Stock Market in 2026: Sensex, Nifty Outlook and Investment Strategy | SwapXTimes\n\nIndian Markets: A Year of Correction and Consolidation After the extraordinary bull run that saw the BSE Sensex cross 85,000 and the NSE Nifty 50 breach 26,000 in September 2024, Indian equity markets entered a significant correction phase in the October 2024 - February 2025 period. Driven by persistent Foreign Institutional Investor (FII) selling (net outflows of approximately \u20b92.1 lakh crore in Q4 2024)"
+      },
+      {
+        "url": "https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/",
+        "success": true,
+        "ms": 15271,
+        "title": "Indian Stock Market Trends: Sensex, Nifty Insights & 2026 Predictions For Savvy Investors - Dailyfinancial",
+        "tokens": 14,
+        "content_preview": "# Indian Stock Market Trends: Sensex, Nifty Insights & 2026 Predictions For Savvy Investors - Dailyfinancial\n\nLeave a Reply Cancel reply Related Stories Trending Now\n\n*Source: https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/*"
+      },
+      {
+        "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+        "success": true,
+        "ms": 10190,
+        "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+        "tokens": 2000,
+        "content_preview": "# Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India\n\nEditionININUSEnglishEnglish\u0939\u093f\u0928\u094d\u0926\u0940\u092e\u0930\u093e\u0920\u0940\u0c95\u0ca8\u0ccd\u0ca8\u0ca1\u0ba4\u0bae\u0bbf\u0bb4\u0bcd\u09ac\u09be\u0982\u09b2\u09be\u0d2e\u0d32\u0d2f\u0d3e\u0d33\u0d02\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0WeatherSign InTOIToday's ePaperNewsBusiness NewsIndia Business NewsStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowTrendingAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashP"
+      },
+      {
+        "url": "https://taxguru.in/rbi/rbi-policy-february-2026-key-rates-measures.html",
+        "success": true,
+        "ms": 9016,
+        "title": "RBI Policy February 2026 - Key Rates and Measures",
+        "tokens": 2000,
+        "content_preview": "# RBI Policy February 2026 - Key Rates and Measures\n\nLogin/Register My Profile Submit Post Books Subscription Budget 2026 Fema / RBI Articles RBI Policy February 2026 - Key Rates and Measures Yash Paul Bhola 07 Feb 2026 2,376 Views 0 comment Print Fema / RBI | Articles In its February 2026 monetary policy, the RBI maintained a status quo on interest rates, keeping the repo rate unchanged at 5.25% and continuing with a neutral policy stance. The decision reflects confidence in macroeconomic stabi"
+      },
+      {
+        "url": "https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3",
+        "success": false,
+        "ms": 7614,
+        "error": "Browser operation 'navigate' failed: Page.goto: Download is starting\nCall log:\n  - navigating to \"https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3\", waiting until \"networkidle\"\n"
+      }
+    ],
+    "headed_retry": []
+  },
+  "final": {
+    "results": [
+      {
+        "url": "https://swapxtimes.com/india-stock-market-2026.html",
+        "success": true,
+        "ms": 8633,
+        "title": "India's Stock Market in 2026: Sensex, Nifty Outlook and Investment Strategy | SwapXTimes",
+        "tokens": 1625,
+        "content_preview": "# India's Stock Market in 2026: Sensex, Nifty Outlook and Investment Strategy | SwapXTimes\n\nIndian Markets: A Year of Correction and Consolidation After the extraordinary bull run that saw the BSE Sensex cross 85,000 and the NSE Nifty 50 breach 26,000 in September 2024, Indian equity markets entered a significant correction phase in the October 2024 - February 2025 period. Driven by persistent Foreign Institutional Investor (FII) selling (net outflows of approximately \u20b92.1 lakh crore in Q4 2024)"
+      },
+      {
+        "url": "https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/",
+        "success": true,
+        "ms": 15271,
+        "title": "Indian Stock Market Trends: Sensex, Nifty Insights & 2026 Predictions For Savvy Investors - Dailyfinancial",
+        "tokens": 14,
+        "content_preview": "# Indian Stock Market Trends: Sensex, Nifty Insights & 2026 Predictions For Savvy Investors - Dailyfinancial\n\nLeave a Reply Cancel reply Related Stories Trending Now\n\n*Source: https://dailyfinancial.in/indian-stock-market-trends-sensex-nifty-insights-2026-predictions-for-savvy-investors/*"
+      },
+      {
+        "url": "https://timesofindia.indiatimes.com/business/india-business/stock-market-outlook-2026-why-did-sensex-nifty-underperform-in-2025-where-are-indices-headed-next-year-top-things-to-know/articleshow/126273827.cms",
+        "success": true,
+        "ms": 10190,
+        "title": "Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India",
+        "tokens": 2000,
+        "content_preview": "# Stock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to know - The Times of India\n\nEditionININUSEnglishEnglish\u0939\u093f\u0928\u094d\u0926\u0940\u092e\u0930\u093e\u0920\u0940\u0c95\u0ca8\u0ccd\u0ca8\u0ca1\u0ba4\u0bae\u0bbf\u0bb4\u0bcd\u09ac\u09be\u0982\u09b2\u09be\u0d2e\u0d32\u0d2f\u0d3e\u0d33\u0d02\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0WeatherSign InTOIToday's ePaperNewsBusiness NewsIndia Business NewsStock market outlook 2026: Why did Sensex, Nifty underperform in 2025 & where are indices headed? Top things to knowTrendingAir India advisoryGold price predictionVande Bharat sleeperStock market todaySilver price crashP"
+      },
+      {
+        "url": "https://taxguru.in/rbi/rbi-policy-february-2026-key-rates-measures.html",
+        "success": true,
+        "ms": 9016,
+        "title": "RBI Policy February 2026 - Key Rates and Measures",
+        "tokens": 2000,
+        "content_preview": "# RBI Policy February 2026 - Key Rates and Measures\n\nLogin/Register My Profile Submit Post Books Subscription Budget 2026 Fema / RBI Articles RBI Policy February 2026 - Key Rates and Measures Yash Paul Bhola 07 Feb 2026 2,376 Views 0 comment Print Fema / RBI | Articles In its February 2026 monetary policy, the RBI maintained a status quo on interest rates, keeping the repo rate unchanged at 5.25% and continuing with a neutral policy stance. The decision reflects confidence in macroeconomic stabi"
+      },
+      {
+        "url": "https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3",
+        "success": false,
+        "ms": 7614,
+        "error": "Browser operation 'navigate' failed: Page.goto: Download is starting\nCall log:\n  - navigating to \"https://www.axis.bank.in/docs/default-source/default-document-library/sixth-bi-monthly-monetary-policy-review-2025-26.pdf?sfvrsn=f7c41f8b_3\", waiting until \"networkidle\"\n"
+      }
+    ],
+    "success_count": 4,
+    "failure_count": 1
+  },
+  "stats": {
+    "searxng_calls": 2,
+    "searxng_successes": 2,
+    "searxng_failures": 0,
+    "searxng_empty": 0,
+    "extract_calls": 0,
+    "extract_successes": 0,
+    "extract_failures": 0,
+    "extract_headed_retries": 0,
+    "avg_searxng_ms": 2432.0,
+    "avg_extract_ms": 0.0,
+    "last_searxng_error": null,
+    "searxng_success_rate": 100.0,
+    "embedder_active": true
+  },
+  "finished_at": "2026-06-15T21:02:09.789993+00:00",
+  "topic": "indian financial markets outlook 2026"
+}

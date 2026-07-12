@@ -1,0 +1,82 @@
+{
+  "started_at": "2026-06-15T20:36:37.682376+00:00",
+  "candidates": [
+    {
+      "name": "longforecast",
+      "headless": {
+        "url": "https://www.longforecast.com/sensex-forecast",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 12355,
+        "likely_cf": false
+      },
+      "headed": null
+    },
+    {
+      "name": "nowsecure",
+      "headless": {
+        "url": "https://nowsecure.nl/",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 27432,
+        "likely_cf": false
+      },
+      "headed": null
+    },
+    {
+      "name": "nopecha_demo",
+      "headless": {
+        "url": "https://nopecha.com/demo/cloudflare",
+        "mode": "headless",
+        "success": false,
+        "challenge_blocked": true,
+        "error": "Page unavailable",
+        "ms": 21422,
+        "likely_cf": true
+      },
+      "headed": {
+        "url": "https://nopecha.com/demo/cloudflare",
+        "mode": "headed",
+        "success": false,
+        "error": "Page unavailable",
+        "ms": 109085,
+        "title": "",
+        "content_preview": ""
+      }
+    },
+    {
+      "name": "timesofindia",
+      "headless": {
+        "url": "https://timesofindia.indiatimes.com/markets/stocks/news",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 23892,
+        "likely_cf": false
+      },
+      "headed": null
+    },
+    {
+      "name": "fortuneindia",
+      "headless": {
+        "url": "https://www.fortuneindia.com/investing",
+        "mode": "headless",
+        "success": true,
+        "challenge_blocked": false,
+        "error": null,
+        "ms": 10036,
+        "likely_cf": false
+      },
+      "headed": null
+    }
+  ],
+  "cf_like": [
+    "nopecha_demo"
+  ],
+  "finished_at": "2026-06-15T20:40:02.707684+00:00"
+}
