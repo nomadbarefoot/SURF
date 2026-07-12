@@ -1,4 +1,5 @@
 """Search controller for SearXNG queries and parallel deep extraction."""
+
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,10 +27,15 @@ async def search_query(
             categories=request.categories,
             language=request.language,
             time_range=request.time_range,
+            provider=request.provider,
+            fallback=request.fallback,
+            min_relevance=request.min_relevance,
         )
     except Exception as exc:
         logger.error("search_query_failed", error=str(exc))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        )
 
 
 @router.get("/stats")
@@ -56,4 +62,6 @@ async def search_extract(
         )
     except Exception as exc:
         logger.error("search_extract_failed", error=str(exc))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        )

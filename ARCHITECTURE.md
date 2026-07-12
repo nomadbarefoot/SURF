@@ -26,7 +26,7 @@ Mounted routers:
 - `FetchService`: `httpx`, browser-context, `curl_cffi`, and optional `cloudscraper` fetches.
 - `DownloadService`: sandboxed download persistence under `data/downloads`.
 - `AdblockService`: ABP-style filter loading and request-block decisions.
-- `SearchService`: SearXNG metasearch with hybrid BM25 + semantic relevance scoring; parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and optional embedding-based section filtering (`ContentRefiner`).
+- `SearchService`: Exa primary + SearXNG fallback with hybrid BM25 + semantic relevance scoring, configurable relevance threshold, and parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and embedding-based section filtering (`ContentRefiner`). Embeddings are produced in-process by `sentence-transformers` (`services/embeddings`).
 - `FinanceService`: curated source ladders from `config/finance_sources.yaml`; walks known-good endpoints before search fallback; returns structured markdown via `FinanceRenderer`; daily cache for macro/ERP endpoints.
 - `searxng_runtime`: SearXNG health probe and optional Docker autostart.
 
@@ -69,7 +69,7 @@ Browser-context `/fetch/request` reuses cookies but is not part of page adblock 
 
 ## Search and Extraction
 
-Stage 1 (`SearchService.search`): queries SearXNG at `SURF_SEARXNG_BASE_URL`, deduplicates results, scores with hybrid BM25 + optional semantic embeddings, and returns ranked snippets.
+Stage 1 (`SearchService.search`): queries the configured provider (Exa by default, with optional SearXNG fallback), deduplicates results, scores with hybrid BM25 + semantic embeddings from the local `sentence-transformers` encoder, filters to results above `SURF_SEARCH_RELEVANCE_THRESHOLD`, and returns ranked snippets. If no result reaches the threshold, the top 3 are returned with `success: false`.
 
 Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures in headed mode when relevance warrants it, and optionally refines output with `refine_query` embedding filters.
 

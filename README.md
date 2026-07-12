@@ -78,7 +78,7 @@ SURF exposes three MCP tool families: `browser_*`, `search_*`, and `finance_*`.
 
 No session required — search and extract spin up ephemeral browser sessions internally.
 
-1. `search_query` — run a SearXNG metasearch query; returns ranked results with titles, snippets, URLs, source engine, and hybrid relevance scores.
+1. `search_query` — run a web search query via Exa (primary) with SearXNG fallback; returns ranked results with titles, snippets, URLs, source, and hybrid relevance scores.
 2. Pick URLs from the results.
 3. `search_extract` — fetch full page content from up to 10 URLs in parallel. Pass `refine_query` to keep only sections relevant to your research topic. Pass a `relevance` map (URL → score from `search_query`) to prioritize headed retries for high-value failures.
 
@@ -91,7 +91,7 @@ Example pipeline:
 
 SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888`). SURF can autostart a Docker container when `SURF_SEARXNG_AUTOWAKE_ENABLED=true`. Check reachability with `GET /health/searxng?autowake=true`.
 
-Optional: set `SURF_EMBEDDING_BASE_URL` and `SURF_EMBEDDING_MODEL` for semantic relevance scoring in search and section filtering during extraction. Without an embedder, search falls back to BM25-only scoring.
+Semantic relevance scoring and section filtering use a local sentence-transformers model (`sentence-transformers/all-mpnet-base-v2` by default). The model downloads on first use and is cached under `~/.cache/huggingface`. Set `SURF_EMBEDDING_MODEL` to use a different sentence-transformers model and `SURF_EMBEDDING_DEVICE` to force `cpu`, `cuda`, `mps`, or `auto`. Without a working local embedder, search falls back to BM25-only scoring.
 
 ### Finance Pack
 
@@ -278,8 +278,11 @@ Runtime browser profiles, downloads, and filter-list caches live under `data/` a
 - `engines`, `categories` (optional SearXNG filters)
 - `language` (default `en`)
 - `time_range` (optional: `day`, `week`, `month`, `year`)
+- `provider` (optional: `exa` or `searxng`)
+- `fallback` (optional bool)
+- `min_relevance` (optional 0–1 override for `SURF_SEARCH_RELEVANCE_THRESHOLD`)
 
-Returns `{success, results[], ms}` where each result has `title`, `url`, `snippet`, `engine`, and `relevance` (0–1 hybrid BM25 + semantic score).
+Returns `{success, results[], ms}` where each result has `title`, `url`, `snippet`, `source`, and `relevance` (0–1 hybrid BM25 + semantic score). Results are sorted by relevance and filtered to scores `>= SURF_SEARCH_RELEVANCE_THRESHOLD` (default `0.5`). If no result reaches the threshold, the response returns `success: false`, an error message, and the top 3 results with `metadata.below_threshold: true`.
 
 `POST /search/extract` accepts:
 

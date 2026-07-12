@@ -23,12 +23,14 @@ from typing import Any
 DEFAULT_BASE_URL = "http://surf.local"
 ROOT = Path(__file__).resolve().parent
 
-FREE_TIER_TOOLS: frozenset[str] = frozenset({
-    "search_query",
-    "search_extract",
-    "browser_fetch",
-    "browser_health",
-})
+FREE_TIER_TOOLS: frozenset[str] = frozenset(
+    {
+        "search_query",
+        "search_extract",
+        "browser_fetch",
+        "browser_health",
+    }
+)
 
 
 class SurfAppBridge:
@@ -99,12 +101,18 @@ def ensure_venv_python() -> None:
     venv_python = ROOT / ".venv" / "bin" / "python"
     if not venv_python.exists():
         return
-    if Path(sys.executable) == venv_python or str(sys.executable).startswith(str(ROOT / ".venv")):
+    if Path(sys.executable) == venv_python or str(sys.executable).startswith(
+        str(ROOT / ".venv")
+    ):
         return
 
     env = os.environ.copy()
     env["SURFCTL_NO_VENV_REEXEC"] = "1"
-    os.execve(str(venv_python), [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]], env)
+    os.execve(
+        str(venv_python),
+        [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+        env,
+    )
 
 
 def build_headers(data: str | bytes | None, headers: dict[str, str]) -> dict[str, str]:
@@ -149,7 +157,12 @@ async def stdio_server(timeout: float) -> int:
     sys.stdout = sys.stderr
     try:
         async with SurfAppBridge(timeout) as bridge:
-            stdout.write(json.dumps({"ready": True, "transport": "stdio", "protocol": "surfctl-jsonl"}) + "\n")
+            stdout.write(
+                json.dumps(
+                    {"ready": True, "transport": "stdio", "protocol": "surfctl-jsonl"}
+                )
+                + "\n"
+            )
             stdout.flush()
             for line in sys.stdin:
                 line = line.strip()
@@ -164,14 +177,18 @@ async def stdio_server(timeout: float) -> int:
                     payload = await stdio_request(bridge, request)
                 except Exception as error:
                     payload = {"ok": False, "error": str(error)}
-                stdout.write(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n")
+                stdout.write(
+                    json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
+                )
                 stdout.flush()
     finally:
         sys.stdout = stdout
     return 0
 
 
-async def stdio_request(bridge: SurfAppBridge, request: dict[str, Any]) -> dict[str, Any]:
+async def stdio_request(
+    bridge: SurfAppBridge, request: dict[str, Any]
+) -> dict[str, Any]:
     method = str(request.get("method", "GET")).upper()
     path = str(request.get("path", "/"))
     headers = request.get("headers") if isinstance(request.get("headers"), dict) else {}
@@ -295,11 +312,11 @@ def build_mcp_server():
     @mcp.tool(
         name="search_query",
         description=(
-            "Run a web search query via SearXNG metasearch. Returns ranked results "
-            "with titles, snippets, URLs, source engine, and relevance scores. "
-            "Use for information retrieval, fact-checking, or finding URLs to "
-            "extract with search_extract. Supports engine/category filtering "
-            "and time-range constraints."
+            "Run a web search query via Exa (primary) with SearXNG fallback. "
+            "Returns ranked results with titles, snippets, URLs, source, and "
+            "relevance scores. Use for information retrieval, fact-checking, or "
+            "finding URLs to extract with search_extract. Supports engine/category "
+            "filtering and time-range constraints when the active provider supports them."
         ),
     )
     async def search_query(
@@ -309,6 +326,7 @@ def build_mcp_server():
         categories: list[str] | None = None,
         language: str = "en",
         time_range: str | None = None,
+        min_relevance: float | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {
             "query": query,
@@ -321,6 +339,8 @@ def build_mcp_server():
             data["categories"] = categories
         if time_range is not None:
             data["time_range"] = time_range
+        if min_relevance is not None:
+            data["min_relevance"] = min_relevance
         return await app_call("POST", "/search/query", data)
 
     @mcp.tool(
@@ -382,7 +402,9 @@ def build_mcp_server():
             )
 
         @mcp.tool(name="browser_close_session", description="Close session.")
-        async def browser_close_session(session_id: str, force: bool = False) -> dict[str, Any]:
+        async def browser_close_session(
+            session_id: str, force: bool = False
+        ) -> dict[str, Any]:
             suffix = "?force=true" if force else ""
             return await app_call("DELETE", f"/sessions/{session_id}{suffix}")
 
@@ -419,15 +441,28 @@ def build_mcp_server():
             )
 
         @mcp.tool(name="browser_click", description="Click.")
-        async def browser_click(session_id: str, selector: str, timeout: int | None = None) -> dict[str, Any]:
-            data: dict[str, Any] = {"session_id": session_id, "action": "click", "selector": selector}
+        async def browser_click(
+            session_id: str, selector: str, timeout: int | None = None
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "action": "click",
+                "selector": selector,
+            }
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)
 
         @mcp.tool(name="browser_type", description="Type.")
-        async def browser_type(session_id: str, selector: str, value: str, timeout: int | None = None) -> dict[str, Any]:
-            data: dict[str, Any] = {"session_id": session_id, "action": "type", "selector": selector, "value": value}
+        async def browser_type(
+            session_id: str, selector: str, value: str, timeout: int | None = None
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "action": "type",
+                "selector": selector,
+                "value": value,
+            }
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)
@@ -465,12 +500,27 @@ def build_mcp_server():
             if selector:
                 data["selector"] = selector
             result = await app_call("POST", "/browser/extract", data)
-            links = result.get("data", {}).get("content") or result.get("data", {}).get("data", {}).get("raw_content", {}).get("links") or []
+            links = (
+                result.get("data", {}).get("content")
+                or result.get("data", {})
+                .get("data", {})
+                .get("raw_content", {})
+                .get("links")
+                or []
+            )
             if contains:
                 needle = contains.lower()
                 links = [
-                    link for link in links
-                    if needle in (link.get("url", "") + " " + link.get("href", "") + " " + link.get("text", "")).lower()
+                    link
+                    for link in links
+                    if needle
+                    in (
+                        link.get("url", "")
+                        + " "
+                        + link.get("href", "")
+                        + " "
+                        + link.get("text", "")
+                    ).lower()
                 ]
             return {"success": True, "count": len(links), "links": links[:max_items]}
 
@@ -539,7 +589,9 @@ def build_mcp_server():
 
         @mcp.tool(name="browser_network_stop", description="Stop network.")
         async def browser_network_stop(session_id: str) -> dict[str, Any]:
-            return await app_call("POST", "/browser/network/stop", {"session_id": session_id})
+            return await app_call(
+                "POST", "/browser/network/stop", {"session_id": session_id}
+            )
 
         # ---- Finance Pack ---------------------------------------------------
 
@@ -555,7 +607,9 @@ def build_mcp_server():
             ),
         )
         async def finance_consensus(symbol: str, market: str = "IN") -> dict[str, Any]:
-            return await app_call("POST", "/finance/consensus", {"symbol": symbol, "market": market})
+            return await app_call(
+                "POST", "/finance/consensus", {"symbol": symbol, "market": market}
+            )
 
         @mcp.tool(
             name="finance_insider",
@@ -568,7 +622,9 @@ def build_mcp_server():
             ),
         )
         async def finance_insider(symbol: str, market: str = "IN") -> dict[str, Any]:
-            return await app_call("POST", "/finance/insider", {"symbol": symbol, "market": market})
+            return await app_call(
+                "POST", "/finance/insider", {"symbol": symbol, "market": market}
+            )
 
         @mcp.tool(
             name="finance_corp_actions",
@@ -579,8 +635,12 @@ def build_mcp_server():
                 "and execution status."
             ),
         )
-        async def finance_corp_actions(symbol: str, market: str = "IN") -> dict[str, Any]:
-            return await app_call("POST", "/finance/corp_actions", {"symbol": symbol, "market": market})
+        async def finance_corp_actions(
+            symbol: str, market: str = "IN"
+        ) -> dict[str, Any]:
+            return await app_call(
+                "POST", "/finance/corp_actions", {"symbol": symbol, "market": market}
+            )
 
         @mcp.tool(
             name="finance_macro",
@@ -604,7 +664,9 @@ def build_mcp_server():
             ),
         )
         async def finance_erp(home: str = "IN", foreign: str = "US") -> dict[str, Any]:
-            return await app_call("POST", "/finance/erp", {"home": home, "foreign": foreign})
+            return await app_call(
+                "POST", "/finance/erp", {"home": home, "foreign": foreign}
+            )
 
         @mcp.tool(
             name="finance_snapshot_us",
@@ -616,7 +678,9 @@ def build_mcp_server():
             ),
         )
         async def finance_snapshot_us(symbol: str) -> dict[str, Any]:
-            return await app_call("POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"})
+            return await app_call(
+                "POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"}
+            )
 
     return mcp
 
@@ -626,7 +690,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    stdio_parser = subparsers.add_parser("stdio", help="Run raw JSONL API over stdin/stdout")
+    stdio_parser = subparsers.add_parser(
+        "stdio", help="Run raw JSONL API over stdin/stdout"
+    )
     stdio_parser.add_argument("--timeout", type=float, default=180.0)
     subparsers.add_parser("mcp", help="Run MCP server over stdin/stdout")
 

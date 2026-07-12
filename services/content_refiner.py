@@ -2,6 +2,7 @@
 
 DOM blocks → sections → heuristic filter → optional embed filter → markdown.
 """
+
 from __future__ import annotations
 
 import re
@@ -71,7 +72,10 @@ def is_noise_block(block: Dict[str, Any]) -> bool:
     text = _block_text(block).strip()
     if not text:
         return True
-    if len(text) < settings.search_refine_min_block_chars and block.get("type") != "heading":
+    if (
+        len(text) < settings.search_refine_min_block_chars
+        and block.get("type") != "heading"
+    ):
         return True
     if _NOISE_PATTERNS.search(text):
         return True
@@ -117,7 +121,11 @@ def blocks_to_sections(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             sections.append(current)
         current["blocks"].append(block)
 
-    return [s for s in sections if (s.get("heading") or s.get("blocks")) and not is_sidebar_section(s)]
+    return [
+        s
+        for s in sections
+        if (s.get("heading") or s.get("blocks")) and not is_sidebar_section(s)
+    ]
 
 
 def section_plain_text(section: Dict[str, Any]) -> str:
@@ -190,7 +198,7 @@ async def filter_sections_by_embedding(
         return sections, []
 
     import numpy as np
-    from services.search_service import _encode
+    from services.embeddings import _encode
 
     q_emb = await _encode(query)
     if q_emb is None:
@@ -241,8 +249,7 @@ class ContentRefiner:
 
         # Drop heading-only shells with no body blocks.
         sections = [
-            s for s in sections
-            if s.get("blocks") or len((s.get("heading") or "")) > 80
+            s for s in sections if s.get("blocks") or len((s.get("heading") or "")) > 80
         ]
 
         if query and len(sections) > 8:

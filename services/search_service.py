@@ -1,4 +1,4 @@
-"""Search service: SearXNG integration + parallel deep extraction via SURF sessions.
+"""Search service: provider-based search (Exa primary, SearXNG fallback) + parallel deep extraction.
 
 Ported from SENTRY ETL patterns:
 - Text cleaning (HTML strip, Unicode normalization, zero-width removal)
@@ -6,6 +6,7 @@ Ported from SENTRY ETL patterns:
 - URL-based deduplication with score preference
 - Markdown-oriented output, minimal metadata
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,81 +24,18 @@ import structlog
 from config import get_settings
 from services.challenge_resolver import ChallengeResolver
 from services.content_refiner import ContentRefiner
-from services.searxng_runtime import ensure_searxng
+from services.embeddings import _encode, is_embedder_available
+from services.search_providers import SearchProviderRegistry
+from utils.text import clean_text as _clean_text
 
 logger = structlog.get_logger()
 settings = get_settings()
-
-# ---------------------------------------------------------------------------
-# Embedding via local LiteLLM proxy (OpenAI-compatible /v1/embeddings)
-# ---------------------------------------------------------------------------
-_EMBED_CLIENT: Optional[httpx.AsyncClient] = None
-_EMBED_AVAILABLE: Optional[bool] = None
-
-
-def _get_embed_client() -> Optional[httpx.AsyncClient]:
-    global _EMBED_CLIENT
-    if _EMBED_CLIENT is None:
-        _EMBED_CLIENT = httpx.AsyncClient(
-            base_url=settings.embedding_base_url,
-            headers={"Authorization": f"Bearer {settings.embedding_api_key}"},
-            timeout=10,
-        )
-    return _EMBED_CLIENT
-
-
-async def _encode(text: str) -> Optional[np.ndarray]:
-    global _EMBED_AVAILABLE
-    if _EMBED_AVAILABLE is False:
-        return None
-    client = _get_embed_client()
-    if client is None:
-        return None
-    try:
-        resp = await client.post(
-            "/embeddings",
-            json={"model": settings.embedding_model, "input": text},
-        )
-        resp.raise_for_status()
-        vec = resp.json()["data"][0]["embedding"]
-        if _EMBED_AVAILABLE is None:
-            _EMBED_AVAILABLE = True
-            logger.info("search_embedder_connected", model=settings.embedding_model)
-        arr = np.array(vec, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        return arr / norm if norm > 0 else arr
-    except Exception as exc:
-        if _EMBED_AVAILABLE is None:
-            _EMBED_AVAILABLE = False
-            logger.warning("search_embedder_unavailable", error=str(exc))
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Text cleaning (ported from SENTRY shared/utils/string_utils.py)
-# ---------------------------------------------------------------------------
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
-_MULTI_SPACE_RE = re.compile(r"\s+")
-_UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
-_ZERO_WIDTH_RE = re.compile(r"[​‌‍﻿]")
-_UNICODE_DASH_RE = re.compile(r"[‐‑‒–—―]")
-
-
-def _clean_text(text: str) -> str:
-    if not text:
-        return ""
-    text = _HTML_TAG_RE.sub("", text)
-    text = html.unescape(text)
-    text = _UNICODE_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), text)
-    text = _UNICODE_DASH_RE.sub("-", text)
-    text = _ZERO_WIDTH_RE.sub("", text)
-    text = _MULTI_SPACE_RE.sub(" ", text)
-    return text.strip()
 
 
 # ---------------------------------------------------------------------------
 # Relevance scoring (ported from SENTRY shared/etl/transformers/helpers.py)
 # ---------------------------------------------------------------------------
+
 
 def _bm25(item: Dict[str, Any], query: str) -> float:
     """BM25 relevance score, normalized 0-1."""
@@ -124,7 +62,9 @@ def _bm25(item: Dict[str, Any], query: str) -> float:
         tf = freq[t]
         score += idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * len(doc_terms) / avg_dl))
 
-    norm = 1.0 / (1.0 + math.exp(-score / (1.0 if score > 3 else 1.2 if score > 1.5 else 2.0)))
+    norm = 1.0 / (
+        1.0 + math.exp(-score / (1.0 if score > 3 else 1.2 if score > 1.5 else 2.0))
+    )
     ratio = matched / len(query_terms)
     if ratio >= 1.0:
         norm = min(1.0, norm * 1.2)
@@ -138,7 +78,7 @@ def _bm25(item: Dict[str, Any], query: str) -> float:
 
 
 async def _semantic(item: Dict[str, Any], query: str) -> Optional[float]:
-    """Cosine similarity via LiteLLM embeddings, 0-1."""
+    """Cosine similarity via local sentence-transformers embeddings, 0-1."""
     doc_text = f"{item.get('title', '')} {item.get('snippet', '')}".strip()
     if not doc_text:
         return None
@@ -161,26 +101,39 @@ async def _relevance(item: Dict[str, Any], query: str) -> float:
 # Service
 # ---------------------------------------------------------------------------
 
-class SearchService:
 
+class SearchService:
     def __init__(self):
+        self._registry = SearchProviderRegistry()
         self._semaphore = asyncio.Semaphore(settings.max_search_sessions)
         self._headed_semaphore = asyncio.Semaphore(settings.max_search_headed_sessions)
         self._stats = {
+            # legacy SearXNG keys (kept for backward compatibility)
             "searxng_calls": 0,
             "searxng_successes": 0,
             "searxng_failures": 0,
             "searxng_empty": 0,
+            "avg_searxng_ms": 0.0,
+            "last_searxng_error": None,
+            # Exa + generic search keys
+            "exa_calls": 0,
+            "exa_successes": 0,
+            "exa_failures": 0,
+            "exa_empty": 0,
+            "avg_exa_ms": 0.0,
+            "last_exa_error": None,
+            "search_calls": 0,
+            "search_successes": 0,
+            "search_failures": 0,
+            "search_fallbacks": 0,
             "extract_calls": 0,
             "extract_successes": 0,
             "extract_failures": 0,
             "extract_headed_retries": 0,
-            "avg_searxng_ms": 0.0,
             "avg_extract_ms": 0.0,
-            "last_searxng_error": None,
         }
 
-    # ---- Stage 1: SearXNG search ------------------------------------------
+    # ---- Stage 1: provider search -----------------------------------------
 
     async def search(
         self,
@@ -190,91 +143,172 @@ class SearchService:
         categories: Optional[List[str]] = None,
         language: str = "en",
         time_range: Optional[str] = None,
+        provider: Optional[str] = None,
+        fallback: Optional[bool] = None,
+        min_relevance: Optional[float] = None,
     ) -> Dict[str, Any]:
-        self._stats["searxng_calls"] += 1
-        t0 = time.monotonic()
+        """
+        Search via the configured provider, falling back to the secondary provider
+        on failure or empty results. Applies hybrid BM25 + semantic re-ranking and
+        URL deduplication on the final result set, then filters to results above
+        the configured relevance threshold.
+        """
+        requested_provider = (provider or settings.search_provider or "exa").lower()
+        allow_fallback = (
+            fallback if fallback is not None else settings.exa_fallback_enabled
+        )
 
-        params: Dict[str, Any] = {"q": query, "format": "json", "language": language}
-        if engines:
-            params["engines"] = ",".join(engines)
-        elif settings.searxng_engines:
-            params["engines"] = ",".join(settings.searxng_engines)
-        if categories:
-            params["categories"] = ",".join(categories)
-        if time_range:
-            params["time_range"] = time_range
+        primary = self._registry.get(requested_provider)
+        if primary is None:
+            return {
+                "success": False,
+                "error": f"Unknown search provider: {requested_provider}",
+            }
 
-        try:
-            async with httpx.AsyncClient(timeout=settings.searxng_timeout) as client:
-                resp = await client.get(f"{settings.searxng_base_url}/search", params=params)
-                resp.raise_for_status()
-                data = resp.json()
-        except httpx.ConnectError:
-            wake = await ensure_searxng()
-            if wake.get("status") == "ready":
-                try:
-                    async with httpx.AsyncClient(timeout=settings.searxng_timeout) as client:
-                        resp = await client.get(f"{settings.searxng_base_url}/search", params=params)
-                        resp.raise_for_status()
-                        data = resp.json()
-                except httpx.ConnectError:
-                    wake = await ensure_searxng(force=True)
-                    if wake.get("status") == "ready":
-                        try:
-                            async with httpx.AsyncClient(timeout=settings.searxng_timeout) as client:
-                                resp = await client.get(f"{settings.searxng_base_url}/search", params=params)
-                                resp.raise_for_status()
-                                data = resp.json()
-                        except httpx.ConnectError:
-                            self._stats["searxng_failures"] += 1
-                            self._stats["last_searxng_error"] = (
-                                f"Cannot reach SearXNG at {settings.searxng_base_url} after autowake"
-                            )
-                            return {"success": False, "error": self._stats["last_searxng_error"],
-                                    "searxng_wake": wake}
-                    else:
-                        self._stats["searxng_failures"] += 1
-                        self._stats["last_searxng_error"] = (
-                            f"Cannot reach SearXNG at {settings.searxng_base_url}"
-                        )
-                        return {"success": False, "error": self._stats["last_searxng_error"],
-                                "searxng_wake": wake}
-            else:
-                self._stats["searxng_failures"] += 1
-                self._stats["last_searxng_error"] = (
-                    f"Cannot reach SearXNG at {settings.searxng_base_url}"
+        secondary: Optional[Any] = None
+        if allow_fallback:
+            secondary = self._registry.fallback()
+
+        # Try primary provider
+        result = await primary.search(
+            query=query,
+            max_results=max_results,
+            engines=engines,
+            categories=categories,
+            language=language,
+            time_range=time_range,
+        )
+        self._record_provider_stats(primary.name, result)
+
+        if result["success"] and result["results"]:
+            return await self._finalize_results(
+                query, result, max_results, min_relevance=min_relevance
+            )
+
+        # Try fallback provider when enabled
+        if allow_fallback and secondary is not None:
+            self._stats["search_fallbacks"] += 1
+            fallback_result = await secondary.search(
+                query=query,
+                max_results=max_results,
+                engines=engines,
+                categories=categories,
+                language=language,
+                time_range=time_range,
+            )
+            self._record_provider_stats(secondary.name, fallback_result)
+            if fallback_result["success"] and fallback_result["results"]:
+                return await self._finalize_results(
+                    query, fallback_result, max_results, min_relevance=min_relevance
                 )
-                return {"success": False, "error": self._stats["last_searxng_error"],
-                        "searxng_wake": wake}
-        except httpx.HTTPStatusError as exc:
-            self._stats["searxng_failures"] += 1
-            self._stats["last_searxng_error"] = f"SearXNG returned {exc.response.status_code}"
-            return {"success": False, "error": self._stats["last_searxng_error"]}
-        except Exception as exc:
-            self._stats["searxng_failures"] += 1
-            self._stats["last_searxng_error"] = str(exc)
-            return {"success": False, "error": str(exc)}
+            result = fallback_result
 
-        raw = data.get("results", [])
-        if not raw:
-            self._stats["searxng_empty"] += 1
+        # No provider succeeded or returned results
+        return {
+            "success": False,
+            "error": result.get("error") or "No search results",
+            "provider": result.get("provider"),
+            "metadata": result.get("metadata"),
+        }
 
-        results = self._dedup([self._normalize(r) for r in raw])
+    def _record_provider_stats(
+        self, provider_name: str, result: Dict[str, Any]
+    ) -> None:
+        """Update provider-specific and aggregate counters."""
+        prefix = provider_name.lower()
+        calls_key = f"{prefix}_calls"
+        successes_key = f"{prefix}_successes"
+        failures_key = f"{prefix}_failures"
+        empty_key = f"{prefix}_empty"
+        avg_key = f"avg_{prefix}_ms"
+        last_error_key = f"last_{prefix}_error"
+
+        self._stats["search_calls"] += 1
+        if self._stats.get(calls_key) is not None:
+            self._stats[calls_key] += 1
+
+        if result.get("success"):
+            self._stats["search_successes"] += 1
+            if self._stats.get(successes_key) is not None:
+                self._stats[successes_key] += 1
+
+            if not result.get("results"):
+                self._stats["search_failures"] += (
+                    1  # empty counts as failure at service level
+                )
+                if self._stats.get(empty_key) is not None:
+                    self._stats[empty_key] += 1
+
+            ms = result.get("ms", 0)
+            if self._stats.get(avg_key) is not None:
+                n = self._stats[successes_key]
+                self._stats[avg_key] = round(
+                    self._stats[avg_key] + (ms - self._stats[avg_key]) / n, 1
+                )
+        else:
+            self._stats["search_failures"] += 1
+            if self._stats.get(failures_key) is not None:
+                self._stats[failures_key] += 1
+            if self._stats.get(last_error_key) is not None:
+                self._stats[last_error_key] = result.get("error")
+
+    async def _finalize_results(
+        self,
+        query: str,
+        provider_result: Dict[str, Any],
+        max_results: int,
+        min_relevance: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Dedupe, score, sort, filter by relevance threshold, and trim."""
+        results = self._dedup([self._normalize(r) for r in provider_result["results"]])
+        if not results:
+            return {
+                "success": False,
+                "error": "No results after deduplication",
+                "provider": provider_result.get("provider"),
+                "metadata": provider_result.get("metadata"),
+            }
 
         scores = await asyncio.gather(*[_relevance(r, query) for r in results])
         for r, s in zip(results, scores):
             r["relevance"] = round(s, 3)
         results.sort(key=lambda r: r["relevance"], reverse=True)
-        results = results[:max_results]
 
-        ms = round((time.monotonic() - t0) * 1000)
-        self._stats["searxng_successes"] += 1
-        n = self._stats["searxng_successes"]
-        self._stats["avg_searxng_ms"] = round(self._stats["avg_searxng_ms"] + (ms - self._stats["avg_searxng_ms"]) / n, 1)
+        threshold = (
+            min_relevance
+            if min_relevance is not None
+            else settings.search_relevance_threshold
+        )
+        passing = [r for r in results if r["relevance"] >= threshold]
 
-        return {"success": True, "results": results, "ms": ms}
+        if passing:
+            results = passing[:max_results]
+        else:
+            results = results[:3]
+            return {
+                "success": False,
+                "error": f"No results above relevance threshold ({threshold})",
+                "results": results,
+                "provider": provider_result.get("provider"),
+                "ms": provider_result.get("ms"),
+                "cost": provider_result.get("cost"),
+                "metadata": {
+                    **(provider_result.get("metadata") or {}),
+                    "relevance_threshold": threshold,
+                    "below_threshold": True,
+                },
+            }
 
-    # ---- Stage 2: parallel deep extraction --------------------------------
+        return {
+            "success": True,
+            "results": results,
+            "provider": provider_result.get("provider"),
+            "ms": provider_result.get("ms"),
+            "cost": provider_result.get("cost"),
+            "metadata": provider_result.get("metadata"),
+        }
+
+    # ---- Stage 2: parallel deep extraction ---------------------------------
 
     async def deep_extract(
         self,
@@ -296,14 +330,24 @@ class SearchService:
 
         if skip_headless and force_headed:
             initial_results = [
-                {"url": u, "success": False, "error": ChallengeResolver.agent_error(), "challenge_blocked": True}
+                {
+                    "url": u,
+                    "success": False,
+                    "error": ChallengeResolver.agent_error(),
+                    "challenge_blocked": True,
+                }
                 for u in urls
             ]
         elif skip_headless:
             initial_results = []
         else:
             initial_results = await self._extract_batch_headless(
-                urls, session_service, browser_service, content_mode, max_text_length, refine_query
+                urls,
+                session_service,
+                browser_service,
+                content_mode,
+                max_text_length,
+                refine_query,
             )
 
         by_url: Dict[str, Dict[str, Any]] = {}
@@ -312,8 +356,11 @@ class SearchService:
 
         if not skip_headless:
             retry_urls = [
-                u for u in urls
-                if ChallengeResolver.should_headed_retry(u, by_url.get(u, {"success": False}), relevance_map)
+                u
+                for u in urls
+                if ChallengeResolver.should_headed_retry(
+                    u, by_url.get(u, {"success": False}), relevance_map
+                )
             ]
         elif force_headed:
             retry_urls = list(urls)
@@ -323,7 +370,12 @@ class SearchService:
         for url in retry_urls:
             self._stats["extract_headed_retries"] += 1
             headed_result = await self._extract_single_headed(
-                url, session_service, browser_service, content_mode, max_text_length, refine_query
+                url,
+                session_service,
+                browser_service,
+                content_mode,
+                max_text_length,
+                refine_query,
             )
             by_url[url] = {**headed_result, "url": url}
 
@@ -331,7 +383,11 @@ class SearchService:
         for u in urls:
             result = by_url.get(u)
             if result is None:
-                result = {"url": u, "success": False, "error": ChallengeResolver.agent_error()}
+                result = {
+                    "url": u,
+                    "success": False,
+                    "error": ChallengeResolver.agent_error(),
+                }
             cleaned.append(self._public_result(result))
 
         total_ms = int((time.monotonic() - start) * 1000)
@@ -341,7 +397,11 @@ class SearchService:
         self._stats["extract_successes"] += ok
         self._stats["extract_failures"] += fail
         n = self._stats["extract_calls"]
-        self._stats["avg_extract_ms"] = round(self._stats["avg_extract_ms"] + (total_ms - self._stats["avg_extract_ms"]) / n, 1)
+        self._stats["avg_extract_ms"] = round(
+            self._stats["avg_extract_ms"]
+            + (total_ms - self._stats["avg_extract_ms"]) / n,
+            1,
+        )
 
         return {"success": True, "results": cleaned, "total_ms": total_ms}
 
@@ -415,7 +475,12 @@ class SearchService:
                 )
             except asyncio.TimeoutError:
                 logger.warning("search_extract_headed_timeout", url=url)
-                return {"url": url, "success": False, "error": "Global timeout", "ms": settings.search_extract_timeout_headed * 1000}
+                return {
+                    "url": url,
+                    "success": False,
+                    "error": "Global timeout",
+                    "ms": settings.search_extract_timeout_headed * 1000,
+                }
 
     async def _extract_single(
         self,
@@ -430,7 +495,11 @@ class SearchService:
     ) -> Dict[str, Any]:
         start = time.monotonic()
         session = None
-        nav_timeout = settings.search_nav_timeout_headed if headed else settings.search_nav_timeout_headless
+        nav_timeout = (
+            settings.search_nav_timeout_headed
+            if headed
+            else settings.search_nav_timeout_headless
+        )
         try:
             user_config: Dict[str, Any] = {
                 "profile_id": f"_search_{uuid.uuid4().hex[:6]}",
@@ -453,9 +522,13 @@ class SearchService:
             async with session_service.session_operation(sid, "search_extract") as sess:
                 await browser_service.navigate_to_url(sess, url, timeout=nav_timeout)
                 if headed:
-                    challenge_outcome = await ChallengeResolver.resolve_headed(sess.page)
+                    challenge_outcome = await ChallengeResolver.resolve_headed(
+                        sess.page
+                    )
                 else:
-                    await ChallengeResolver.wait_passive(sess.page, settings.search_challenge_wait_headless)
+                    await ChallengeResolver.wait_passive(
+                        sess.page, settings.search_challenge_wait_headless
+                    )
                 obs = await self._observe_extract(
                     browser_service, sess, content_mode, max_text_length
                 )
@@ -503,7 +576,9 @@ class SearchService:
                         flat_chars=len(fallback_text),
                     )
                     cleaned_text = fallback_text
-                    content = self._to_markdown(title, cleaned_text, obs.get("url", url))
+                    content = self._to_markdown(
+                        title, cleaned_text, obs.get("url", url)
+                    )
                     tokens = max(1, len(cleaned_text) // 4)
                 elif len(cleaned_text) < settings.search_min_content_chars:
                     logger.info(
@@ -521,10 +596,14 @@ class SearchService:
                         "ms": ms,
                     }
                 else:
-                    content = refined.get("markdown") or self._to_markdown(title, cleaned_text, obs.get("url", url))
+                    content = refined.get("markdown") or self._to_markdown(
+                        title, cleaned_text, obs.get("url", url)
+                    )
                     tokens = refined.get("tokens") or max(1, len(cleaned_text) // 4)
             else:
-                content = refined.get("markdown") or self._to_markdown(title, cleaned_text, obs.get("url", url))
+                content = refined.get("markdown") or self._to_markdown(
+                    title, cleaned_text, obs.get("url", url)
+                )
                 tokens = refined.get("tokens") or max(1, len(cleaned_text) // 4)
 
             logger.info(
@@ -548,7 +627,9 @@ class SearchService:
             }
         except Exception as exc:
             ms = int((time.monotonic() - start) * 1000)
-            logger.warning("search_extract_failed", url=url, headed=headed, error=str(exc))
+            logger.warning(
+                "search_extract_failed", url=url, headed=headed, error=str(exc)
+            )
             return {"url": url, "success": False, "error": str(exc), "ms": ms}
         finally:
             if session:
@@ -559,9 +640,23 @@ class SearchService:
 
     def get_stats(self) -> Dict[str, Any]:
         s = self._stats
-        total = s["searxng_calls"]
-        rate = round(s["searxng_successes"] / total * 100, 1) if total else 0.0
-        return {**s, "searxng_success_rate": rate, "embedder_active": _EMBED_AVAILABLE is True}
+        total = s["search_calls"]
+        rate = round(s["search_successes"] / total * 100, 1) if total else 0.0
+        return {
+            **s,
+            "searxng_success_rate": (
+                round(s["searxng_successes"] / s["searxng_calls"] * 100, 1)
+                if s["searxng_calls"]
+                else 0.0
+            ),
+            "exa_success_rate": (
+                round(s["exa_successes"] / s["exa_calls"] * 100, 1)
+                if s["exa_calls"]
+                else 0.0
+            ),
+            "search_success_rate": rate,
+            "embedder_active": is_embedder_available(),
+        }
 
     async def _observe_extract(
         self,
@@ -613,25 +708,29 @@ class SearchService:
             public["tokens"] = result.get("tokens", 0)
         else:
             error = result.get("error") or ChallengeResolver.agent_error()
-            if result.get("challenge_blocked") or ChallengeResolver.is_retryable_failure(result):
+            if result.get(
+                "challenge_blocked"
+            ) or ChallengeResolver.is_retryable_failure(result):
                 error = ChallengeResolver.agent_error()
             public["error"] = error
         return public
 
     @staticmethod
     def _normalize(raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Final normalization pass on provider results (cleans and fills defaults)."""
         return {
             "title": _clean_text(raw.get("title", "")),
-            "snippet": _clean_text(raw.get("content", "")),
+            "snippet": _clean_text(raw.get("snippet", "")),
             "url": raw.get("url", ""),
-            "source": raw.get("engine"),
+            "source": raw.get("source"),
+            "published": raw.get("published"),
         }
 
     @staticmethod
     def _dedup(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: Dict[str, Dict[str, Any]] = {}
         for r in results:
-            url = r["url"].lower().strip()
+            url = str(r.get("url", "")).lower().strip()
             if url and url not in seen:
                 seen[url] = r
         return list(seen.values())

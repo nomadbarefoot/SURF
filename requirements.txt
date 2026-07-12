@@ -25,6 +25,12 @@ mcp>=1.27.0
 # Search (Required for search API)
 # ==============================================================================
 numpy>=1.26.0
+sentence-transformers>=2.5.0
+
+# CPU-only torch to keep install size small (~200 MB instead of ~2 GB).
+# sentence-transformers pulls torch; the line below forces the CPU wheel.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0+cpu
 
 # ==============================================================================
 # Logging & Monitoring (Required)
