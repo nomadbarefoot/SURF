@@ -313,8 +313,11 @@ class SearXNGSearchProvider(SearchProvider):
         }
 
     async def _fetch(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        headers = {"X-Forwarded-For": "127.0.0.1"}
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(f"{self._base_url}/search", params=params)
+            resp = await client.get(
+                f"{self._base_url}/search", params=params, headers=headers
+            )
             resp.raise_for_status()
             return resp.json()
 

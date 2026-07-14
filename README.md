@@ -59,6 +59,51 @@ Then send `Authorization: Bearer $SURF_API_TOKEN`.
 
 SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runtime API-key creation are disabled; configure `SURF_API_TOKEN` instead.
 
+## Docker
+
+SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP service with SearXNG. The image uses the official Playwright Python base image and the CPU-only torch wheel already pinned in `requirements.txt`.
+
+### Quickstart
+
+```bash
+cp .env.docker.example .env.docker
+# Edit .env.docker and set SURF_API_TOKEN
+docker compose --env-file .env.docker up --build
+```
+
+SURF is available at `http://localhost:17777` and SearXNG at `http://localhost:8888`.
+
+### Auth inside the container
+
+The container binds to `0.0.0.0`, so `loopback` auth is rejected by the runtime validator. You must use token auth:
+
+```bash
+export SURF_API_TOKEN="$(openssl rand -hex 24)"
+```
+
+### Optional Redis
+
+Redis is included in `docker-compose.yml` but commented out. To enable it, uncomment the service and set:
+
+```bash
+SURF_REDIS_URL=redis://redis:6379/0
+```
+
+### Stdio MCP
+
+The Docker image runs the HTTP server. `surfctl.py mcp` / `surfctl.py stdio` remain host-side entrypoints; they can talk to the container over HTTP if you later build an MCP-over-HTTP wrapper.
+
+### Persistent data
+
+Compose mounts named volumes for:
+
+- `data/` — browser profiles, downloads, adblock filter lists
+- `~/.cache/huggingface` — downloaded embedding models
+
+### Headed sessions
+
+`Xvfb` is installed and started by the entrypoint, so headed fallback and `background_headed` sessions work inside the container without a host display.
+
 ## Quick Agent Flow
 
 SURF exposes three MCP tool families: `browser_*`, `search_*`, and `finance_*`.

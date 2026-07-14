@@ -1,0 +1,47 @@
+services:
+  surf:
+    build: .
+    container_name: surf
+    ports:
+      - "17777:17777"
+    environment:
+      - SURF_HOST=0.0.0.0
+      - SURF_PORT=17777
+      - SURF_AUTH_MODE=token
+      - "SURF_API_TOKEN=${SURF_API_TOKEN:?SURF_API_TOKEN is required. Generate one with: openssl rand -hex 24}"
+      - SURF_SEARXNG_BASE_URL=http://searxng:8080
+      - SURF_SEARXNG_AUTOWAKE_ENABLED=false
+      - SURF_LOG_LEVEL=${SURF_LOG_LEVEL:-INFO}
+      - SURF_EXA_API_KEY=${SURF_EXA_API_KEY:-}
+    volumes:
+      - surf-data:/app/data
+      - huggingface-cache:/home/surf/.cache/huggingface
+    depends_on:
+      - searxng
+    networks:
+      - surf-net
+
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: surf-searxng
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-config:/etc/searxng
+    networks:
+      - surf-net
+
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: surf-redis
+  #   networks:
+  #     - surf-net
+
+volumes:
+  surf-data:
+  huggingface-cache:
+  searxng-config:
+
+networks:
+  surf-net:

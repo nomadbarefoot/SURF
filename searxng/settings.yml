@@ -1,0 +1,13 @@
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "surf-local-searxng-secret-change-me"
+  limiter: false
+
+ui:
+  static_use_hash: true

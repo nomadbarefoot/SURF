@@ -1,4 +1,5 @@
 """Lazy SearXNG runtime — probe health and autostart Docker when down."""
+
 from __future__ import annotations
 
 import asyncio
@@ -30,9 +31,10 @@ async def probe_searxng(timeout: Optional[float] = None) -> Dict[str, Any]:
     t = timeout if timeout is not None else settings.searxng_health_timeout
     url = _health_url()
     t0 = time.monotonic()
+    headers = {"X-Forwarded-For": "127.0.0.1"}
     try:
         async with httpx.AsyncClient(timeout=t) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers=headers)
             ok = resp.status_code == 200 and resp.text.strip().upper() == "OK"
             return {
                 "reachable": ok,
@@ -42,11 +44,19 @@ async def probe_searxng(timeout: Optional[float] = None) -> Dict[str, Any]:
                 "ms": round((time.monotonic() - t0) * 1000),
             }
     except httpx.ConnectError:
-        return {"reachable": False, "url": url, "error": "connect_error",
-                "ms": round((time.monotonic() - t0) * 1000)}
+        return {
+            "reachable": False,
+            "url": url,
+            "error": "connect_error",
+            "ms": round((time.monotonic() - t0) * 1000),
+        }
     except Exception as exc:
-        return {"reachable": False, "url": url, "error": str(exc),
-                "ms": round((time.monotonic() - t0) * 1000)}
+        return {
+            "reachable": False,
+            "url": url,
+            "error": str(exc),
+            "ms": round((time.monotonic() - t0) * 1000),
+        }
 
 
 async def _run_cmd(cmd: list[str], timeout: int) -> Dict[str, Any]:
@@ -95,10 +105,15 @@ async def _docker_run() -> Dict[str, Any]:
     name = settings.searxng_container_name
     image = settings.searxng_docker_image
     cmd = [
-        "docker", "run", "-d",
-        "--name", name,
-        "-p", f"{host_port}:8080",
-        "-v", f"{config_dir}:/etc/searxng:rw",
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        name,
+        "-p",
+        f"{host_port}:8080",
+        "-v",
+        f"{config_dir}:/etc/searxng:rw",
         image,
     ]
     return await _run_cmd(cmd, timeout=settings.searxng_autowake_cmd_timeout)
@@ -124,8 +139,12 @@ async def ensure_searxng(force: bool = False) -> Dict[str, Any]:
         return {"status": "ready", "autowake": False, "probe": probe}
 
     if not settings.searxng_autowake_enabled and not force:
-        return {"status": "down", "autowake": False, "probe": probe,
-                "error": "SearXNG unreachable and autowake disabled"}
+        return {
+            "status": "down",
+            "autowake": False,
+            "probe": probe,
+            "error": "SearXNG unreachable and autowake disabled",
+        }
 
     async with _wake_lock:
         probe = await probe_searxng()
@@ -179,6 +198,8 @@ async def ensure_searxng(force: bool = False) -> Dict[str, Any]:
             result["error"] = "SearXNG still unreachable after autowake"
             logger.warning("searxng_autowake_failed", actions=actions, probe=healthy)
         else:
-            logger.info("searxng_autowake_ok", actions=[a.get("action") for a in actions])
+            logger.info(
+                "searxng_autowake_ok", actions=[a.get("action") for a in actions]
+            )
         _last_wake_result = result
         return result
