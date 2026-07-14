@@ -284,7 +284,7 @@ class SearchService:
         if passing:
             results = passing[:max_results]
         else:
-            results = results[:3]
+            results = results[: settings.search_below_threshold_results]
             return {
                 "success": False,
                 "error": f"No results above relevance threshold ({threshold})",

@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     search_challenge_wait_headed: int = Field(default=45000)
     search_headed_relevance_threshold: float = Field(default=0.7)
     search_relevance_threshold: float = Field(default=0.5)
+    search_below_threshold_results: int = Field(default=3)
     max_search_headed_sessions: int = Field(default=1)
     search_headed_max_attempts: int = Field(default=2)
     search_challenge_click_attempts: int = Field(default=2)

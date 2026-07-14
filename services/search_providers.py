@@ -126,7 +126,9 @@ class ExaSearchProvider(SearchProvider):
                 "metadata": {},
             }
 
-        num_results = max(1, min(max_results, self._default_num_results))
+        # Fetch the full provider pool regardless of the caller's output size;
+        # trimming to max_results is the ETL layer's job (_finalize_results).
+        num_results = max(1, self._default_num_results)
 
         payload: Dict[str, Any] = {
             "query": query,
