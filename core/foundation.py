@@ -566,6 +566,12 @@ async def get_session_manager():
     return await get_session_service()
 
 
+def get_request_guard():
+    """Return the module-level RequestGuard singleton."""
+    from services.request_guard import get_guard
+    return get_guard()
+
+
 # Request context dependencies
 async def get_request_id(request: Request) -> str:
     """Get request ID from request state"""

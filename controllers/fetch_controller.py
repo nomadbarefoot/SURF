@@ -4,9 +4,10 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
-from core.foundation import get_current_user, get_fetch_service, get_session_service, get_download_service, ValidationError
+from core.foundation import get_current_user, get_fetch_service, get_request_guard, get_session_service, get_download_service, ValidationError
 from models.schemas import FetchRequest, FetchResponse
 from services.fetch_service import FetchService
+from services.request_guard import RequestGuard
 from services.session_service import SessionService
 from services.download_service import DownloadService
 
@@ -20,9 +21,11 @@ async def fetch_request(
     fetch_service: FetchService = Depends(get_fetch_service),
     session_service: SessionService = Depends(get_session_service),
     download_service: DownloadService = Depends(get_download_service),
+    guard: RequestGuard = Depends(get_request_guard),
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Execute a one-off HTTP request, optionally using cookies from a browser session."""
+    guard.check_url(str(request.url))
     try:
         if request.session_id:
             async with session_service.session_operation(request.session_id, "fetch") as session:

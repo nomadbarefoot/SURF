@@ -5,8 +5,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
-from core.foundation import get_current_user, get_search_service
+from core.foundation import get_current_user, get_request_guard, get_search_service
 from models.schemas import SearchRequest, SearchExtractRequest
+from services.request_guard import RequestGuard
 from services.search_service import SearchService
 
 logger = structlog.get_logger()
@@ -17,8 +18,10 @@ router = APIRouter()
 async def search_query(
     request: SearchRequest,
     search_service: SearchService = Depends(get_search_service),
+    guard: RequestGuard = Depends(get_request_guard),
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
+    guard.check_query(request.query)
     try:
         return await search_service.search(
             query=request.query,
@@ -50,8 +53,10 @@ async def search_stats(
 async def search_extract(
     request: SearchExtractRequest,
     search_service: SearchService = Depends(get_search_service),
+    guard: RequestGuard = Depends(get_request_guard),
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
+    guard.check_urls([str(u) for u in request.urls])
     try:
         return await search_service.deep_extract(
             urls=request.urls,

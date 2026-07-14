@@ -1,0 +1,68 @@
+# SURF request guard — pattern denylist
+#
+# Patterns are matched (case-insensitive, re.search) against:
+#   - search queries (kind: query)
+#   - target URLs and any query string (kind: url)
+#   - both (kind: both)
+#
+# Design intent: block clearly harmful requests only.
+# Do NOT over-trigger on security research, CVE analysis, malware defence, or
+# general infosec vocabulary.  A smarter classifier can replace this matcher
+# later — keep categories and pattern lists here, code in services/request_guard.py.
+#
+# Adding a pattern: keep it specific; test against legitimate research queries
+# before committing.
+
+categories:
+
+  # --------------------------------------------------------------------------
+  # Malware / exploit acquisition
+  # Block direct acquisition requests, not research or defence discussion.
+  # --------------------------------------------------------------------------
+  - category: malware_acquisition
+    kind: both
+    reason: "Blocked: malware or exploit acquisition"
+    patterns:
+      - '(?i)\b(ransomware|malware|spyware|trojan|rootkit|keylogger|botnet)[\s_-]+(download|builder|kit|deploy|spread|install|buy|purchase)\b'
+      - '(?i)\b(exploit[\s_-]kit|exploit[\s_-]pack)\b'
+      - '(?i)\bremote[\s_-]access[\s_-]trojan\s+(download|build|create|buy)\b'
+      - '(?i)\b(stealware|infostealer)\s+(download|buy|free)\b'
+
+  # --------------------------------------------------------------------------
+  # Credential harvesting / phishing kits
+  # --------------------------------------------------------------------------
+  - category: phishing
+    kind: both
+    reason: "Blocked: phishing kit or credential harvesting tool"
+    patterns:
+      - '(?i)\bphishing[\s_-]kit\b'
+      - '(?i)\bcredential[\s_-](stealer|harvester)\b'
+      - '(?i)\bpassword[\s_-]stealer\b'
+      - '(?i)\b(login|banking|credential)[\s_-]harvester\b'
+      - '(?i)\baccounts?[\s_-]dumper\b'
+
+  # --------------------------------------------------------------------------
+  # CSAM — no exceptions
+  # --------------------------------------------------------------------------
+  - category: csam
+    kind: both
+    reason: "Blocked: prohibited content"
+    patterns:
+      - '(?i)\b(child|minor|underage)[\s_-](porn|pornography|nude|naked|sex|sexual)\b'
+      - '(?i)\bchild[\s_-]sexual[\s_-]abuse\b'
+      - '(?i)\bpedophil(e|ia|ic)\b'
+      - '(?i)\bcsam\b'
+      - '(?i)\bloli(con)?[\s_-](porn|nude|sex|hentai)\b'
+
+  # --------------------------------------------------------------------------
+  # Doxxing private individuals
+  # Block tutorial/how-to requests; not regular OSINT or public records research.
+  # --------------------------------------------------------------------------
+  - category: doxxing
+    kind: query
+    reason: "Blocked: doxxing or non-consensual private data lookup"
+    patterns:
+      - '(?i)\bhow[\s_-]to[\s_-]dox\b'
+      - '(?i)\bdoxing[\s_-](tutorial|guide|method|tool)\b'
+      - '(?i)\bfind[\s_-](home[\s_-]address|personal[\s_-]address|private[\s_-]address|ssn|social[\s_-]security[\s_-]number)[\s_-]of\b'
+      - '(?i)\blook[\s_-]up[\s_-]someone[\s_-]s[\s_-](address|ssn|id[\s_-]number)\b'
