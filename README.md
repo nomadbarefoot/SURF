@@ -2,7 +2,7 @@
 
 SURF is a local browser and web-research substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
 
-Beyond single-page browsing, SURF includes **web search** (`search_query` via SearXNG metasearch) and **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
+Beyond single-page browsing, SURF includes **web search** (`search_query` via Exa primary with SearXNG fallback) and **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
 
 The goal is reliable occasional browsing, scraping, and research. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, browser-like fetches, search-then-extract pipelines, and typed financial extractors. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
@@ -75,15 +75,20 @@ SURF is available at `http://localhost:17777` and SearXNG at `http://localhost:8
 
 ### Auth inside the container
 
-The container binds to `0.0.0.0`, so `loopback` auth is rejected by the runtime validator. You must use token auth:
+The container binds to `0.0.0.0`, so `loopback` auth is rejected by the runtime validator. Compose forces `SURF_AUTH_MODE=token` and requires `SURF_API_TOKEN` in `.env.docker`:
 
 ```bash
-export SURF_API_TOKEN="$(openssl rand -hex 24)"
+# Generate once, then put the same value in .env.docker
+openssl rand -hex 24
 ```
+
+HTTP clients must send `Authorization: Bearer $SURF_API_TOKEN`. Keep `.env.docker` local — it is gitignored; use `.env.docker.example` as the template.
+
+Optional: set `SURF_EXA_API_KEY` in `.env.docker` for Exa-backed search. Without it, search falls back to SearXNG (`http://searxng:8080` inside the compose network; `http://localhost:8888` from the host).
 
 ### Optional Redis
 
-Redis is included in `docker-compose.yml` but commented out. To enable it, uncomment the service and set:
+Redis is included in `docker-compose.yml` but commented out. To enable it, uncomment the service, attach the `surf` service to it, and set:
 
 ```bash
 SURF_REDIS_URL=redis://redis:6379/0
@@ -91,7 +96,7 @@ SURF_REDIS_URL=redis://redis:6379/0
 
 ### Stdio MCP
 
-The Docker image runs the HTTP server. `surfctl.py mcp` / `surfctl.py stdio` remain host-side entrypoints; they can talk to the container over HTTP if you later build an MCP-over-HTTP wrapper.
+The Docker image runs the HTTP server (`start_surf.py`). Agent workflows still use host-side `surfctl.py mcp` / `surfctl.py stdio`, which run FastAPI in-process — they do not automatically proxy to the container.
 
 ### Persistent data
 
@@ -140,7 +145,7 @@ Semantic relevance scoring and section filtering use a local sentence-transforme
 
 ### Finance Pack
 
-Typed endpoints that walk curated source ladders and return fixed markdown (source, as-of, confidence). Prefer these over generic search for recurring ledger data. See `FINANCE_PACK.md` for design detail.
+Typed endpoints that walk curated source ladders and return fixed markdown (source, as-of, confidence). Prefer these over generic search for recurring ledger data. See `research/FINANCE_PACK.md` for design detail.
 
 - `finance_consensus(symbol, market)` — analyst PT mean/range, EPS estimates
 - `finance_insider(symbol, market)` — insider/promoter transactions and pledges

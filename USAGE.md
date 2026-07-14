@@ -88,6 +88,6 @@ Finance Pack example:
 {"id":"macro","method":"POST","path":"/finance/macro","data":{"country":"IN"}}
 ```
 
-Use `README.md` for the canonical API overview and `AGENTS.md` for agent protocol.
+Use `README.md` for the canonical API overview and `ARCHITECTURE.md` for system structure and data flows.
 
 Close sessions when work is done. SURF stdio exits when the MCP/JSONL process closes, and Playwright/Chromium is released after browser idle.
