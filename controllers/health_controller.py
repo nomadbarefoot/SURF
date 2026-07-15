@@ -2,12 +2,15 @@
 import psutil
 import time
 from typing import Dict, Any
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 import structlog
 
-from core.foundation import get_session_service, get_finance_service
+from core.foundation import (
+    get_finance_service,
+    get_session_service_if_initialized,
+    require_full_access,
+)
 from models.schemas import HealthResponse
-from services.session_service import SessionService
 from services.finance_service import FinanceService
 from services.searxng_runtime import ensure_searxng, probe_searxng
 from config.settings import get_settings
@@ -21,32 +24,47 @@ _start_time = time.time()
 
 
 def _process_memory_tree() -> Dict[str, Any]:
-    process = psutil.Process()
-    children = process.children(recursive=True)
-    process_memory = process.memory_info()
-    child_rss = 0
-    child_count = 0
-    for child in children:
-        try:
-            child_rss += child.memory_info().rss
-            child_count += 1
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return {
-        "pid": process.pid,
-        "rss": process_memory.rss,
-        "vms": process_memory.vms,
-        "child_count": child_count,
-        "child_rss": child_rss,
-        "tree_rss": process_memory.rss + child_rss,
-        "num_threads": process.num_threads(),
-        "create_time": process.create_time(),
-    }
+    try:
+        process = psutil.Process()
+        children = process.children(recursive=True)
+        process_memory = process.memory_info()
+        child_rss = 0
+        child_count = 0
+        for child in children:
+            try:
+                child_rss += child.memory_info().rss
+                child_count += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return {
+            "available": True,
+            "pid": process.pid,
+            "rss": process_memory.rss,
+            "vms": process_memory.vms,
+            "child_count": child_count,
+            "child_rss": child_rss,
+            "tree_rss": process_memory.rss + child_rss,
+            "num_threads": process.num_threads(),
+            "create_time": process.create_time(),
+        }
+    except (OSError, psutil.Error):
+        return {
+            "available": False,
+            "pid": None,
+            "rss": None,
+            "vms": None,
+            "child_count": None,
+            "child_rss": None,
+            "tree_rss": None,
+            "num_threads": None,
+            "create_time": None,
+        }
 
 
 @router.get("/", response_model=HealthResponse)
 async def health_check(
-    session_service: SessionService = Depends(get_session_service)
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
 ):
     """Service health check with detailed metrics"""
     
@@ -60,14 +78,11 @@ async def health_check(
             "percentage": memory_info.percent
         }
         
-        # Get CPU usage
-        cpu_usage = psutil.cpu_percent(interval=1)
-        
         # Get service uptime
         uptime = time.time() - _start_time
         
-        # Get session statistics
-        active_sessions = session_service.active_session_count
+        session_service = get_session_service_if_initialized()
+        active_sessions = session_service.active_session_count if session_service else 0
         
         return HealthResponse(
             success=True,
@@ -81,6 +96,7 @@ async def health_check(
         
     except Exception as e:
         logger.error("Health check failed", error=str(e))
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthResponse(
             success=False,
             status="unhealthy",
@@ -93,23 +109,32 @@ async def health_check(
 
 @router.get("/ready")
 async def readiness_check(
-    session_service: SessionService = Depends(get_session_service)
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
 ):
     """Readiness check for load balancers"""
     
     try:
-        if session_service.active_session_count >= settings.max_sessions:
+        session_service = get_session_service_if_initialized()
+        active_sessions = session_service.active_session_count if session_service else 0
+        if active_sessions >= settings.max_sessions:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": "Maximum sessions reached"}
         
         return {
             "status": "ready",
-            "active_sessions": session_service.active_session_count,
+            "active_sessions": active_sessions,
             "max_sessions": settings.max_sessions,
-            "browser_runtime": session_service.browser_runtime_state(),
+            "browser_runtime": (
+                session_service.browser_runtime_state()
+                if session_service
+                else {"status": "not_started"}
+            ),
         }
         
     except Exception as e:
         logger.error("Readiness check failed", error=str(e))
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"status": "not_ready", "reason": str(e)}
 
 
@@ -128,19 +153,21 @@ async def liveness_check():
 
 @router.get("/metrics")
 async def get_metrics(
-    session_service: SessionService = Depends(get_session_service)
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
 ):
     """Get detailed service metrics for monitoring"""
     
     try:
         # System metrics
         memory_info = psutil.virtual_memory()
-        cpu_usage = psutil.cpu_percent(interval=1)
+        cpu_usage = psutil.cpu_percent(interval=None)
         disk_usage = psutil.disk_usage('/')
         
         # Service metrics
         uptime = time.time() - _start_time
-        active_sessions = session_service.active_session_count
+        session_service = get_session_service_if_initialized()
+        active_sessions = session_service.active_session_count if session_service else 0
         
         process_memory = _process_memory_tree()
         
@@ -185,22 +212,39 @@ async def get_metrics(
         
     except Exception as e:
         logger.error("Failed to get metrics", error=str(e))
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"success": False, "error": str(e)}
 
 
 @router.get("/searxng")
-async def searxng_health(autowake: bool = False):
-    """Probe SearXNG reachability; optionally autostart Docker when down."""
-    if autowake:
-        result = await ensure_searxng(force=True)
-    else:
-        probe = await probe_searxng()
-        result = {"status": "ready" if probe.get("reachable") else "down", "probe": probe}
+async def searxng_health(
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
+):
+    """Probe SearXNG reachability without mutating runtime state."""
+    probe = await probe_searxng()
+    result = {"status": "ready" if probe.get("reachable") else "down", "probe": probe}
+    if result["status"] != "ready":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"success": result.get("status") == "ready", **result}
+
+
+@router.post("/searxng/autowake")
+async def searxng_autowake(
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
+):
+    """Explicitly start the configured SearXNG runtime when autowake is enabled."""
+    result = await ensure_searxng()
+    if result.get("status") != "ready":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {"success": result.get("status") == "ready", **result}
 
 
 @router.get("/finance")
 async def finance_ladder_probe(
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
     finance_service: FinanceService = Depends(get_finance_service),
 ):
     """Probe all finance ladders on one known symbol per market.
@@ -225,19 +269,24 @@ async def finance_ladder_probe(
         except Exception as exc:
             results.append({"endpoint": endpoint, "symbol": symbol, "market": market,
                             "error": str(exc)})
-    all_ok = all(
-        all(r.get("status") in ("ok", "skipped") for r in p.get("rungs", []))
-        for p in results if "rungs" in p
+    all_ok = len(results) == len(probes) and all(
+        "rungs" in probe
+        and all(rung.get("status") in ("ok", "skipped") for rung in probe["rungs"])
+        for probe in results
     )
-    return {"success": True, "healthy": all_ok, "probes": results}
+    if not all_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"success": all_ok, "healthy": all_ok, "probes": results}
 
 
 @router.get("/runtime")
 async def runtime_check(
-    session_service: SessionService = Depends(get_session_service)
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
 ):
     """Cheap runtime state for agents and local supervisors."""
     try:
+        session_service = get_session_service_if_initialized()
         return {
             "success": True,
             "service": {
@@ -252,11 +301,16 @@ async def runtime_check(
                 "browser_idle_timeout_seconds": settings.browser_idle_timeout_seconds,
             },
             "sessions": {
-                "active": session_service.active_session_count,
+                "active": session_service.active_session_count if session_service else 0,
             },
-            "browser_runtime": session_service.browser_runtime_state(),
+            "browser_runtime": (
+                session_service.browser_runtime_state()
+                if session_service
+                else {"status": "not_started"}
+            ),
             "process": _process_memory_tree(),
         }
     except Exception as e:
         logger.error("Runtime check failed", error=str(e))
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"success": False, "error": str(e)}

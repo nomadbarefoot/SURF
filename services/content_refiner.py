@@ -198,22 +198,19 @@ async def filter_sections_by_embedding(
         return sections, []
 
     import numpy as np
-    from services.embeddings import _encode
+    from services.embeddings import _encode_many
 
-    q_emb = await _encode(query)
-    if q_emb is None:
+    texts = [section_plain_text(section)[:2000] for section in sections]
+    embeddings = await _encode_many([query, *texts])
+    if not embeddings:
         return sections, []
+    q_emb, *document_embeddings = embeddings
 
     scored: List[Tuple[Dict[str, Any], float]] = []
     dropped: List[str] = []
-    for section in sections:
-        text = section_plain_text(section)
+    for section, text, d_emb in zip(sections, texts, document_embeddings):
         if len(text) < settings.search_refine_min_block_chars:
             dropped.append(section.get("heading") or "(short)")
-            continue
-        d_emb = await _encode(text[:2000])
-        if d_emb is None:
-            scored.append((section, 1.0))
             continue
         score = float(max(0.0, min(1.0, float(np.dot(q_emb, d_emb)))))
         section["relevance_score"] = round(score, 3)

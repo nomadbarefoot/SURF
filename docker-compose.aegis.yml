@@ -1,0 +1,9 @@
+services:
+  surf:
+    networks:
+      - surf-net
+      - aegis
+
+networks:
+  aegis:
+    external: true

@@ -19,7 +19,7 @@ async def test_probe_searxng_reachable(monkeypatch):
         async def __aexit__(self, *args):
             return None
 
-        async def get(self, url):
+        async def get(self, url, **_kwargs):
             return FakeResp()
 
     monkeypatch.setattr(runtime.httpx, "AsyncClient", lambda **kw: FakeClient())

@@ -3,45 +3,98 @@ services:
     build: .
     container_name: surf
     ports:
-      - "17777:17777"
+      - "127.0.0.1:17777:17777"
+    env_file:
+      - .env.docker
     environment:
       - SURF_HOST=0.0.0.0
       - SURF_PORT=17777
       - SURF_AUTH_MODE=token
-      - "SURF_API_TOKEN=${SURF_API_TOKEN:?SURF_API_TOKEN is required. Generate one with: openssl rand -hex 24}"
+      - "SURF_API_TOKEN=${SURF_API_TOKEN:?Set SURF_API_TOKEN in .env.docker}"
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
-      - SURF_LOG_LEVEL=${SURF_LOG_LEVEL:-INFO}
-      - SURF_EXA_API_KEY=${SURF_EXA_API_KEY:-}
     volumes:
       - surf-data:/app/data
       - huggingface-cache:/home/surf/.cache/huggingface
     depends_on:
-      - searxng
+      searxng:
+        condition: service_healthy
+    init: true
+    read_only: true
+    shm_size: 1gb
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:17777/health/live', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - surf-net
 
   searxng:
-    image: docker.io/searxng/searxng:latest
+    image: docker.io/searxng/searxng:latest@sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f
     container_name: surf-searxng
-    ports:
-      - "8888:8080"
+    env_file:
+      - .env.docker
+    environment:
+      - "SEARXNG_SECRET=${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env.docker}"
+      - SEARXNG_LIMITER=true
+    depends_on:
+      valkey:
+        condition: service_healthy
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
       - searxng-config:/etc/searxng
+      - searxng-cache:/var/cache/searxng
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read().strip() == b'OK'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - surf-net
 
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: surf-redis
-  #   networks:
-  #     - surf-net
+  valkey:
+    image: docker.io/valkey/valkey:8.1-alpine@sha256:94365b275456ae14621001c03556c732b1d93a0cdeacc317d1bdd52eba680885
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    read_only: true
+    tmpfs:
+      - /data:rw,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - surf-net
 
 volumes:
   surf-data:
   huggingface-cache:
   searxng-config:
+  searxng-cache:
 
 networks:
   surf-net:

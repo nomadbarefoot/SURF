@@ -82,7 +82,7 @@ class ResourceMonitor:
         """Collect current system and session metrics"""
         try:
             # System metrics
-            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_percent = psutil.cpu_percent(interval=None)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             

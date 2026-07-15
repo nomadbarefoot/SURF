@@ -5,6 +5,7 @@ import structlog
 
 from core.foundation import get_current_user, get_browser_service, get_session_service
 from core.foundation import BrowserOperationError, SessionNotFoundError, SessionBusyError, ValidationError
+from services.outbound_policy import OutboundPolicyError
 from models.schemas import (
     NavigateRequest, ExtractRequest, InteractRequest, ScreenshotRequest,
     NavigationResponse, ExtractResponse, InteractResponse, ScreenshotResponse,
@@ -12,7 +13,8 @@ from models.schemas import (
     NetworkCaptureRequest, NetworkCaptureResponse,
     DownloadClickRequest, DownloadResponse,
     StructuredDataRequest, StructuredDataResponse, 
-    CaptchaDetectionRequest, CaptchaDetectionResponse
+    CaptchaDetectionRequest, CaptchaDetectionResponse,
+    BatchRequest, BatchOperationResponse, ExtractType, InteractionAction,
 )
 from services.browser_service import BrowserService
 from services.session_service import SessionService
@@ -54,6 +56,11 @@ async def navigate(
         
     except HTTPException:
         raise
+    except OutboundPolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=e.message,
+        )
     except SessionNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -353,12 +360,9 @@ async def click_download(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Download failed: {str(e)}")
 
 
-@router.post("/batch")
+@router.post("/batch", response_model=BatchOperationResponse)
 async def batch_operations(
-    operations: list,
-    session_id: str,
-    parallel: bool = False,
-    max_concurrent: int = 3,
+    request: BatchRequest,
     browser_service: BrowserService = Depends(get_browser_service),
     session_service: SessionService = Depends(get_session_service),
     user: Dict[str, Any] = Depends(get_current_user)
@@ -366,28 +370,28 @@ async def batch_operations(
     """Perform multiple operations in parallel or sequence"""
     
     try:
-        if parallel:
+        if request.parallel:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Parallel batch operations on one page are disabled; send sequential operations or separate sessions."
             )
 
-        async with session_service.session_operation(session_id, "batch") as session:
+        async with session_service.session_operation(request.session_id, "batch") as session:
             results = await _execute_sequential_operations(
-                operations, session, browser_service
+                request.operations, session, browser_service
             )
         
         successful_operations = sum(1 for r in results if r.get("success", False))
         
-        return {
-            "success": successful_operations == len(operations),
-            "results": results,
-            "total_operations": len(operations),
-            "successful_operations": successful_operations,
-            "failed_operations": len(operations) - successful_operations,
-            "parallel": parallel,
-            "max_concurrent": max_concurrent if parallel else 1
-        }
+        return BatchOperationResponse(
+            success=successful_operations == len(request.operations),
+            results=results,
+            total_operations=len(request.operations),
+            successful_operations=successful_operations,
+            failed_operations=len(request.operations) - successful_operations,
+            parallel=False,
+            max_concurrent=1,
+        )
         
     except HTTPException:
         raise
@@ -402,7 +406,7 @@ async def batch_operations(
             detail=str(e)
         )
     except Exception as e:
-        logger.error("Batch operations failed", error=str(e), session_id=session_id)
+        logger.error("Batch operations failed", error=str(e), session_id=request.session_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Batch operations failed"
@@ -419,16 +423,15 @@ async def extract_structured_data(
     """Extract structured data from page content"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Perform structured data extraction
-        result = await browser_service.extract_structured_data(
-            session=session,
-            content_type=request.content_type,
-            selector=request.selector,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(
+            request.session_id, "extract_structured"
+        ) as session:
+            result = await browser_service.extract_structured_data(
+                session=session,
+                content_type=request.content_type,
+                selector=request.selector,
+                timeout=request.timeout,
+            )
         
         # Update session stats
         await session_service.update_session_stats(
@@ -464,15 +467,14 @@ async def detect_captcha(
     """Detect CAPTCHA on the current page"""
     
     try:
-        # Get session
-        session = await session_service.get_session(request.session_id)
-        
-        # Perform CAPTCHA detection
-        result = await browser_service.detect_captcha(
-            session=session,
-            selector=request.selector,
-            timeout=request.timeout
-        )
+        async with session_service.session_operation(
+            request.session_id, "detect_captcha"
+        ) as session:
+            result = await browser_service.detect_captcha(
+                session=session,
+                selector=request.selector,
+                timeout=request.timeout,
+            )
         
         # Update session stats
         await session_service.update_session_stats(
@@ -516,9 +518,10 @@ async def _execute_operation(operation: dict, session, browser_service) -> dict:
                 timeout=operation.get("timeout")
             )
         elif op_type == "extract":
+            extract_type = ExtractType(operation.get("extract_type", "text"))
             result = await browser_service.extract_content(
                 session=session,
-                extract_type=operation["extract_type"],
+                extract_type=extract_type,
                 selector=operation.get("selector"),
                 timeout=operation.get("timeout")
             )
@@ -536,9 +539,10 @@ async def _execute_operation(operation: dict, session, browser_service) -> dict:
                 timeout=operation.get("timeout")
             )
         elif op_type == "interact":
+            action = InteractionAction(operation["action"])
             result = await browser_service.interact_with_element(
                 session=session,
-                action=operation["action"],
+                action=action,
                 selector=operation["selector"],
                 value=operation.get("value"),
                 options=operation.get("options"),

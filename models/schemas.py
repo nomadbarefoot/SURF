@@ -389,7 +389,7 @@ class BatchRequest(BaseModel):
     """Request model for batch operations"""
 
     operations: List[Dict[str, Any]] = Field(
-        ..., min_items=1, max_items=10, description="List of operations"
+        ..., min_length=1, max_length=10, description="List of operations"
     )
     session_id: str = Field(..., description="Session ID for batch operations")
     parallel: bool = Field(
@@ -698,7 +698,7 @@ class SessionConfig(BaseModel):
     )
     timeout: int = Field(default=30000, description="Default timeout in milliseconds")
     java_script_enabled: bool = Field(default=True, description="Enable JavaScript")
-    ignore_https_errors: bool = Field(default=True, description="Ignore HTTPS errors")
+    ignore_https_errors: bool = Field(default=False, description="Ignore HTTPS errors")
     browser_type: BrowserType = Field(
         default=BrowserType.CHROMIUM, description="Browser type"
     )
@@ -922,7 +922,7 @@ class SearchRequest(BaseModel):
 class SearchExtractRequest(BaseModel):
     """Request model for parallel deep content extraction"""
 
-    urls: List[str] = Field(..., min_length=1, max_length=10)
+    urls: List[HttpUrl] = Field(..., min_length=1, max_length=10)
     content_mode: str = Field(default="reader")
     max_text_length: int = Field(default=8000, ge=500, le=50000)
     relevance: Optional[Dict[str, float]] = Field(
@@ -931,6 +931,7 @@ class SearchExtractRequest(BaseModel):
     )
     refine_query: Optional[str] = Field(
         default=None,
+        max_length=1000,
         description="Research topic/query for section-level embed filtering during extraction",
     )
 

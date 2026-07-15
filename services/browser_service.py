@@ -23,6 +23,9 @@ from utils.content_processor import (
 from utils.site_memory import create_site_memory_manager
 from utils.semantic_chunker import SemanticChunker
 from config.settings import settings
+from services.outbound_policy import get_outbound_policy
+from utils.path_policy import resolve_export_file
+from utils.url_security import safe_url_for_log
 
 logger = structlog.get_logger()
 
@@ -32,7 +35,11 @@ class BrowserService:
     
     def __init__(self):
         self.initialized = False
-        self.site_memory_manager = create_site_memory_manager(ttl=settings.site_memory_ttl)
+        self.site_memory_manager = (
+            create_site_memory_manager(ttl=settings.site_memory_ttl)
+            if settings.enable_site_memory
+            else None
+        )
         self.network_captures: Dict[str, Dict[str, Any]] = {}
     
     async def initialize(self) -> None:
@@ -64,6 +71,8 @@ class BrowserService:
         
         if not self.initialized:
             raise BrowserOperationError("navigate", "Browser service not initialized")
+
+        await get_outbound_policy().validate(url)
         
         start_time = time.time()
         try:
@@ -76,10 +85,16 @@ class BrowserService:
             
             # Load site memory if enabled
             site_memory = None
-            if settings.enable_site_memory:
-                site_memory = self.site_memory_manager.get_site_memory(url)
+            if self.site_memory_manager is not None:
+                site_memory = await asyncio.to_thread(
+                    self.site_memory_manager.get_site_memory, url
+                )
                 if site_memory:
-                    logger.debug("Loaded site memory", site_url=url, access_count=site_memory.access_count)
+                    logger.debug(
+                        "Loaded site memory",
+                        site_url=safe_url_for_log(url),
+                        access_count=site_memory.access_count,
+                    )
             
             # Set timeout
             actual_timeout = timeout or session.config.timeout
@@ -111,8 +126,10 @@ class BrowserService:
             session.context.title = await page.title()
             
             # Update site memory with success
-            if settings.enable_site_memory:
-                self.site_memory_manager.update_access_stats(url, success=True)
+            if self.site_memory_manager is not None:
+                await asyncio.to_thread(
+                    self.site_memory_manager.update_access_stats, url, True
+                )
             
             # Update resource monitoring
             resource_monitor.update_session_metrics(
@@ -131,13 +148,21 @@ class BrowserService:
                 "warnings": self._navigation_warnings(response.status if response else None, page.url)
             }
             
-            logger.info("Navigation completed", session_id=session.session_id, **result)
+            logger.info(
+                "Navigation completed",
+                session_id=session.session_id,
+                url=safe_url_for_log(result["url"]),
+                status=result["status"],
+                duration_ms=result["duration_ms"],
+            )
             return result
             
         except Exception as e:
             # Update site memory with failure
-            if settings.enable_site_memory:
-                self.site_memory_manager.update_access_stats(url, success=False)
+            if self.site_memory_manager is not None:
+                await asyncio.to_thread(
+                    self.site_memory_manager.update_access_stats, url, False
+                )
             
             # Update resource monitoring with failure
             resource_monitor.update_session_metrics(
@@ -146,7 +171,12 @@ class BrowserService:
                 response_time=time.time() - start_time
             )
             
-            logger.error("Navigation failed", session_id=session.session_id, url=url, error=str(e))
+            logger.error(
+                "Navigation failed",
+                session_id=session.session_id,
+                url=safe_url_for_log(url),
+                error=str(e),
+            )
             raise BrowserOperationError("navigate", str(e))
     
     async def extract_content(
@@ -443,30 +473,30 @@ class BrowserService:
                         const tag = node.tagName ? node.tagName.toLowerCase() : '';
                         if (/^h[1-6]$/.test(tag) && visible(node)) {
                             const level = parseInt(tag[1], 10);
-                            const t = text(node);
+                            const t = text(node).slice(0, 500);
                             if (t.length >= 3) pushBlock({ type: 'heading', level, text: t });
                             return;
                         }
                         if (tag === 'p' && visible(node)) {
-                            const t = text(node);
+                            const t = text(node).slice(0, 5000);
                             if (t.length >= 20) pushBlock({ type: 'paragraph', text: t });
                             return;
                         }
                         if ((tag === 'ul' || tag === 'ol') && visible(node)) {
                             const items = Array.from(node.querySelectorAll(':scope > li'))
-                                .map((li) => text(li)).filter((t) => t.length >= 8).slice(0, 40);
+                                .map((li) => text(li).slice(0, 1000)).filter((t) => t.length >= 8).slice(0, 40);
                             if (items.length) pushBlock({ type: 'list', ordered: tag === 'ol', items });
                             return;
                         }
                         if (tag === 'table' && visible(node)) {
                             const rows = Array.from(node.querySelectorAll('tr')).slice(0, maxTableRows).map((row) =>
-                                Array.from(row.cells).map((cell) => text(cell).slice(0, 200))
+                                Array.from(row.cells).slice(0, 20).map((cell) => text(cell).slice(0, 200))
                             ).filter((row) => row.some((c) => c.length > 0));
                             if (rows.length) pushBlock({ type: 'table', rows });
                             return;
                         }
                         if (tag === 'blockquote' && visible(node)) {
-                            const t = text(node);
+                            const t = text(node).slice(0, 5000);
                             if (t.length >= 20) pushBlock({ type: 'quote', text: t });
                             return;
                         }
@@ -826,11 +856,10 @@ class BrowserService:
             # Generate path if not provided
             if not path:
                 timestamp = int(time.time())
-                path = f"screenshots/{session.session_id}_{timestamp}.png"
-            
-            # Ensure directory exists
+                path = f"{session.session_id}_{timestamp}.png"
+            path = str(resolve_export_file(path, default_root="screenshots_dir"))
+
             import os
-            os.makedirs(os.path.dirname(path), exist_ok=True)
             
             # Take screenshot
             if selector:

@@ -69,11 +69,10 @@ data/profiles/
 data/downloads/
 data/filterlists/
 
-# Database - keeping .db files tracked for stateful persistence
-# *.db
-# *.sqlite
-# *.sqlite3
-# Only ignore WAL files and temporary files
+# Local databases may contain browsing metadata and must never be committed.
+*.db
+*.sqlite
+*.sqlite3
 *.db-shm
 *.db-wal
 

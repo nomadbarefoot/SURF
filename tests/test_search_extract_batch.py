@@ -53,3 +53,42 @@ async def test_deep_extract_skips_headed_retry_for_headless_success():
 
     headed.assert_not_called()
     assert out["results"][0]["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_deep_extract_reports_all_failures_at_top_level():
+    svc = SearchService()
+    urls = ["https://failed.example/article"]
+
+    with patch.object(
+        svc,
+        "_extract_batch_headless",
+        new=AsyncMock(
+            return_value=[
+                {"url": urls[0], "success": False, "error": "unreadable", "ms": 20}
+            ]
+        ),
+    ):
+        with patch.object(
+            svc,
+            "_extract_single_headed",
+            new=AsyncMock(return_value={"success": False, "error": "unreadable", "ms": 30}),
+        ):
+            out = await svc.deep_extract(urls)
+
+    assert out["success"] is False
+    assert out["partial"] is False
+    assert out["success_count"] == 0
+    assert out["failure_count"] == 1
+
+
+def test_final_markdown_respects_requested_budget():
+    content, truncated = SearchService._bounded_content(
+        "A" * 500,
+        max_text_length=120,
+        url="https://example.com/source",
+    )
+
+    assert truncated is True
+    assert len(content) <= 120
+    assert "Content truncated" in content

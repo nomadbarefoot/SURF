@@ -6,8 +6,11 @@ search:
     - json
 
 server:
-  secret_key: "surf-local-searxng-secret-change-me"
-  limiter: false
+  secret_key: "overridden-by-SEARXNG_SECRET"
+  limiter: true
+
+valkey:
+  url: valkey://valkey:6379/0
 
 ui:
   static_use_hash: true

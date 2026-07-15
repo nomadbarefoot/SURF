@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -41,7 +42,10 @@ def client():
 @pytest.fixture(autouse=True)
 def patch_relevance():
     """Keep service-level tests fast and independent of the local embedder."""
-    with patch("services.search_service._relevance", return_value=0.9):
+    async def fixed_scores(items, _query):
+        return [0.9] * len(items)
+
+    with patch("services.search_service._relevance_many", side_effect=fixed_scores):
         yield
 
 
@@ -51,6 +55,11 @@ def patch_relevance():
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.getenv("SURF_RUN_INTEGRATION_TESTS") != "1",
+    reason="set SURF_RUN_INTEGRATION_TESTS=1 to call Exa",
+)
 async def test_exa_provider_real_auto_returns_results(exa_provider):
     """A real Exa call should return ranked results with auto/highlights defaults."""
     result = await exa_provider.search(
@@ -72,6 +81,11 @@ async def test_exa_provider_real_auto_returns_results(exa_provider):
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.getenv("SURF_RUN_INTEGRATION_TESTS") != "1",
+    reason="set SURF_RUN_INTEGRATION_TESTS=1 to call Exa",
+)
 async def test_exa_provider_uses_auto_mode(exa_provider):
     """Exa always searches with mode=auto regardless of any legacy mode arg."""
     result = await exa_provider.search(
@@ -95,6 +109,28 @@ async def test_exa_provider_missing_key_returns_error():
 
     assert result["success"] is False
     assert "SURF_EXA_API_KEY" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_exa_rejects_constraints_it_cannot_honor():
+    with patch("services.search_providers.settings.exa_api_key", "test-key"):
+        provider = ExaSearchProvider()
+        result = await provider.search("anything", engines=["google"])
+
+    assert result["success"] is False
+    assert result["metadata"]["unsupported_constraints"] == ["engines"]
+
+
+@pytest.mark.asyncio
+async def test_exa_respects_caller_result_ceiling():
+    with patch("services.search_providers.settings.exa_api_key", "test-key"):
+        provider = ExaSearchProvider()
+    request = AsyncMock(return_value={"results": []})
+
+    with patch("services.search_providers._bounded_json_request", request):
+        await provider.search("anything", max_results=2)
+
+    assert request.await_args.kwargs["json"]["numResults"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +343,28 @@ async def test_service_respects_fallback_disabled(service):
     fallback.search.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_service_does_not_retry_the_requested_provider_as_fallback(service):
+    primary = AsyncMock()
+    primary.name = "exa"
+    primary.search = AsyncMock(
+        return_value={
+            "success": False,
+            "provider": "exa",
+            "results": [],
+            "error": "failed",
+            "metadata": {},
+        }
+    )
+
+    with patch.object(service._registry, "get", return_value=primary):
+        with patch.object(service._registry, "fallback", return_value=primary):
+            result = await service.search("query", provider="exa", fallback=True)
+
+    assert result["success"] is False
+    primary.search.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Relevance threshold
 # ---------------------------------------------------------------------------
@@ -340,7 +398,9 @@ async def test_service_filters_results_below_threshold(service):
         }
     )
 
-    with patch("services.search_service._relevance", side_effect=[0.8, 0.3]):
+    with patch(
+        "services.search_service._relevance_many", return_value=[0.8, 0.3]
+    ):
         with patch.object(service._registry, "get", return_value=primary):
             with patch.object(service._registry, "fallback", return_value=None):
                 result = await service.search("query", max_results=10, provider="exa")
@@ -370,7 +430,9 @@ async def test_service_returns_top_three_when_none_pass_threshold(service):
         }
     )
 
-    with patch("services.search_service._relevance", return_value=0.1):
+    with patch(
+        "services.search_service._relevance_many", return_value=[0.1] * 4
+    ):
         with patch.object(service._registry, "get", return_value=primary):
             with patch.object(service._registry, "fallback", return_value=None):
                 result = await service.search("query", max_results=10, provider="exa")
@@ -403,7 +465,7 @@ async def test_service_min_relevance_override(service):
         }
     )
 
-    with patch("services.search_service._relevance", return_value=0.4):
+    with patch("services.search_service._relevance_many", return_value=[0.4]):
         with patch.object(service._registry, "get", return_value=primary):
             with patch.object(service._registry, "fallback", return_value=None):
                 result = await service.search(

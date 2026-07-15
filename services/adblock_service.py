@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import structlog
 
 from config.settings import settings
+from utils.url_security import safe_url_for_log
 
 logger = structlog.get_logger()
 
@@ -90,7 +91,11 @@ class AdblockService:
                 response.raise_for_status()
                 return response.text
         except Exception as e:
-            logger.warning("Filter list download failed", url=url, error=str(e))
+            logger.warning(
+                "Filter list download failed",
+                url=safe_url_for_log(url),
+                error=str(e),
+            )
             return None
 
     def should_block(self, url: str, source_url: str, resource_type: str, mode: str) -> Dict[str, Any]:
@@ -119,7 +124,9 @@ class AdblockService:
                 }
             return {"blocked": False, "reason": "no_match"}
         except Exception as e:
-            logger.debug("Adblock decision failed", url=url, error=str(e))
+            logger.debug(
+                "Adblock decision failed", url=safe_url_for_log(url), error=str(e)
+            )
             return {"blocked": False, "reason": "error", "error": str(e)}
 
     def stats(self) -> Dict[str, Any]:

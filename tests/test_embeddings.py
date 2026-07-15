@@ -9,12 +9,30 @@ from services import embeddings
 
 
 @pytest.fixture(autouse=True)
-def reset_embedder_state():
+def reset_embedder_state(monkeypatch):
     """Isolate embedding state between tests."""
+    class FakeModel:
+        def __init__(self):
+            self.calls = []
+
+        def encode(self, value, **_kwargs):
+            self.calls.append(value)
+            if isinstance(value, list):
+                return np.stack(
+                    [np.full(768, index + 1, dtype=np.float32) for index, _ in enumerate(value)]
+                )
+            return np.ones(768, dtype=np.float32)
+
+    fake_model = FakeModel()
+    monkeypatch.setattr(
+        embeddings.LocalEmbeddingProvider,
+        "_load_model",
+        lambda _self: fake_model,
+    )
     embeddings._embed_available = None
     embeddings._embed_model = None
     embeddings._embed_provider = None
-    yield
+    yield fake_model
 
 
 @pytest.mark.asyncio
@@ -48,3 +66,13 @@ async def test_encode_reuses_loaded_model():
     assert second is not None
     assert first.shape == second.shape
     assert embeddings.is_embedder_available() is True
+
+
+@pytest.mark.asyncio
+async def test_encode_many_uses_one_model_call(reset_embedder_state):
+    vectors = await embeddings._encode_many(["first", "second", "third"])
+
+    assert vectors is not None
+    assert len(vectors) == 3
+    assert reset_embedder_state.calls == [["first", "second", "third"]]
+    assert all(abs(np.linalg.norm(vector) - 1.0) < 1e-5 for vector in vectors)

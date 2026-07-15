@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import structlog
@@ -33,6 +33,13 @@ class EmbeddingProvider(ABC):
     async def encode(self, text: str) -> Optional[np.ndarray]:
         """Return a normalized embedding vector or None if encoding fails."""
         ...
+
+    async def encode_many(self, texts: List[str]) -> Optional[List[np.ndarray]]:
+        """Return normalized vectors for a batch of texts."""
+        vectors = await asyncio.gather(*(self.encode(text) for text in texts))
+        if any(vector is None for vector in vectors):
+            return None
+        return [vector for vector in vectors if vector is not None]
 
 
 class LocalEmbeddingProvider(EmbeddingProvider):
@@ -62,11 +69,11 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         logger.info("embedding_model_loaded", model=model_name, device=device)
         return model
 
-    async def encode(self, text: str) -> Optional[np.ndarray]:
+    async def _ensure_model(self) -> bool:
         global _embed_model, _embed_available
 
         if _embed_available is False:
-            return None
+            return False
 
         if _embed_model is None:
             async with _embed_lock:
@@ -79,7 +86,14 @@ class LocalEmbeddingProvider(EmbeddingProvider):
                     except Exception as exc:
                         _embed_available = False
                         logger.warning("embedding_model_load_failed", error=str(exc))
-                        return None
+                        return False
+        return _embed_model is not None
+
+    async def encode(self, text: str) -> Optional[np.ndarray]:
+        global _embed_model
+
+        if not await self._ensure_model():
+            return None
 
         try:
             vec = await asyncio.get_running_loop().run_in_executor(
@@ -96,6 +110,29 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         norm = np.linalg.norm(arr)
         return arr / norm if norm > 0 else arr
 
+    async def encode_many(self, texts: List[str]) -> Optional[List[np.ndarray]]:
+        global _embed_model
+
+        if not texts:
+            return []
+        if not await self._ensure_model():
+            return None
+        try:
+            vectors = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: _embed_model.encode(
+                    texts, convert_to_numpy=True, show_progress_bar=False
+                ),
+            )
+        except Exception as exc:
+            logger.warning("embedding_batch_encode_failed", error=str(exc))
+            return None
+
+        arr = np.asarray(vectors, dtype=np.float32)
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
+        normalized = np.divide(arr, norms, out=np.zeros_like(arr), where=norms > 0)
+        return [row for row in normalized]
+
 
 def get_embedder() -> EmbeddingProvider:
     """Return the configured embedding provider singleton."""
@@ -108,6 +145,11 @@ def get_embedder() -> EmbeddingProvider:
 async def _encode(text: str) -> Optional[np.ndarray]:
     """Convenience wrapper used by SearchService and ContentRefiner."""
     return await get_embedder().encode(text)
+
+
+async def _encode_many(texts: List[str]) -> Optional[List[np.ndarray]]:
+    """Batch convenience wrapper used by relevance and refinement pipelines."""
+    return await get_embedder().encode_many(texts)
 
 
 def is_embedder_available() -> bool:

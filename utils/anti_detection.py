@@ -642,14 +642,10 @@ class CAPTCHADetector:
         if is_captcha:
             logger.warning("CAPTCHA detected", reason=reason)
             
-            # Take screenshot for analysis
-            screenshot_path = f"TEST/captcha_detected_{int(time.time())}.png"
-            await page.screenshot(path=screenshot_path, full_page=True)
-            
             return {
                 "detected": True,
                 "reason": reason,
-                "screenshot": screenshot_path,
+                "screenshot": None,
                 "backoff_time": random.randint(300, 600),  # 5-10 minutes
                 "action": "backoff"
             }
@@ -685,7 +681,7 @@ def get_enhanced_stealth_config() -> Dict[str, Any]:
         },
         "stealth": True,
         "java_script_enabled": True,
-        "ignore_https_errors": True,
+        "ignore_https_errors": False,
         "block_resources": [],  # Don't block resources for better stealth
         "timeout": 60000
     }

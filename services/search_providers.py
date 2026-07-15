@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -10,11 +11,54 @@ import httpx
 import structlog
 
 from config import get_settings
+from core.foundation import ResourceLimitError
 from services.searxng_runtime import ensure_searxng
 from utils.text import clean_text as _clean_text
 
 logger = structlog.get_logger()
 settings = get_settings()
+
+
+async def _bounded_json_request(
+    method: str,
+    url: str,
+    *,
+    timeout: float,
+    **request_kwargs: Any,
+) -> Dict[str, Any]:
+    """Read provider JSON incrementally under the configured parse budget.
+
+    Uses ``aiter_bytes()`` so httpx decompresses Content-Encoding for us.
+    Do not rebuild an ``httpx.Response`` with the original encoding headers —
+    that re-applies gzip/deflate to already-decoded bytes and breaks Exa
+    (Content-Encoding: gzip + chunked).
+    """
+    limit = get_settings().max_json_parse_size
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(method, url, **request_kwargs) as response:
+            declared = response.headers.get("content-length")
+            if declared:
+                try:
+                    declared_size = int(declared)
+                except ValueError:
+                    declared_size = 0
+                if declared_size > limit:
+                    raise ResourceLimitError("provider_response_bytes", limit, declared_size)
+
+            content = bytearray()
+            async for chunk in response.aiter_bytes():
+                projected = len(content) + len(chunk)
+                if projected > limit:
+                    raise ResourceLimitError("provider_response_bytes", limit, projected)
+                content.extend(chunk)
+
+            # raise_for_status on the stream response after the body is read so
+            # HTTPStatusError can still expose response content when needed.
+            response.raise_for_status()
+            data = json.loads(bytes(content))
+            if not isinstance(data, dict):
+                raise ValueError("Search provider returned a non-object JSON response")
+            return data
 
 
 class SearchProvider(ABC):
@@ -126,9 +170,28 @@ class ExaSearchProvider(SearchProvider):
                 "metadata": {},
             }
 
-        # Fetch the full provider pool regardless of the caller's output size;
-        # trimming to max_results is the ETL layer's job (_finalize_results).
-        num_results = max(1, self._default_num_results)
+        unsupported = {
+            name: value
+            for name, value in {
+                "engines": engines,
+                "categories": categories,
+                "time_range": time_range,
+            }.items()
+            if value
+        }
+        if unsupported:
+            return {
+                "success": False,
+                "provider": self.name,
+                "results": [],
+                "ms": 0,
+                "cost": None,
+                "error": "Exa does not support the requested provider-specific constraints",
+                "metadata": {"unsupported_constraints": sorted(unsupported)},
+            }
+
+        # Respect the caller's output ceiling while retaining a provider-side cap.
+        num_results = max(1, min(max_results, self._default_num_results))
 
         payload: Dict[str, Any] = {
             "query": query,
@@ -141,17 +204,16 @@ class ExaSearchProvider(SearchProvider):
 
         t0 = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.post(
-                    f"{self._base_url}/search",
-                    json=payload,
-                    headers={
-                        "x-api-key": self._api_key,
-                        "Content-Type": "application/json",
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            data = await _bounded_json_request(
+                "POST",
+                f"{self._base_url}/search",
+                timeout=self._timeout,
+                json=payload,
+                headers={
+                    "x-api-key": self._api_key,
+                    "Content-Type": "application/json",
+                },
+            )
         except httpx.HTTPStatusError as exc:
             ms = int((time.monotonic() - t0) * 1000)
             error = (
@@ -316,12 +378,13 @@ class SearXNGSearchProvider(SearchProvider):
 
     async def _fetch(self, params: Dict[str, Any]) -> Dict[str, Any]:
         headers = {"X-Forwarded-For": "127.0.0.1"}
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(
-                f"{self._base_url}/search", params=params, headers=headers
-            )
-            resp.raise_for_status()
-            return resp.json()
+        return await _bounded_json_request(
+            "GET",
+            f"{self._base_url}/search",
+            timeout=self._timeout,
+            params=params,
+            headers=headers,
+        )
 
 
 class SearchProviderRegistry:

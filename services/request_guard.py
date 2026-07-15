@@ -18,6 +18,7 @@ from typing import List, NamedTuple, Optional
 
 import yaml
 from fastapi import HTTPException, status
+from utils.url_security import safe_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,11 @@ class RequestGuard:
         """Raise HTTP 403 if *url* matches a denylist rule."""
         reason = self._matches(url, "url")
         if reason:
-            logger.warning("request_guard blocked url reason=%r url=%r", reason, url)
+            logger.warning(
+                "request_guard blocked url reason=%r url=%r",
+                reason,
+                safe_url_for_log(url),
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=reason,

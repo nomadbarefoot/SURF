@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, Optional, Any, List
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 import structlog
 
@@ -32,6 +33,7 @@ from models.schemas import (
 from utils.stealth import setup_stealth_mode
 from utils.helpers import get_random_user_agent
 from utils.anti_detection import get_enhanced_stealth_config, user_agent_pool
+from services.outbound_policy import OutboundPolicyError, get_outbound_policy
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -190,8 +192,9 @@ class SessionService:
                 
                 session_data.context_obj = context
 
-                if self._enum_value(config.block_mode) != "off" or config.block_resources:
-                    await context.route("**/*", lambda route: self._handle_route(route, session_data))
+                # Every browser request crosses the egress policy, even when ad/resource
+                # blocking is disabled. This covers redirects and page subresources.
+                await context.route("**/*", lambda route: self._handle_route(route, session_data))
 
                 # Create page
                 page = context.pages[0] if context.pages else await context.new_page()
@@ -425,7 +428,7 @@ class SessionService:
             "content_mode": settings.content_mode,
             "timeout": settings.default_timeout,
             "java_script_enabled": True,
-            "ignore_https_errors": True,
+            "ignore_https_errors": False,
             "browser_type": "chromium",
             "locale": settings.default_locale,
             "timezone_id": settings.default_timezone_id
@@ -449,7 +452,6 @@ class SessionService:
             raise ConfigurationError("session_mode", "fetch_only sessions do not create browser contexts yet")
 
         launch_args = [
-            "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-blink-features=AutomationControlled",
         ]
@@ -577,7 +579,19 @@ class SessionService:
         stats["requests_seen"] += 1
 
         decision = {"blocked": False, "reason": "allowed"}
-        if resource_type in (session.config.block_resources or []):
+        scheme = urlsplit(request.url).scheme.lower()
+        if scheme not in {"data", "blob", "about"}:
+            try:
+                await get_outbound_policy().validate(
+                    request.url,
+                    allowed_schemes=("http", "https", "ws", "wss"),
+                )
+            except OutboundPolicyError:
+                decision = {"blocked": True, "reason": "outbound_policy"}
+
+        if decision.get("blocked"):
+            pass
+        elif resource_type in (session.config.block_resources or []):
             decision = {"blocked": True, "reason": "resource_type", "filter": resource_type}
         elif self.adblock_service:
             source_url = self._route_source_url(route)

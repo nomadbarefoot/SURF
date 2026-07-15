@@ -61,7 +61,7 @@ class LadderExhausted(Exception):
 # ---------------------------------------------------------------------------
 
 def _extract_field(text: str, selector: Dict[str, Any]) -> Optional[str]:
-    """Apply a regex selector against raw text; return first capture group or None."""
+    """Apply a regex selector and preserve every capture in multi-field records."""
     if selector.get("type") != "regex":
         return None
     pattern = selector.get("pattern", "")
@@ -70,10 +70,10 @@ def _extract_field(text: str, selector: Dict[str, Any]) -> Optional[str]:
     m = re.search(pattern, text, re.DOTALL)
     if not m:
         return None
-    try:
-        return m.group(1).strip()
-    except IndexError:
-        return m.group(0).strip()
+    captures = [value.strip() for value in m.groups() if value is not None]
+    if captures:
+        return " | ".join(captures)
+    return m.group(0).strip()
 
 
 def _parse_as_of(text: str, selector: Dict[str, Any]) -> Optional[str]:

@@ -24,9 +24,10 @@ import structlog
 from config import get_settings
 from services.challenge_resolver import ChallengeResolver
 from services.content_refiner import ContentRefiner
-from services.embeddings import _encode, is_embedder_available
+from services.embeddings import _encode, _encode_many, is_embedder_available
 from services.search_providers import SearchProviderRegistry
 from utils.text import clean_text as _clean_text
+from utils.url_security import safe_url_for_log
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -77,24 +78,56 @@ def _bm25(item: Dict[str, Any], query: str) -> float:
     return min(max(norm, 0.0), 1.0)
 
 
-async def _semantic(item: Dict[str, Any], query: str) -> Optional[float]:
+async def _semantic(
+    item: Dict[str, Any], query: str, q_emb: Optional[np.ndarray] = None
+) -> Optional[float]:
     """Cosine similarity via local sentence-transformers embeddings, 0-1."""
     doc_text = f"{item.get('title', '')} {item.get('snippet', '')}".strip()
     if not doc_text:
         return None
-    q_emb, d_emb = await asyncio.gather(_encode(query), _encode(doc_text))
+    if q_emb is None:
+        q_emb = await _encode(query)
+    d_emb = await _encode(doc_text)
     if q_emb is None or d_emb is None:
         return None
     return float(min(max(np.dot(q_emb, d_emb), 0.0), 1.0))
 
 
-async def _relevance(item: Dict[str, Any], query: str) -> float:
+async def _relevance(
+    item: Dict[str, Any], query: str, q_emb: Optional[np.ndarray] = None
+) -> float:
     """Hybrid score: 60% BM25 + 40% semantic. Falls back to BM25-only."""
     bm25 = _bm25(item, query)
-    sem = await _semantic(item, query)
+    sem = await _semantic(item, query, q_emb=q_emb)
     if sem is not None:
         return min(max(0.6 * bm25 + 0.4 * sem, 0.0), 1.0)
     return bm25
+
+
+async def _relevance_many(items: List[Dict[str, Any]], query: str) -> List[float]:
+    """Score a result set with one model invocation instead of one per item."""
+    document_texts = [
+        f"{item.get('title', '')} {item.get('snippet', '')}".strip()
+        for item in items
+    ]
+    embeddings = await _encode_many([query, *document_texts])
+    if not embeddings or len(embeddings) != len(items) + 1:
+        return [_bm25(item, query) for item in items]
+
+    query_embedding, *document_embeddings = embeddings
+    scores: List[float] = []
+    for item, document_text, document_embedding in zip(
+        items, document_texts, document_embeddings
+    ):
+        bm25 = _bm25(item, query)
+        if not document_text:
+            scores.append(bm25)
+            continue
+        semantic = float(
+            min(max(np.dot(query_embedding, document_embedding), 0.0), 1.0)
+        )
+        scores.append(min(max(0.6 * bm25 + 0.4 * semantic, 0.0), 1.0))
+    return scores
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +201,8 @@ class SearchService:
         secondary: Optional[Any] = None
         if allow_fallback:
             secondary = self._registry.fallback()
+            if secondary is not None and secondary.name.lower() == requested_provider:
+                secondary = None
 
         # Try primary provider
         result = await primary.search(
@@ -269,7 +304,7 @@ class SearchService:
                 "metadata": provider_result.get("metadata"),
             }
 
-        scores = await asyncio.gather(*[_relevance(r, query) for r in results])
+        scores = await _relevance_many(results, query)
         for r, s in zip(results, scores):
             r["relevance"] = round(s, 3)
         results.sort(key=lambda r: r["relevance"], reverse=True)
@@ -320,6 +355,7 @@ class SearchService:
         *,
         force_headed: bool = False,
         skip_headless: bool = False,
+        include_diagnostics: bool = False,
     ) -> Dict[str, Any]:
         from core.foundation import get_session_service, get_browser_service
 
@@ -367,16 +403,22 @@ class SearchService:
         else:
             retry_urls = []
 
-        for url in retry_urls:
+        async def _headed(url: str) -> tuple[str, Dict[str, Any]]:
             self._stats["extract_headed_retries"] += 1
-            headed_result = await self._extract_single_headed(
+            return (
                 url,
-                session_service,
-                browser_service,
-                content_mode,
-                max_text_length,
-                refine_query,
+                await self._extract_single_headed(
+                    url,
+                    session_service,
+                    browser_service,
+                    content_mode,
+                    max_text_length,
+                    refine_query,
+                ),
             )
+
+        headed_results = await asyncio.gather(*[_headed(url) for url in retry_urls])
+        for url, headed_result in headed_results:
             by_url[url] = {**headed_result, "url": url}
 
         cleaned = []
@@ -403,7 +445,27 @@ class SearchService:
             1,
         )
 
-        return {"success": True, "results": cleaned, "total_ms": total_ms}
+        response = {
+            "success": ok > 0,
+            "partial": 0 < ok < len(cleaned),
+            "results": cleaned,
+            "success_count": ok,
+            "failure_count": fail,
+            "total_ms": total_ms,
+        }
+        if include_diagnostics:
+            response["diagnostics"] = {
+                "headless": [
+                    {**result, "url": url}
+                    for url, result in zip(urls, initial_results)
+                ],
+                "headed_retry": [
+                    {**result, "url": url}
+                    for url, result in headed_results
+                ],
+                "headed_retry_urls": retry_urls,
+            }
+        return response
 
     async def _extract_batch_headless(
         self,
@@ -430,7 +492,9 @@ class SearchService:
                         timeout=settings.search_extract_timeout,
                     )
                 except asyncio.TimeoutError:
-                    logger.warning("search_extract_headless_timeout", url=url)
+                    logger.warning(
+                        "search_extract_headless_timeout", url=safe_url_for_log(url)
+                    )
                     return {
                         "url": url,
                         "success": False,
@@ -474,7 +538,9 @@ class SearchService:
                     timeout=settings.search_extract_timeout_headed,
                 )
             except asyncio.TimeoutError:
-                logger.warning("search_extract_headed_timeout", url=url)
+                logger.warning(
+                    "search_extract_headed_timeout", url=safe_url_for_log(url)
+                )
                 return {
                     "url": url,
                     "success": False,
@@ -547,10 +613,10 @@ class SearchService:
             if ChallengeResolver.is_challenge_page(title, raw_text):
                 logger.info(
                     "search_extract_challenge_blocked",
-                    url=url,
+                    url=safe_url_for_log(url),
                     headed=headed,
                     challenge_outcome=challenge_outcome,
-                    page_url=obs.get("url", url),
+                    page_url=safe_url_for_log(obs.get("url", url)),
                 )
                 return {
                     "url": url,
@@ -570,7 +636,7 @@ class SearchService:
                 if len(fallback_text) > len(cleaned_text):
                     logger.info(
                         "search_extract_structured_fallback",
-                        url=url,
+                        url=safe_url_for_log(url),
                         sections=refined.get("section_count"),
                         refined_chars=refined.get("chars"),
                         flat_chars=len(fallback_text),
@@ -583,7 +649,7 @@ class SearchService:
                 elif len(cleaned_text) < settings.search_min_content_chars:
                     logger.info(
                         "search_extract_insufficient_content",
-                        url=url,
+                        url=safe_url_for_log(url),
                         headed=headed,
                         chars=len(cleaned_text),
                         blocks=refined.get("block_count"),
@@ -606,12 +672,19 @@ class SearchService:
                 )
                 tokens = refined.get("tokens") or max(1, len(cleaned_text) // 4)
 
+            content, truncated = self._bounded_content(
+                content,
+                max_text_length=max_text_length,
+                url=obs.get("url", url),
+            )
+            tokens = max(1, len(content) // 4)
+
             logger.info(
                 "search_extract_ok",
-                url=url,
+                url=safe_url_for_log(url),
                 headed=headed,
                 challenge_outcome=challenge_outcome,
-                page_url=obs.get("url", url),
+                page_url=safe_url_for_log(obs.get("url", url)),
                 ms=ms,
                 sections=refined.get("section_count"),
                 dropped=refined.get("dropped_sections"),
@@ -624,11 +697,15 @@ class SearchService:
                 "success": True,
                 "ms": ms,
                 "sections": refined.get("section_count"),
+                "truncated": truncated,
             }
         except Exception as exc:
             ms = int((time.monotonic() - start) * 1000)
             logger.warning(
-                "search_extract_failed", url=url, headed=headed, error=str(exc)
+                "search_extract_failed",
+                url=safe_url_for_log(url),
+                headed=headed,
+                error=str(exc),
             )
             return {"url": url, "success": False, "error": str(exc), "ms": ms}
         finally:
@@ -706,6 +783,7 @@ class SearchService:
             public["title"] = result.get("title", "")
             public["content"] = result.get("content", "")
             public["tokens"] = result.get("tokens", 0)
+            public["truncated"] = bool(result.get("truncated"))
         else:
             error = result.get("error") or ChallengeResolver.agent_error()
             if result.get(
@@ -742,3 +820,16 @@ class SearchService:
         lines.append("")
         lines.append(f"*Source: {url}*")
         return "\n".join(lines)
+
+    @staticmethod
+    def _bounded_content(content: str, *, max_text_length: int, url: str) -> tuple[str, bool]:
+        """Apply the public extraction budget to the final rendered Markdown."""
+        if len(content) <= max_text_length:
+            return content, False
+        suffix = f"\n\n[Content truncated]\n\n*Source: {url}*"
+        budget = max(0, max_text_length - len(suffix))
+        prefix = content[:budget]
+        boundary = prefix.rfind("\n\n")
+        if boundary >= budget // 2:
+            prefix = prefix[:boundary]
+        return f"{prefix.rstrip()}{suffix}"[:max_text_length], True

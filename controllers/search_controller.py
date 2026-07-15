@@ -59,7 +59,7 @@ async def search_extract(
     guard.check_urls([str(u) for u in request.urls])
     try:
         return await search_service.deep_extract(
-            urls=request.urls,
+            urls=[str(url) for url in request.urls],
             content_mode=request.content_mode,
             max_text_length=request.max_text_length,
             relevance=request.relevance,

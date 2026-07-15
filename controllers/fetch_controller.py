@@ -4,12 +4,14 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
-from core.foundation import get_current_user, get_fetch_service, get_request_guard, get_session_service, get_download_service, ValidationError
+from core.foundation import get_current_user, get_fetch_service, get_request_guard, get_session_service, get_download_service, ResourceLimitError, ValidationError
 from models.schemas import FetchRequest, FetchResponse
 from services.fetch_service import FetchService
 from services.request_guard import RequestGuard
 from services.session_service import SessionService
 from services.download_service import DownloadService
+from services.outbound_policy import OutboundPolicyError
+from utils.url_security import safe_url_for_log
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -32,7 +34,6 @@ async def fetch_request(
                 cookies = None
                 browser_context = None
                 if getattr(session, "context_obj", None):
-                    cookies = await session.context_obj.cookies()
                     browser_context = session.context_obj
                 result = await fetch_service.request(
                     method=request.method,
@@ -75,13 +76,27 @@ async def fetch_request(
             result["text"] = ""
             result["text_preview"] = ""
         return FetchResponse(success=True, data=result)
+    except OutboundPolicyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": e.error_code, "message": e.message},
+        )
+    except ResourceLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"code": e.error_code, "message": e.message, "details": e.details},
+        )
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"type": type(e).__name__, "code": e.error_code, "message": e.message, "details": e.details}
         )
     except Exception as e:
-        logger.error("Fetch request failed", error=str(e), url=str(request.url))
+        logger.error(
+            "Fetch request failed",
+            error=str(e),
+            url=safe_url_for_log(request.url),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fetch request failed: {str(e)}"

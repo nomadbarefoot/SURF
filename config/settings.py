@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     default_profile_id: str = Field(default="default")
     persist_profiles: bool = Field(default=True)
     downloads_dir: str = Field(default="data/downloads")
+    screenshots_dir: str = Field(default="data/screenshots")
+    export_roots: List[str] = Field(default=[])
     max_download_size_bytes: int = Field(default=104857600)
     download_retention_seconds: int = Field(default=86400)
 
@@ -145,6 +147,15 @@ class Settings(BaseSettings):
     # Request Limits
     max_request_size: int = Field(default=10485760)  # 10MB
     max_url_length: int = Field(default=2048)
+    max_response_size: int = Field(default=52428800)  # 50MB
+    max_json_parse_size: int = Field(default=1048576)  # 1MB
+
+    # Outbound Network Policy
+    outbound_allow_private_networks: bool = Field(default=False)
+    outbound_allowed_hosts: List[str] = Field(default=[])
+    outbound_dns_timeout_seconds: float = Field(default=3.0)
+    outbound_dns_cache_ttl_seconds: float = Field(default=30.0)
+    outbound_max_redirects: int = Field(default=5)
 
     # Monitoring
     enable_metrics: bool = Field(default=True)
@@ -164,7 +175,7 @@ class Settings(BaseSettings):
 
     # Enhanced Features Configuration
     enable_adaptive_rate_limiting: bool = Field(default=True)
-    enable_site_memory: bool = Field(default=True)
+    enable_site_memory: bool = Field(default=False)
     enable_semantic_chunking: bool = Field(default=True)
     enable_content_deduplication: bool = Field(default=True)
     enable_enhanced_mouse_movement: bool = Field(default=True)
@@ -259,6 +270,20 @@ class Settings(BaseSettings):
         """Parse CORS headers from string or list"""
         if isinstance(v, str):
             return [item.strip() for item in v.split(",")]
+        return v
+
+    @validator("outbound_allowed_hosts", pre=True)
+    def parse_outbound_allowed_hosts(cls, v: Any) -> List[str]:
+        """Parse exact or wildcard host exceptions from a comma-separated value."""
+        if isinstance(v, str):
+            return [item.strip().lower().rstrip(".") for item in v.split(",") if item.strip()]
+        return v
+
+    @validator("export_roots", pre=True)
+    def parse_export_roots(cls, v: Any) -> List[str]:
+        """Parse explicitly writable artifact roots from a comma-separated value."""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
 

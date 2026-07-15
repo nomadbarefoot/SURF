@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -51,9 +52,27 @@ def _save_markdown_samples(
             "",
             r.get("content", ""),
         ]
-        path.write_text("\n".join(lines), encoding="utf-8")
+        _atomic_write_text(path, "\n".join(lines))
         saved.append(path)
     return saved
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write an artifact beside its destination, then atomically publish it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temp_path = Path(handle.name)
+    temp_path.replace(path)
 
 
 def _trim_result(r: Dict[str, Any], *, include_content: bool) -> Dict[str, Any]:
@@ -111,8 +130,6 @@ async def run_etl(
                 "error": search_out.get("error"),
             }
             run["queries"].append(q_record)
-            if not search_out.get("success"):
-                continue
             for hit in search_out.get("results") or []:
                 url = hit.get("url")
                 if not url:
@@ -141,27 +158,23 @@ async def run_etl(
             "relevance": relevance,
         }
 
-        from core.foundation import get_session_service, get_browser_service
-
-        session_service = await get_session_service()
-        browser_service = await get_browser_service()
-
-        headless_raw = await service._extract_batch_headless(
-            urls, session_service, browser_service, "reader", 8000, refine_query
+        extracted = await service.deep_extract(
+            urls=urls,
+            content_mode="reader",
+            max_text_length=8000,
+            relevance=relevance,
+            refine_query=refine_query,
+            include_diagnostics=True,
         )
+        diagnostics = extracted.get("diagnostics") or {}
+        headless_raw = diagnostics.get("headless") or []
         headless_by_url = {u: r for u, r in zip(urls, headless_raw)}
         run["stages"]["headless"] = [
             _trim_result({**r, "url": u}, include_content=include_content)
             for u, r in zip(urls, headless_raw)
         ]
 
-        retry_urls = [
-            u
-            for u in urls
-            if ChallengeResolver.should_headed_retry(
-                u, headless_by_url.get(u, {"success": False}), relevance
-            )
-        ]
+        retry_urls = diagnostics.get("headed_retry_urls") or []
         run["extract_plan"]["headed_retry_urls"] = retry_urls
         run["extract_plan"]["headed_retry_reasons"] = {
             u: {
@@ -174,22 +187,12 @@ async def run_etl(
             for u in retry_urls
         }
 
-        headed_raw: List[Dict[str, Any]] = []
-        for url in retry_urls:
-            headed_raw.append(
-                await service._extract_single_headed(
-                    url, session_service, browser_service, "reader", 8000, refine_query
-                )
-            )
+        headed_raw = diagnostics.get("headed_retry") or []
         run["stages"]["headed_retry"] = [
             _trim_result(r, include_content=include_content) for r in headed_raw
         ]
 
-        final_by_url = dict(headless_by_url)
-        for url, r in zip(retry_urls, headed_raw):
-            final_by_url[url] = {**r, "url": url}
-
-        final_public = [service._public_result(final_by_url.get(u, {"url": u, "success": False})) for u in urls]
+        final_public = extracted.get("results") or []
         run["final"] = {
             "results": [_trim_result(r, include_content=include_content) for r in final_public],
             "success_count": sum(1 for r in final_public if r.get("success")),
@@ -224,7 +227,7 @@ def main() -> int:
     os.environ.setdefault("SURF_LOG_LEVEL", "ERROR")
 
     queries = args.queries or DEFAULT_QUERIES
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     out = args.output or (ROOT / "research" / f"etl-run-{run_id}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -239,8 +242,6 @@ def main() -> int:
     )
     payload["topic"] = args.topic
     full_results = payload.pop("_full_results", payload.get("final", {}).get("results", []))
-    out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-
     markdown_paths: List[Path] = []
     if args.markdown_samples > 0:
         markdown_paths = _save_markdown_samples(
@@ -249,7 +250,12 @@ def main() -> int:
             count=args.markdown_samples,
             run_id=run_id,
         )
-        payload["markdown_samples"] = [str(p) for p in markdown_paths]
+        payload["markdown_samples"] = [
+            {"path": str(path), "size_bytes": path.stat().st_size}
+            for path in markdown_paths
+        ]
+
+    _atomic_write_text(out, json.dumps(payload, indent=2, default=str))
 
     print(f"Saved ETL artifact: {out}")
     for p in markdown_paths:

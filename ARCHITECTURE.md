@@ -79,6 +79,7 @@ flowchart TB
     Emb["embeddings"]
     CR["ContentRefiner"]
     Ch["ChallengeResolver"]
+    Egress["OutboundPolicy"]
     SXRT["searxng_runtime"]
     Cache["CacheService"]
   end
@@ -105,6 +106,8 @@ flowchart TB
   BS --> AB
   BS --> Ch
   FS --> SS
+  FS --> Egress
+  SS --> Egress
   Search --> Providers
   Search --> Emb
   Search --> BS
@@ -195,15 +198,16 @@ flowchart TD
 flowchart LR
   Host["Host"] -->|compose up| Compose["docker compose"]
   Compose --> SurfC["surf container<br/>start_surf.py + Xvfb"]
-  Compose --> SXC["searxng container"]
+  Compose --> SXC["searxng container<br/>internal only"]
+  Compose --> VK["Valkey limiter<br/>ephemeral"]
   SurfC -->|SURF_SEARXNG_BASE_URL<br/>http://searxng:8080| SXC
-  Host -->|:17777 token auth| SurfC
-  Host -->|:8888| SXC
+  Host -->|127.0.0.1:17777<br/>token auth| SurfC
+  SXC --> VK
   Vol1[("surf-data")] --- SurfC
   Vol2[("huggingface-cache")] --- SurfC
 ```
 
-Compose forces `SURF_AUTH_MODE=token` (bind is `0.0.0.0`). Host-side MCP/stdio does **not** proxy into the container; the image serves HTTP only.
+Compose forces `SURF_AUTH_MODE=token`; Docker publishes it on host loopback only. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests. Host-side MCP/stdio does **not** proxy into the container; the image serves HTTP only.
 
 ## Entrypoints
 
@@ -226,7 +230,8 @@ Mounted routers:
 
 - `SessionService`: lazy Playwright startup, browser context creation, persistent profile leases, per-session operation locks, idle/hard-TTL cleanup, browser-runtime idle teardown, blocker counters.
 - `BrowserService`: page navigation, compact observations, interactions, screenshots, network capture, click downloads.
-- `FetchService`: `httpx`, browser-context, `curl_cffi`, and optional `cloudscraper` fetches.
+- `FetchService`: bounded streaming via `httpx`, browser-context, `curl_cffi`, and optional `cloudscraper`; redirects are manual and revalidated.
+- `OutboundPolicy`: shared scheme, hostname, DNS, address-class, redirect, navigation, and browser-subresource validation.
 - `DownloadService`: sandboxed download persistence under `data/downloads`.
 - `AdblockService`: ABP-style filter loading and request-block decisions.
 - `SearchService`: Exa primary + SearXNG fallback with hybrid BM25 + semantic relevance scoring, configurable relevance threshold, and parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and embedding-based section filtering (`ContentRefiner`). Embeddings are produced in-process by `sentence-transformers` (`services/embeddings`).
@@ -238,12 +243,13 @@ Mounted routers:
 - `data/profiles/`: persistent Chromium profiles.
 - `data/downloads/`: sandboxed downloads and index.
 - `data/filterlists/`: cached EasyList/EasyPrivacy filters.
+- `data/site_memory.db`: opt-in origin-level performance metadata only; disabled by default, ignored by Git, and never stores cookies/session data.
 
 These paths are ignored by Git.
 
 ## Auth Model
 
-Default `SURF_AUTH_MODE=loopback` allows requests only when SURF is bound to a loopback host. `SURF_AUTH_MODE=token` requires `SURF_API_TOKEN`.
+Default `SURF_AUTH_MODE=loopback` allows free-tier search/fetch routes only when SURF is bound to a loopback host. A configured bearer is required for privileged browser/session routes and detailed health probes. `SURF_AUTH_MODE=token` requires `SURF_API_TOKEN` for normal routes; only `/health/live` remains anonymous.
 
 SURF refuses loopback auth on non-loopback hosts. Demo login and runtime API-key creation are disabled.
 
@@ -255,7 +261,7 @@ Sessions are persistent by default and silent by default. A persistent `profile_
 
 Idle cleanup closes inactive sessions after `SURF_IDLE_TIMEOUT_SECONDS`. Hard TTL closes sessions after `SURF_HARD_TTL_SECONDS`. Busy sessions are not reaped until the active operation completes.
 
-The stdio bridge is process-scoped and thin. Health checks and non-browser work do not start Playwright. Browser runtime starts when a browser session is created, then stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` once no sessions are active. Default limits are `SURF_MAX_SESSIONS=3` and `SURF_MAX_HEADED_SESSIONS=1`.
+The stdio bridge is process-scoped and thin. Health checks do not initialize session services or start Playwright, and CPU probes are non-blocking. Browser runtime starts when a browser session is created, then stops after `SURF_BROWSER_IDLE_TIMEOUT_SECONDS` once no sessions are active. Default limits are `SURF_MAX_SESSIONS=3` and `SURF_MAX_HEADED_SESSIONS=1`.
 
 ## Blocking And Observation
 
@@ -274,9 +280,9 @@ Browser-context `/fetch/request` reuses cookies but is not part of page adblock 
 
 ## Search and Extraction
 
-Stage 1 (`SearchService.search`): queries the configured provider (Exa by default, with optional SearXNG fallback), deduplicates results, scores with hybrid BM25 + semantic embeddings from the local `sentence-transformers` encoder, filters to results above `SURF_SEARCH_RELEVANCE_THRESHOLD`, and returns ranked snippets. If no result reaches the threshold, the top 3 are returned with `success: false`.
+Stage 1 (`SearchService.search`): queries the configured provider (Exa by default, with optional SearXNG fallback), deduplicates results, batch-encodes query/results once for hybrid BM25 + semantic scoring, filters to results above `SURF_SEARCH_RELEVANCE_THRESHOLD`, and returns ranked snippets. Provider-specific constraints that Exa cannot honor are rejected so SearXNG can handle them. If no result reaches the threshold, the top 3 are returned with `success: false`.
 
-Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures in headed mode when relevance warrants it, and optionally refines output with `refine_query` embedding filters.
+Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures concurrently under the headed-session semaphore when relevance warrants it, applies final Markdown budgets, and optionally refines output with batched `refine_query` embeddings. ETL callers use this public contract and publish artifacts atomically.
 
 Search extraction reuses `BrowserService` observe modes and `ChallengeResolver` for Cloudflare-style blocks. Stats are exposed at `GET /search/stats`.
 
@@ -286,4 +292,4 @@ Search extraction reuses `BrowserService` observe modes and `ChallengeResolver` 
 
 ## Safety Boundary
 
-SURF supports normal browser interaction, stable cookies, headed mode, conservative ad blocking, and browser-like one-off fetches. It does not automate CAPTCHA solving, credential bypass, access-control bypass, or high-volume crawling.
+SURF supports normal browser interaction, stable cookies, headed mode, conservative ad blocking, and browser-like one-off fetches. Central egress validation blocks local/private address classes by default, response/request bodies are bounded, cross-origin redirects shed sensitive headers, and browser cookies are selected per redirect target. It does not automate CAPTCHA solving, credential bypass, access-control bypass, or high-volume crawling.

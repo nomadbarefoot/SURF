@@ -10,12 +10,13 @@ import time
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
 from pathlib import Path
+from urllib.parse import urlsplit
 import structlog
 
 logger = structlog.get_logger()
 
 # Database schema version for migrations
-DB_VERSION = 2
+DB_VERSION = 3
 
 @dataclass
 class SiteMemory:
@@ -54,14 +55,33 @@ class SiteMemory:
 class SiteMemoryManager:
     """Manages site memory persistence and retrieval with SQLite storage"""
     
-    def __init__(self, ttl: int = 86400):
+    def __init__(self, ttl: int = 86400, db_path: Optional[Path] = None):
         # Store database locally within surf module
         surf_dir = Path(__file__).parent.parent
-        self.db_path = surf_dir / "data" / "site_memory.db"
+        self.db_path = Path(db_path) if db_path is not None else surf_dir / "data" / "site_memory.db"
         self.ttl = ttl
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
         self._migrate_database()
+        self._purge_sensitive_legacy_fields()
+
+    @staticmethod
+    def _site_key(site_url: str) -> str:
+        """Persist only an origin; never retain paths, queries, or fragments."""
+        parsed = urlsplit(site_url)
+        if not parsed.scheme or not parsed.hostname:
+            return site_url.split("?", 1)[0].split("#", 1)[0]
+        default_port = 443 if parsed.scheme.lower() == "https" else 80
+        authority = parsed.hostname.lower().rstrip(".")
+        if parsed.port and parsed.port != default_port:
+            authority = f"{authority}:{parsed.port}"
+        return f"{parsed.scheme.lower()}://{authority}"
+
+    def _purge_sensitive_legacy_fields(self) -> None:
+        """Remove plaintext session and cookie values written by old versions."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE site_memory SET session_data = '{}', cookies = '[]'")
+            conn.commit()
     
     def _init_database(self) -> None:
         """Initialize the site memory database with enhanced schema"""
@@ -169,14 +189,19 @@ class SiteMemoryManager:
                                 raise
                             logger.debug(f"Column {column_name} already exists")
                     
-                    # Update schema version
-                    conn.execute("""
-                        INSERT OR REPLACE INTO schema_version (version, migrated_at)
-                        VALUES (?, ?)
-                    """, (DB_VERSION, time.time()))
-                    
-                    conn.commit()
-                    logger.info("Database migrated to version", version=DB_VERSION)
+                if current_version < 3:
+                    # Versions 1-2 could contain full URLs, cookies, and session
+                    # material. Discard those legacy rows instead of attempting
+                    # to preserve potentially sensitive plaintext.
+                    conn.execute("DELETE FROM site_memory")
+
+                conn.execute("""
+                    INSERT OR REPLACE INTO schema_version (version, migrated_at)
+                    VALUES (?, ?)
+                """, (DB_VERSION, time.time()))
+
+                conn.commit()
+                logger.info("Database migrated to version", version=DB_VERSION)
         except Exception as e:
             logger.error("Failed to migrate database", error=str(e), exc_info=True)
             # Don't raise - allow system to continue with existing schema
@@ -184,6 +209,7 @@ class SiteMemoryManager:
     def save_site_memory(self, site_memory: SiteMemory) -> bool:
         """Save site memory to database"""
         try:
+            site_memory.site_url = self._site_key(site_memory.site_url)
             current_time = time.time()
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
@@ -196,8 +222,8 @@ class SiteMemoryManager:
                             COALESCE((SELECT created_at FROM site_memory WHERE site_url = ?), ?), ?)
                 """, (
                     site_memory.site_url,
-                    json.dumps(site_memory.session_data),
-                    json.dumps(site_memory.cookies),
+                    "{}",
+                    "[]",
                     site_memory.last_accessed or current_time,
                     site_memory.access_count,
                     site_memory.success_rate,
@@ -222,6 +248,7 @@ class SiteMemoryManager:
     def get_site_memory(self, site_url: str) -> Optional[SiteMemory]:
         """Get site memory from database"""
         try:
+            site_url = self._site_key(site_url)
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute("""
                     SELECT session_data, cookies, last_accessed, access_count, 
@@ -264,9 +291,18 @@ class SiteMemoryManager:
                            performance_data: Optional[Dict[str, Any]] = None) -> bool:
         """Update access statistics for a site"""
         try:
+            site_url = self._site_key(site_url)
             site_memory = self.get_site_memory(site_url)
             if not site_memory:
-                return False
+                site_memory = SiteMemory(
+                    site_url=site_url,
+                    session_data={},
+                    cookies=[],
+                    last_accessed=time.time(),
+                    access_count=0,
+                    success_rate=0.0,
+                    custom_data={},
+                )
             
             # Update statistics
             site_memory.access_count += 1
@@ -306,6 +342,7 @@ class SiteMemoryManager:
     def update_extraction_patterns(self, site_url: str, patterns: Dict[str, Any]) -> bool:
         """Update extraction patterns for a site"""
         try:
+            site_url = self._site_key(site_url)
             site_memory = self.get_site_memory(site_url)
             if not site_memory:
                 # Create new entry
@@ -329,6 +366,7 @@ class SiteMemoryManager:
     def update_timing_patterns(self, site_url: str, timing_data: Dict[str, Any]) -> bool:
         """Update timing patterns for a site"""
         try:
+            site_url = self._site_key(site_url)
             site_memory = self.get_site_memory(site_url)
             if not site_memory:
                 site_memory = SiteMemory(
@@ -351,6 +389,7 @@ class SiteMemoryManager:
     def update_optimal_selectors(self, site_url: str, selectors: Dict[str, str]) -> bool:
         """Update optimal selectors for a site"""
         try:
+            site_url = self._site_key(site_url)
             site_memory = self.get_site_memory(site_url)
             if not site_memory:
                 site_memory = SiteMemory(
@@ -373,6 +412,7 @@ class SiteMemoryManager:
     def update_site_characteristics(self, site_url: str, characteristics: Dict[str, Any]) -> bool:
         """Update site characteristics"""
         try:
+            site_url = self._site_key(site_url)
             site_memory = self.get_site_memory(site_url)
             if not site_memory:
                 site_memory = SiteMemory(
@@ -498,6 +538,8 @@ class SiteMemoryManager:
 
 
 # Factory function for creating SiteMemoryManager instances
-def create_site_memory_manager(ttl: int = 86400) -> SiteMemoryManager:
+def create_site_memory_manager(
+    ttl: int = 86400, db_path: Optional[Path] = None
+) -> SiteMemoryManager:
     """Create a new SiteMemoryManager instance with local storage"""
-    return SiteMemoryManager(ttl=ttl)
+    return SiteMemoryManager(ttl=ttl, db_path=db_path)

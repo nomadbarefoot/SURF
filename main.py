@@ -10,6 +10,7 @@ from config.settings import get_settings
 from core.foundation import (
     LoggingMiddleware,
     SecurityMiddleware,
+    RequestSizeLimitMiddleware,
     RateLimitMiddleware,
     ErrorHandlingMiddleware,
     RequestIDMiddleware,
@@ -74,7 +75,12 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     RateLimitMiddleware,
-    requests_per_minute=settings.rate_limit_requests
+    requests_per_window=settings.rate_limit_requests,
+    window_seconds=settings.rate_limit_window,
+)
+app.add_middleware(
+    RequestSizeLimitMiddleware,
+    max_body_size=settings.max_request_size,
 )
 app.add_middleware(
     CORSMiddleware,
@@ -115,7 +121,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         "Unhandled exception",
         error=str(exc),
         error_type=type(exc).__name__,
-        url=str(request.url),
+        path=request.url.path,
         method=request.method,
         exc_info=True
     )

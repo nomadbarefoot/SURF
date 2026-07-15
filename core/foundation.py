@@ -1,6 +1,7 @@
 """Consolidated core foundation for Surf Browser Service"""
 import time
 import asyncio
+import secrets
 import uuid
 from typing import Callable, Optional, Dict, Any
 from fastapi import Request, Response, HTTPException, status, Depends
@@ -170,7 +171,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             "Request started",
             method=request.method,
-            url=str(request.url),
+            path=request.url.path,
             client_ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent")
         )
@@ -185,7 +186,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             "Request completed",
             method=request.method,
-            url=str(request.url),
+            path=request.url.path,
             status_code=response.status_code,
             duration_ms=int(duration * 1000)
         )
@@ -197,20 +198,19 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     """Security middleware for request validation and protection"""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Check request size
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > settings.max_request_size:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Request too large"
-            )
-
         # Route-tier gate: when running in loopback mode without a bearer token,
         # restrict access to FREE_TIER_ROUTES (mirrors FREE_TIER_TOOLS on the MCP layer).
         if settings.auth_mode == "loopback":
             auth_header = request.headers.get("authorization", "")
-            has_token = auth_header.lower().startswith("bearer ") and len(auth_header) > len("bearer ")
-            if not has_token:
+            provided_token = ""
+            if auth_header.lower().startswith("bearer "):
+                provided_token = auth_header[len("bearer "):].strip()
+            has_valid_token = bool(
+                provided_token
+                and settings.api_token
+                and secrets.compare_digest(provided_token, settings.api_token)
+            )
+            if not has_valid_token:
                 path = request.url.path
                 # Always allow the root endpoint
                 if path != "/" and not any(path.startswith(prefix) for prefix in FREE_TIER_ROUTES):
@@ -236,38 +236,129 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class RequestSizeLimitMiddleware:
+    """Bound declared and chunked request bodies before route parsing."""
+
+    def __init__(self, app, max_body_size: int):
+        self.app = app
+        self.max_body_size = max_body_size
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {
+            key.lower(): value for key, value in scope.get("headers", [])
+        }
+        declared = headers.get(b"content-length")
+        if declared:
+            try:
+                declared_size = int(declared)
+            except ValueError:
+                await JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": {"code": "INVALID_CONTENT_LENGTH", "message": "Invalid Content-Length header"}},
+                )(scope, receive, send)
+                return
+            if declared_size > self.max_body_size:
+                await self._reject(scope, receive, send, declared_size)
+                return
+
+        buffered = []
+        total = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            buffered.append(message)
+            if message["type"] != "http.request":
+                continue
+            total += len(message.get("body", b""))
+            if total > self.max_body_size:
+                await self._reject(scope, receive, send, total)
+                return
+            if not message.get("more_body", False):
+                break
+
+        index = 0
+
+        async def replay():
+            nonlocal index
+            if index < len(buffered):
+                message = buffered[index]
+                index += 1
+                return message
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay, send)
+
+    async def _reject(self, scope, receive, send, current_size: int) -> None:
+        await JSONResponse(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            content={
+                "success": False,
+                "error": {
+                    "code": "REQUEST_TOO_LARGE",
+                    "message": "Request body exceeds the configured limit",
+                    "details": {
+                        "limit": self.max_body_size,
+                        "current": current_size,
+                    },
+                },
+            },
+        )(scope, receive, send)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate limiting middleware using in-memory storage"""
     
-    def __init__(self, app, requests_per_minute: int = 100):
+    def __init__(self, app, requests_per_window: int = 100, window_seconds: int = 60):
         super().__init__(app)
-        self.requests_per_minute = requests_per_minute
+        self.requests_per_window = requests_per_window
+        self.window_seconds = window_seconds
         self.requests: Dict[str, list] = {}
-        self.cleanup_task = None
+        self._request_count = 0
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         client_ip = request.client.host if request.client else "unknown"
         current_time = time.time()
         
-        # Clean old requests
-        if client_ip in self.requests:
-            self.requests[client_ip] = [
-                req_time for req_time in self.requests[client_ip]
-                if current_time - req_time < 60  # Keep only last minute
-            ]
-        else:
-            self.requests[client_ip] = []
+        if request.url.path == "/health/live":
+            return await call_next(request)
+
+        cutoff = current_time - self.window_seconds
+        self._request_count += 1
+        if self._request_count % 100 == 0:
+            self.requests = {
+                key: [timestamp for timestamp in timestamps if timestamp >= cutoff]
+                for key, timestamps in self.requests.items()
+                if any(timestamp >= cutoff for timestamp in timestamps)
+            }
+
+        self.requests[client_ip] = [
+            timestamp
+            for timestamp in self.requests.get(client_ip, [])
+            if timestamp >= cutoff
+        ]
         
         # Check rate limit
-        if len(self.requests[client_ip]) >= self.requests_per_minute:
-            retry_after = 60 - (current_time - min(self.requests[client_ip]))
-            raise HTTPException(
+        if len(self.requests[client_ip]) >= self.requests_per_window:
+            retry_after = max(
+                1,
+                int(self.window_seconds - (current_time - min(self.requests[client_ip]))),
+            )
+            return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "error": "Rate limit exceeded",
-                    "retry_after": int(retry_after)
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "RATE_LIMIT_EXCEEDED",
+                        "message": "Rate limit exceeded",
+                        "details": {"retry_after": retry_after},
+                    },
                 },
-                headers={"Retry-After": str(int(retry_after))}
+                headers={"Retry-After": str(retry_after)},
             )
         
         # Add current request
@@ -292,7 +383,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 error_code=e.error_code,
                 message=e.message,
                 details=e.details,
-                url=str(request.url),
+                path=request.url.path,
                 method=request.method
             )
             
@@ -313,7 +404,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 "HTTP exception occurred",
                 status_code=e.status_code,
                 detail=e.detail,
-                url=str(request.url),
+                path=request.url.path,
                 method=request.method
             )
             
@@ -333,7 +424,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 "Unexpected error occurred",
                 error=str(e),
                 error_type=type(e).__name__,
-                url=str(request.url),
+                path=request.url.path,
                 method=request.method,
                 exc_info=True
             )
@@ -395,13 +486,27 @@ async def get_current_user(
 
     scopes = ["browser:read", "browser:write", "sessions:manage", "downloads:manage"]
     if settings.auth_mode == "loopback":
+        if (
+            credentials
+            and settings.api_token
+            and secrets.compare_digest(credentials.credentials, settings.api_token)
+        ):
+            return {
+                "username": "local-token",
+                "scopes": scopes,
+                "auth_type": "local_token",
+            }
         return {
             "username": "local-loopback",
-            "scopes": scopes,
+            "scopes": [],
             "auth_type": "loopback"
         }
 
-    if not credentials or credentials.credentials != settings.api_token:
+    if (
+        not credentials
+        or not settings.api_token
+        or not secrets.compare_digest(credentials.credentials, settings.api_token)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
@@ -441,7 +546,19 @@ async def require_auth(
     return user
 
 
-async def require_scope(required_scope: str):
+async def require_full_access(
+    user: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
+    """Require a validated bearer token, including in loopback mode."""
+    if user.get("auth_type") != "local_token":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A configured API token is required",
+        )
+    return user
+
+
+def require_scope(required_scope: str):
     """Require specific scope for endpoint access"""
     
     def scope_checker(user: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
@@ -475,6 +592,11 @@ async def get_session_service():
         _session_service = SessionService()
         await _session_service.initialize()
     
+    return _session_service
+
+
+def get_session_service_if_initialized() -> Optional[Any]:
+    """Return runtime state without starting background services from a probe."""
     return _session_service
 
 

@@ -11,6 +11,7 @@ import structlog
 
 from config.settings import settings
 from core.foundation import BrowserOperationError, ValidationError
+from utils.path_policy import is_allowed_export_path, resolve_export_directory
 
 logger = structlog.get_logger()
 
@@ -74,7 +75,10 @@ class DownloadService:
     def path_for(self, download_id: str) -> Path:
         record = self._record(download_id)
         path = Path(record["path"]).resolve()
-        if not record.get("external") and not self._inside_root(path):
+        if record.get("external"):
+            if not is_allowed_export_path(path):
+                raise ValidationError("download_id", "External download path is outside configured export roots")
+        elif not self._inside_root(path):
             raise ValidationError("download_id", "Download path is outside sandbox")
         return path
 
@@ -85,7 +89,10 @@ class DownloadService:
             if not record:
                 raise ValidationError("download_id", "Download not found")
             path = Path(record["path"])
-            if (self._inside_root(path.resolve()) or record.get("external")) and path.exists():
+            allowed = self._inside_root(path.resolve()) or (
+                record.get("external") and is_allowed_export_path(path)
+            )
+            if allowed and path.exists():
                 path.unlink()
             self._save_index(records)
             return {"deleted": True, "download_id": download_id}
@@ -119,6 +126,8 @@ class DownloadService:
         if external:
             target_dir = self._requested_output_dir(output_dir)
             path = (target_dir / safe_name).resolve()
+            if not is_allowed_export_path(path):
+                raise ValidationError("output_dir", "Target file escapes configured export roots", str(path))
             if path.exists() and not overwrite:
                 raise ValidationError("output_dir", "Target file already exists; set overwrite=true to replace it", str(path))
         else:
@@ -201,13 +210,4 @@ class DownloadService:
         return path
 
     def _requested_output_dir(self, value: Optional[str]) -> Path:
-        if not value:
-            raise ValidationError("output_dir", "Output directory is required")
-        path = Path(value).expanduser()
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            raise ValidationError("output_dir", f"Unable to create output directory: {e}", value) from e
-        if not path.is_dir():
-            raise ValidationError("output_dir", "Output path is not a directory", value)
-        return path.resolve()
+        return resolve_export_directory(value or "")
