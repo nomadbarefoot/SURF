@@ -197,8 +197,7 @@ async def filter_sections_by_embedding(
     if not sections or not query or not settings.search_refine_embed_enabled:
         return sections, []
 
-    import numpy as np
-    from services.embeddings import _encode_many
+    from services.embeddings import _encode_many, cosine_similarity
 
     texts = [section_plain_text(section)[:2000] for section in sections]
     embeddings = await _encode_many([query, *texts])
@@ -212,7 +211,7 @@ async def filter_sections_by_embedding(
         if len(text) < settings.search_refine_min_block_chars:
             dropped.append(section.get("heading") or "(short)")
             continue
-        score = float(max(0.0, min(1.0, float(np.dot(q_emb, d_emb)))))
+        score = max(0.0, min(1.0, cosine_similarity(q_emb, d_emb)))
         section["relevance_score"] = round(score, 3)
         scored.append((section, score))
         if score < settings.search_refine_embed_threshold:

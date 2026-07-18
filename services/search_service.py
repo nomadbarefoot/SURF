@@ -18,13 +18,18 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import httpx
-import numpy as np
 import structlog
 
 from config import get_settings
 from services.challenge_resolver import ChallengeResolver
 from services.content_refiner import ContentRefiner
-from services.embeddings import _encode, _encode_many, is_embedder_available
+from services.embeddings import (
+    Embedding,
+    _encode,
+    _encode_many,
+    cosine_similarity,
+    is_embedder_available,
+)
 from services.search_providers import SearchProviderRegistry
 from utils.text import clean_text as _clean_text
 from utils.url_security import safe_url_for_log
@@ -79,9 +84,9 @@ def _bm25(item: Dict[str, Any], query: str) -> float:
 
 
 async def _semantic(
-    item: Dict[str, Any], query: str, q_emb: Optional[np.ndarray] = None
+    item: Dict[str, Any], query: str, q_emb: Optional[Embedding] = None
 ) -> Optional[float]:
-    """Cosine similarity via local sentence-transformers embeddings, 0-1."""
+    """Cosine similarity via the configured embedding endpoint, 0-1."""
     doc_text = f"{item.get('title', '')} {item.get('snippet', '')}".strip()
     if not doc_text:
         return None
@@ -90,11 +95,11 @@ async def _semantic(
     d_emb = await _encode(doc_text)
     if q_emb is None or d_emb is None:
         return None
-    return float(min(max(np.dot(q_emb, d_emb), 0.0), 1.0))
+    return min(max(cosine_similarity(q_emb, d_emb), 0.0), 1.0)
 
 
 async def _relevance(
-    item: Dict[str, Any], query: str, q_emb: Optional[np.ndarray] = None
+    item: Dict[str, Any], query: str, q_emb: Optional[Embedding] = None
 ) -> float:
     """Hybrid score: 60% BM25 + 40% semantic. Falls back to BM25-only."""
     bm25 = _bm25(item, query)
@@ -124,7 +129,10 @@ async def _relevance_many(items: List[Dict[str, Any]], query: str) -> List[float
             scores.append(bm25)
             continue
         semantic = float(
-            min(max(np.dot(query_embedding, document_embedding), 0.0), 1.0)
+            min(
+                max(cosine_similarity(query_embedding, document_embedding), 0.0),
+                1.0,
+            )
         )
         scores.append(min(max(0.6 * bm25 + 0.4 * semantic, 0.0), 1.0))
     return scores

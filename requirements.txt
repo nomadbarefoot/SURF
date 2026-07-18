@@ -22,18 +22,6 @@ mcp==1.27.2
 # cloudscraper>=1.2.71
 
 # ==============================================================================
-# Search (Required for search API)
-# ==============================================================================
-numpy==2.4.6
-sentence-transformers==5.5.1
-transformers==5.12.1
-
-# CPU-only torch to keep install size small (~200 MB instead of ~2 GB).
-# sentence-transformers pulls torch; the line below forces the CPU wheel.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.0+cpu
-
-# ==============================================================================
 # Logging & Monitoring (Required)
 # ==============================================================================
 structlog==25.5.0

@@ -1,17 +1,12 @@
-"""Local native embedding pipeline.
-
-SURF uses sentence-transformers in-process instead of an external embedding
-proxy. The model is loaded lazily on first encode() call and cached for the
-process lifetime.
-"""
+"""Remote embedding client for SURF's semantic ranking pipeline."""
 
 from __future__ import annotations
 
-import asyncio
+import math
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import List, Optional
 
-import numpy as np
+import httpx
 import structlog
 
 from config import get_settings
@@ -19,139 +14,106 @@ from config import get_settings
 logger = structlog.get_logger()
 settings = get_settings()
 
-# Module-level singleton state for the local embedding model.
-_embed_lock: asyncio.Lock = asyncio.Lock()
-_embed_model: Any = None
+Embedding = List[float]
 _embed_available: Optional[bool] = None
-_embed_provider: Optional["LocalEmbeddingProvider"] = None
+_embed_provider: Optional["LiteLLMEmbeddingProvider"] = None
+
+
+def _normalize(vector: List[float]) -> Embedding:
+    values = [float(value) for value in vector]
+    norm = math.sqrt(math.fsum(value * value for value in values))
+    return [value / norm for value in values] if norm > 0 else values
+
+
+def cosine_similarity(left: Embedding, right: Embedding) -> float:
+    """Return cosine similarity for two equal-length embedding vectors."""
+    if not left or len(left) != len(right):
+        return 0.0
+    left_norm = math.sqrt(math.fsum(value * value for value in left))
+    right_norm = math.sqrt(math.fsum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return math.fsum(a * b for a, b in zip(left, right)) / (
+        left_norm * right_norm
+    )
 
 
 class EmbeddingProvider(ABC):
-    """Abstract base for a text-to-dense-vector encoder."""
+    """Abstract text-to-vector encoder."""
 
     @abstractmethod
-    async def encode(self, text: str) -> Optional[np.ndarray]:
-        """Return a normalized embedding vector or None if encoding fails."""
+    async def encode_many(self, texts: List[str]) -> Optional[List[Embedding]]:
+        """Return normalized vectors for a batch, or None on failure."""
         ...
 
-    async def encode_many(self, texts: List[str]) -> Optional[List[np.ndarray]]:
-        """Return normalized vectors for a batch of texts."""
-        vectors = await asyncio.gather(*(self.encode(text) for text in texts))
-        if any(vector is None for vector in vectors):
-            return None
-        return [vector for vector in vectors if vector is not None]
+    async def encode(self, text: str) -> Optional[Embedding]:
+        vectors = await self.encode_many([text])
+        return vectors[0] if vectors else None
 
 
-class LocalEmbeddingProvider(EmbeddingProvider):
-    """sentence-transformers based local encoder.
+class LiteLLMEmbeddingProvider(EmbeddingProvider):
+    """OpenAI-compatible embedding client backed by the local LiteLLM proxy."""
 
-    Defaults to all-mpnet-base-v2 for quality. The model downloads on first use
-    and is cached under the standard HuggingFace cache directory (~/.cache).
-    """
+    def __init__(self, transport: Optional[httpx.AsyncBaseTransport] = None):
+        self._transport = transport
 
-    def _choose_device(self) -> str:
-        explicit = settings.embedding_device
-        if explicit and explicit.lower() not in {"auto", "cpu"}:
-            logger.warning(
-                "embedding_device_forced_to_cpu",
-                requested=explicit,
-                reason="SURF uses CPU-only torch to keep install size small",
-            )
-        return "cpu"
-
-    def _load_model(self) -> Any:
-        from sentence_transformers import SentenceTransformer
-
-        device = self._choose_device()
-        model_name = settings.embedding_model
-        logger.info("embedding_model_loading", model=model_name, device=device)
-        model = SentenceTransformer(model_name, device=device)
-        logger.info("embedding_model_loaded", model=model_name, device=device)
-        return model
-
-    async def _ensure_model(self) -> bool:
-        global _embed_model, _embed_available
-
-        if _embed_available is False:
-            return False
-
-        if _embed_model is None:
-            async with _embed_lock:
-                if _embed_model is None:
-                    try:
-                        _embed_model = await asyncio.get_running_loop().run_in_executor(
-                            None, self._load_model
-                        )
-                        _embed_available = True
-                    except Exception as exc:
-                        _embed_available = False
-                        logger.warning("embedding_model_load_failed", error=str(exc))
-                        return False
-        return _embed_model is not None
-
-    async def encode(self, text: str) -> Optional[np.ndarray]:
-        global _embed_model
-
-        if not await self._ensure_model():
-            return None
-
-        try:
-            vec = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: _embed_model.encode(
-                    text, convert_to_numpy=True, show_progress_bar=False
-                ),
-            )
-        except Exception as exc:
-            logger.warning("embedding_encode_failed", error=str(exc))
-            return None
-
-        arr = np.array(vec, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        return arr / norm if norm > 0 else arr
-
-    async def encode_many(self, texts: List[str]) -> Optional[List[np.ndarray]]:
-        global _embed_model
+    async def encode_many(self, texts: List[str]) -> Optional[List[Embedding]]:
+        global _embed_available
 
         if not texts:
             return []
-        if not await self._ensure_model():
-            return None
-        try:
-            vectors = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: _embed_model.encode(
-                    texts, convert_to_numpy=True, show_progress_bar=False
-                ),
-            )
-        except Exception as exc:
-            logger.warning("embedding_batch_encode_failed", error=str(exc))
-            return None
 
-        arr = np.asarray(vectors, dtype=np.float32)
-        norms = np.linalg.norm(arr, axis=1, keepdims=True)
-        normalized = np.divide(arr, norms, out=np.zeros_like(arr), where=norms > 0)
-        return [row for row in normalized]
+        headers = {}
+        if settings.embedding_api_key:
+            headers["Authorization"] = f"Bearer {settings.embedding_api_key}"
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=settings.embedding_timeout,
+                transport=self._transport,
+            ) as client:
+                response = await client.post(
+                    f"{settings.embedding_base_url.rstrip('/')}/embeddings",
+                    headers=headers,
+                    json={"model": settings.embedding_model, "input": texts},
+                )
+                response.raise_for_status()
+                payload = response.json()
+
+            rows = sorted(payload.get("data", []), key=lambda row: row.get("index", -1))
+            if len(rows) != len(texts):
+                raise ValueError(
+                    f"expected {len(texts)} embeddings, received {len(rows)}"
+                )
+            vectors = [_normalize(row["embedding"]) for row in rows]
+            dimensions = {len(vector) for vector in vectors}
+            if len(dimensions) != 1 or 0 in dimensions:
+                raise ValueError("embedding response has inconsistent dimensions")
+
+            _embed_available = True
+            return vectors
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            _embed_available = False
+            logger.warning("embedding_request_failed", error=str(exc))
+            return None
 
 
 def get_embedder() -> EmbeddingProvider:
-    """Return the configured embedding provider singleton."""
+    """Return the process-wide remote embedding provider."""
     global _embed_provider
     if _embed_provider is None:
-        _embed_provider = LocalEmbeddingProvider()
+        _embed_provider = LiteLLMEmbeddingProvider()
     return _embed_provider
 
 
-async def _encode(text: str) -> Optional[np.ndarray]:
-    """Convenience wrapper used by SearchService and ContentRefiner."""
+async def _encode(text: str) -> Optional[Embedding]:
     return await get_embedder().encode(text)
 
 
-async def _encode_many(texts: List[str]) -> Optional[List[np.ndarray]]:
-    """Batch convenience wrapper used by relevance and refinement pipelines."""
+async def _encode_many(texts: List[str]) -> Optional[List[Embedding]]:
     return await get_embedder().encode_many(texts)
 
 
 def is_embedder_available() -> bool:
-    """Best-effort availability check for stats/health."""
+    """Report whether the most recent embedding request succeeded."""
     return _embed_available is True

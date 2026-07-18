@@ -74,14 +74,15 @@ SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runti
 
 ## Docker
 
-SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP service with SearXNG. The image uses the official Playwright Python base image and the CPU-only torch wheel already pinned in `requirements.txt`.
+SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP service with SearXNG. The image uses the official Playwright Python base image; semantic embeddings are supplied by LiteLLM rather than a local ML runtime.
 
 ### Quickstart
 
 ```bash
 cp .env.docker.example .env.docker
-# Edit .env.docker and set SURF_API_TOKEN and SEARXNG_SECRET
-docker compose --env-file .env.docker up --build
+# Set SURF_API_TOKEN, SEARXNG_SECRET, and SURF_EMBEDDING_API_KEY
+docker compose --env-file .env.docker \
+  -f docker-compose.yml -f docker-compose.aegis.yml up --build
 ```
 
 SURF is available only on host loopback at `http://127.0.0.1:17777`. SearXNG and its ephemeral Valkey limiter store are private to the compose network.
@@ -100,9 +101,11 @@ HTTP clients must send `Authorization: Bearer $SURF_API_TOKEN`. Keep `.env.docke
 
 Optional: set `SURF_EXA_API_KEY` in `.env.docker` for Exa-backed search. Without it, search falls back to the compose-only SearXNG service at `http://searxng:8080`.
 
-### Optional Aegis network
+Semantic ranking and section refinement use the OpenAI-compatible LiteLLM embedding route. Set `SURF_EMBEDDING_API_KEY` to a restricted LiteLLM key. The Docker defaults call the `embedding` model alias at `http://litellm:4000/v1`; override `SURF_EMBEDDING_BASE_URL` for a different deployment. If the endpoint is unavailable, ranking falls back to BM25 and refinement leaves sections unchanged.
 
-The secure default attaches SURF only to `surf-net`. If another local stack needs to reach SURF over an existing external `aegis` Docker network, opt in with the override:
+### LiteLLM network
+
+The base stack attaches SURF only to `surf-net`. To use LiteLLM from the Aegis stack, attach SURF to its shared external Docker network with the override:
 
 ```bash
 docker compose --env-file .env.docker \
@@ -118,7 +121,6 @@ The Docker image runs the HTTP server (`start_surf.py`). Agent workflows still u
 Compose mounts named volumes for:
 
 - `data/` — browser profiles, downloads, adblock filter lists
-- `~/.cache/huggingface` — downloaded embedding models
 - SearXNG configuration/cache; Valkey limiter state is deliberately ephemeral
 
 ### Headed sessions
@@ -157,7 +159,7 @@ Example pipeline:
 
 SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose). An authenticated `GET /health/searxng` is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, an authenticated `POST /health/searxng/autowake` may start the configured Docker runtime.
 
-Semantic relevance scoring and section filtering use a local sentence-transformers model (`sentence-transformers/all-mpnet-base-v2` by default). The model downloads on first use and is cached under `~/.cache/huggingface`. Set `SURF_EMBEDDING_MODEL` to use a different sentence-transformers model. This installation is CPU-only; unsupported device overrides are forced back to CPU. Without a working local embedder, search falls back to BM25-only scoring.
+Semantic relevance scoring and section filtering use the OpenAI-compatible embedding endpoint configured by `SURF_EMBEDDING_BASE_URL` and `SURF_EMBEDDING_MODEL`. Host-side execution defaults to `http://127.0.0.1:4000/v1`; Compose uses `http://litellm:4000/v1`. Without a working endpoint, search falls back to BM25-only scoring and skips embedding-based filtering.
 
 ### Finance Pack
 

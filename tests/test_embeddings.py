@@ -1,8 +1,11 @@
-"""Tests for the local sentence-transformers embedding pipeline."""
+"""Tests for the LiteLLM embedding client."""
 
 from __future__ import annotations
 
-import numpy as np
+import json
+import math
+
+import httpx
 import pytest
 
 from services import embeddings
@@ -10,69 +13,89 @@ from services import embeddings
 
 @pytest.fixture(autouse=True)
 def reset_embedder_state(monkeypatch):
-    """Isolate embedding state between tests."""
-    class FakeModel:
-        def __init__(self):
-            self.calls = []
-
-        def encode(self, value, **_kwargs):
-            self.calls.append(value)
-            if isinstance(value, list):
-                return np.stack(
-                    [np.full(768, index + 1, dtype=np.float32) for index, _ in enumerate(value)]
-                )
-            return np.ones(768, dtype=np.float32)
-
-    fake_model = FakeModel()
-    monkeypatch.setattr(
-        embeddings.LocalEmbeddingProvider,
-        "_load_model",
-        lambda _self: fake_model,
-    )
     embeddings._embed_available = None
-    embeddings._embed_model = None
     embeddings._embed_provider = None
-    yield fake_model
+    monkeypatch.setattr(embeddings.settings, "embedding_api_key", "test-key")
+    monkeypatch.setattr(embeddings.settings, "embedding_model", "embedding")
+    monkeypatch.setattr(
+        embeddings.settings, "embedding_base_url", "http://litellm:4000/v1"
+    )
+
+
+def _provider(handler):
+    return embeddings.LiteLLMEmbeddingProvider(transport=httpx.MockTransport(handler))
 
 
 @pytest.mark.asyncio
-async def test_local_embedder_returns_normalized_vector():
-    vec = await embeddings._encode("SURF local embedding test")
-    assert vec is not None
-    assert vec.dtype == np.float32
-    assert vec.shape == (768,)
-    assert abs(np.linalg.norm(vec) - 1.0) < 1e-5
+async def test_encode_many_batches_request_and_normalizes_vectors():
+    captured = {}
 
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["authorization"] = request.headers.get("authorization")
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": 1, "embedding": [0.0, 5.0]},
+                    {"index": 0, "embedding": [3.0, 4.0]},
+                ]
+            },
+        )
 
-@pytest.mark.asyncio
-async def test_embedder_availability_after_encode():
-    assert embeddings.is_embedder_available() is False
-    await embeddings._encode("warmup")
+    vectors = await _provider(handler).encode_many(["first", "second"])
+
+    assert captured == {
+        "authorization": "Bearer test-key",
+        "payload": {"model": "embedding", "input": ["first", "second"]},
+    }
+    assert vectors is not None
+    assert vectors[0] == pytest.approx([0.6, 0.8])
+    assert vectors[1] == pytest.approx([0.0, 1.0])
     assert embeddings.is_embedder_available() is True
+
+
+@pytest.mark.asyncio
+async def test_encode_returns_single_vector():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"data": [{"index": 0, "embedding": [2, 0]}]}
+        )
+
+    vector = await _provider(handler).encode("query")
+
+    assert vector == [1.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_request_failure_marks_provider_unavailable():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": "unavailable"})
+
+    assert await _provider(handler).encode_many(["query"]) is None
+    assert embeddings.is_embedder_available() is False
+
+
+@pytest.mark.asyncio
+async def test_invalid_batch_response_fails_closed():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []})
+
+    assert await _provider(handler).encode_many(["query"]) is None
 
 
 def test_get_embedder_singleton():
-    a = embeddings.get_embedder()
-    b = embeddings.get_embedder()
-    assert isinstance(a, embeddings.LocalEmbeddingProvider)
-    assert a is b
+    first = embeddings.get_embedder()
+    second = embeddings.get_embedder()
+    assert isinstance(first, embeddings.LiteLLMEmbeddingProvider)
+    assert first is second
 
 
-@pytest.mark.asyncio
-async def test_encode_reuses_loaded_model():
-    first = await embeddings._encode("first")
-    second = await embeddings._encode("second")
-    assert first is not None
-    assert second is not None
-    assert first.shape == second.shape
-    assert embeddings.is_embedder_available() is True
-
-
-@pytest.mark.asyncio
-async def test_encode_many_uses_one_model_call(reset_embedder_state):
-    vectors = await embeddings._encode_many(["first", "second", "third"])
-
-    assert vectors is not None
-    assert len(vectors) == 3
-    assert reset_embedder_state.calls == [["first", "second", "third"]]
-    assert all(abs(np.linalg.norm(vector) - 1.0) < 1e-5 for vector in vectors)
+def test_cosine_similarity_handles_unnormalized_vectors():
+    assert embeddings.cosine_similarity([3.0, 0.0], [4.0, 0.0]) == pytest.approx(
+        1.0
+    )
+    assert embeddings.cosine_similarity([1.0, 0.0], [0.0, 2.0]) == pytest.approx(
+        0.0
+    )
+    assert math.isfinite(embeddings.cosine_similarity([0.0], [0.0]))

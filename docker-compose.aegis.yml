@@ -7,3 +7,4 @@ services:
 networks:
   aegis:
     external: true
+    name: aegis-v2-services

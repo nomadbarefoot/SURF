@@ -18,10 +18,7 @@ RUN groupadd -r surf -g 10001 && \
 WORKDIR /app
 
 COPY --chown=root:root requirements.txt .
-RUN if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then \
-        sed -i 's/^torch==2\.12\.0+cpu$/torch==2.12.0/' requirements.txt; \
-    fi && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=root:root . .
 

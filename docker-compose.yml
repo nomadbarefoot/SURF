@@ -13,9 +13,10 @@ services:
       - "SURF_API_TOKEN=${SURF_API_TOKEN:?Set SURF_API_TOKEN in .env.docker}"
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
+      - SURF_EMBEDDING_BASE_URL=http://litellm:4000/v1
+      - SURF_EMBEDDING_MODEL=embedding
     volumes:
       - surf-data:/app/data
-      - huggingface-cache:/home/surf/.cache/huggingface
     depends_on:
       searxng:
         condition: service_healthy
@@ -80,6 +81,10 @@ services:
       - /data:rw,nosuid,nodev,size=64m
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -92,7 +97,6 @@ services:
 
 volumes:
   surf-data:
-  huggingface-cache:
   searxng-config:
   searxng-cache:
 

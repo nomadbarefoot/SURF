@@ -21,7 +21,7 @@ flowchart LR
     Exa["Exa API"]
     SX["SearXNG"]
     Web["Target websites"]
-    HF["HuggingFace cache<br/>sentence-transformers"]
+    LiteLLM["LiteLLM<br/>embedding endpoint"]
   end
 
   subgraph Persist["Local persistence"]
@@ -39,7 +39,7 @@ flowchart LR
   App --> Exa
   App --> SX
   App --> Web
-  App --> HF
+  App --> LiteLLM
   App --> Profiles
   App --> Downloads
   App --> Filters
@@ -201,10 +201,10 @@ flowchart LR
   Compose --> SXC["searxng container<br/>internal only"]
   Compose --> VK["Valkey limiter<br/>ephemeral"]
   SurfC -->|SURF_SEARXNG_BASE_URL<br/>http://searxng:8080| SXC
+  SurfC -->|shared external network<br/>http://litellm:4000/v1| LiteLLM["LiteLLM proxy"]
   Host -->|127.0.0.1:17777<br/>token auth| SurfC
   SXC --> VK
   Vol1[("surf-data")] --- SurfC
-  Vol2[("huggingface-cache")] --- SurfC
 ```
 
 Compose forces `SURF_AUTH_MODE=token`; Docker publishes it on host loopback only. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests. Host-side MCP/stdio does **not** proxy into the container; the image serves HTTP only.
@@ -234,7 +234,7 @@ Mounted routers:
 - `OutboundPolicy`: shared scheme, hostname, DNS, address-class, redirect, navigation, and browser-subresource validation.
 - `DownloadService`: sandboxed download persistence under `data/downloads`.
 - `AdblockService`: ABP-style filter loading and request-block decisions.
-- `SearchService`: Exa primary + SearXNG fallback with hybrid BM25 + semantic relevance scoring, configurable relevance threshold, and parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and embedding-based section filtering (`ContentRefiner`). Embeddings are produced in-process by `sentence-transformers` (`services/embeddings`).
+- `SearchService`: Exa primary + SearXNG fallback with hybrid BM25 + semantic relevance scoring, configurable relevance threshold, and parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and embedding-based section filtering (`ContentRefiner`). Embeddings are requested in batches from the OpenAI-compatible LiteLLM endpoint (`services/embeddings`), with BM25/no-filter fallbacks when it is unavailable.
 - `FinanceService`: curated source ladders from `config/finance_sources.yaml`; walks known-good endpoints before search fallback; returns structured markdown via `FinanceRenderer`; daily cache for macro/ERP endpoints.
 - `searxng_runtime`: SearXNG health probe and optional Docker autostart.
 
