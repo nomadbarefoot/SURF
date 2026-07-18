@@ -41,6 +41,19 @@ Manual HTTP development server:
 .venv/bin/python start_surf.py
 ```
 
+The repository-local HTTP CLI is available as `./surf`:
+
+```bash
+export SURF_URL=127.0.0.1:17777
+./surf preflight
+./surf search "Python official documentation" --max-results 3
+./surf fetch https://example.com
+```
+
+Use `--json` for machine-readable output and `--timeout SECONDS` to override
+the default 30-second HTTP timeout. `surf preflight` probes liveness, runtime
+health, SearXNG, and one outbound URL without starting or mutating services.
+
 OpenAPI docs are available at `/docs` when `SURF_DEBUG=true`.
 
 ## Auth

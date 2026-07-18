@@ -1,0 +1,14 @@
+#!/bin/sh
+# Execute the repository's SURF CLI with the project virtualenv when present.
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -n "${SURF_PYTHON:-}" ]; then
+    PYTHON=$SURF_PYTHON
+else
+    PYTHON="$ROOT/.venv/bin/python"
+    if [ ! -x "$PYTHON" ]; then
+        PYTHON=python3
+    fi
+fi
+
+exec "$PYTHON" "$ROOT/cli/surf_cli.py" "$@"

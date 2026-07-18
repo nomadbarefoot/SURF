@@ -18,6 +18,19 @@ Manual HTTP development server:
 .venv/bin/python start_surf.py
 ```
 
+HTTP CLI:
+
+```bash
+./surf preflight
+./surf search "Python official documentation" --max-results 3
+./surf extract https://docs.python.org/3/
+./surf fetch https://example.com
+```
+
+Use `--json` for raw response output and `--timeout SECONDS` for longer-lived
+requests. `extract` returns a non-zero exit status if any URL in the batch
+fails.
+
 Default auth is loopback-only for the manual HTTP server and does not require login. If `SURF_AUTH_MODE=token`, send `Authorization: Bearer $SURF_API_TOKEN`.
 
 ## Agent Flow

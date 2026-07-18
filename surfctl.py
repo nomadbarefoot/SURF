@@ -227,8 +227,23 @@ async def app_call(method: str, path: str, data: Any = None) -> dict[str, Any]:
         raise RuntimeError("SURF MCP bridge is not initialized")
     payload = await MCP_BRIDGE.request(method, path, data)
     if not payload.get("ok"):
-        return payload
-    return payload.get("json") if payload.get("json") is not None else payload
+        raise_mcp_tool_error(payload)
+    result = payload.get("json") if payload.get("json") is not None else payload
+    if isinstance(result, dict) and (
+        result.get("success") is False or result.get("ok") is False
+    ):
+        raise_mcp_tool_error(result)
+    return result
+
+
+def raise_mcp_tool_error(payload: dict[str, Any]) -> None:
+    """Convert an HTTP/application failure into MCP's isError response."""
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    detail = payload.get("json", payload)
+    if isinstance(detail, dict):
+        detail = detail.get("detail", detail.get("error", detail))
+    raise ToolError(json.dumps(detail, sort_keys=True, default=str))
 
 
 @asynccontextmanager
@@ -563,7 +578,7 @@ def build_mcp_server():
                         "timeout": timeout,
                     },
                 )
-            return {"ok": False, "error": "provide url or session_id+selector"}
+            raise_mcp_tool_error({"error": "provide url or session_id+selector"})
 
         @mcp.tool(name="browser_network_start", description="Start network.")
         async def browser_network_start(

@@ -9,6 +9,7 @@ Usage:
   surf search "<query>" [--max-results N]
   surf extract <url> [<url>...]
   surf fetch <url>
+  surf preflight
 """
 
 import argparse
@@ -42,11 +43,24 @@ def _headers() -> dict:
     return {}
 
 
-def _post(url: str, payload: dict) -> dict:
+def _request(
+    method: str,
+    url: str,
+    payload: dict | None = None,
+    timeout: float = _TIMEOUT,
+    allow_http_errors: bool = False,
+) -> httpx.Response:
     try:
-        resp = httpx.post(url, json=payload, headers=_headers(), timeout=_TIMEOUT)
-        resp.raise_for_status()
-        return resp.json()
+        resp = httpx.request(
+            method,
+            url,
+            json=payload,
+            headers=_headers(),
+            timeout=timeout,
+        )
+        if not allow_http_errors:
+            resp.raise_for_status()
+        return resp
     except httpx.HTTPStatusError as exc:
         try:
             body = exc.response.json()
@@ -64,6 +78,35 @@ def _post(url: str, payload: dict) -> dict:
         sys.exit(1)
 
 
+def _post(url: str, payload: dict, timeout: float = _TIMEOUT) -> dict:
+    return _request("POST", url, payload, timeout).json()
+
+
+def _json_response(response: httpx.Response) -> dict:
+    try:
+        body = response.json()
+    except ValueError:
+        return {"success": False, "error": response.text}
+    return body if isinstance(body, dict) else {"data": body}
+
+
+def _fetch_data(response: dict) -> dict:
+    """Unwrap the server's FetchResponse.data envelope."""
+    data = response.get("data")
+    return data if isinstance(data, dict) else response
+
+
+def _extract_failure_count(data: dict) -> int:
+    reported = data.get("failure_count")
+    if isinstance(reported, int):
+        return reported
+    return sum(1 for result in data.get("results", []) if result.get("error"))
+
+
+def _print_json(data: dict) -> None:
+    print(json.dumps(data, indent=2, sort_keys=True))
+
+
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 # ---------------------------------------------------------------------------
@@ -74,7 +117,12 @@ def cmd_search(args: argparse.Namespace) -> None:
     data = _post(
         f"{base}/search/query",
         {"query": args.query, "max_results": args.max_results},
+        args.timeout,
     )
+
+    if args.json:
+        _print_json(data)
+        return
 
     results = data.get("results", [])
     if not results:
@@ -98,7 +146,17 @@ def cmd_search(args: argparse.Namespace) -> None:
 
 def cmd_extract(args: argparse.Namespace) -> None:
     base = _base_url()
-    data = _post(f"{base}/search/extract", {"urls": args.urls})
+    data = _post(
+        f"{base}/search/extract",
+        {"urls": args.urls},
+        args.timeout,
+    )
+
+    if args.json:
+        _print_json(data)
+        if _extract_failure_count(data) or data.get("success") is False:
+            sys.exit(1)
+        return
 
     results = data.get("results", [])
     if not results:
@@ -110,21 +168,87 @@ def cmd_extract(args: argparse.Namespace) -> None:
         print(f"=== {url} ===")
         if r.get("error"):
             print(f"Error: {r['error']}", file=sys.stderr)
-        else:
-            content = r.get("content") or r.get("text") or ""
+        content = r.get("content") or r.get("text") or ""
+        if content:
             print(content)
         print()
+
+    if _extract_failure_count(data) or data.get("success") is False:
+        sys.exit(1)
 
 
 def cmd_fetch(args: argparse.Namespace) -> None:
     base = _base_url()
-    data = _post(f"{base}/fetch/request", {"method": "GET", "url": args.url})
+    data = _post(
+        f"{base}/fetch/request",
+        {"method": "GET", "url": args.url},
+        args.timeout,
+    )
+
+    if args.json:
+        _print_json(data)
+        return
 
     # Prefer the text body; fall back to raw JSON for structured responses
-    content = data.get("content") or data.get("body") or data.get("text")
+    result = _fetch_data(data)
+    content = result.get("content") or result.get("body") or result.get("text")
     if content is None:
-        content = json.dumps(data, indent=2)
+        structured = result.get("json")
+        content = (
+            json.dumps(structured, indent=2)
+            if structured is not None
+            else json.dumps(result, indent=2)
+        )
     print(content)
+
+
+def cmd_preflight(args: argparse.Namespace) -> None:
+    """Run non-mutating service, runtime, SearXNG, and outbound probes."""
+    base = _base_url()
+    checks = [
+        ("service", "GET", "/health/live", None),
+        ("browser runtime", "GET", "/health/runtime", None),
+        ("SearXNG", "GET", "/health/searxng", None),
+        (
+            "outbound fetch",
+            "POST",
+            "/fetch/request",
+            {"method": "GET", "url": args.probe_url},
+        ),
+    ]
+    results = []
+    for name, method, path, payload in checks:
+        try:
+            response = _request(
+                method,
+                f"{base}{path}",
+                payload,
+                args.timeout,
+                allow_http_errors=True,
+            )
+            body = _json_response(response)
+            passed = response.is_success and body.get("success", True) is not False
+            results.append(
+                {
+                    "name": name,
+                    "ok": passed,
+                    "status_code": response.status_code,
+                    "body": body,
+                }
+            )
+        except SystemExit:
+            results.append({"name": name, "ok": False, "error": "request failed"})
+
+    if args.json:
+        _print_json({"success": all(item["ok"] for item in results), "checks": results})
+    else:
+        for item in results:
+            state = "ok" if item["ok"] else "fail"
+            detail = item.get("status_code", item.get("error", "unknown"))
+            print(f"[{state}] {item['name']}: {detail}")
+
+    if not all(item["ok"] for item in results):
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +284,8 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Maximum number of results to return (default: 5)",
     )
+    p_search.add_argument("--timeout", type=float, default=_TIMEOUT, help="HTTP timeout in seconds")
+    p_search.add_argument("--json", action="store_true", help="Print the raw JSON response")
 
     # extract
     p_extract = sub.add_parser(
@@ -171,6 +297,10 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_extract.add_argument("urls", nargs="+", metavar="url", help="URL(s) to extract")
+    p_extract.add_argument(
+        "--timeout", type=float, default=_TIMEOUT, help="HTTP timeout in seconds"
+    )
+    p_extract.add_argument("--json", action="store_true", help="Print the raw JSON response")
 
     # fetch
     p_fetch = sub.add_parser(
@@ -179,6 +309,23 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Issue a raw GET request via SURF's fetch endpoint.",
     )
     p_fetch.add_argument("url", help="URL to fetch")
+    p_fetch.add_argument("--timeout", type=float, default=_TIMEOUT, help="HTTP timeout in seconds")
+    p_fetch.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    p_preflight = sub.add_parser(
+        "preflight",
+        help="Probe service dependencies and outbound access",
+        description="Run non-mutating readiness probes against SURF.",
+    )
+    p_preflight.add_argument(
+        "--probe-url",
+        default="https://example.com",
+        help="URL used for the outbound fetch probe (default: https://example.com)",
+    )
+    p_preflight.add_argument(
+        "--timeout", type=float, default=_TIMEOUT, help="HTTP timeout in seconds"
+    )
+    p_preflight.add_argument("--json", action="store_true", help="Print JSON results")
 
     return parser
 
@@ -193,6 +340,8 @@ def main() -> None:
         cmd_extract(args)
     elif args.command == "fetch":
         cmd_fetch(args)
+    elif args.command == "preflight":
+        cmd_preflight(args)
 
 
 if __name__ == "__main__":
