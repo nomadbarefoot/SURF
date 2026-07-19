@@ -503,7 +503,8 @@ def test_settings_defaults_favor_exa_auto():
     assert settings.exa_fallback_enabled is True
     assert settings.search_relevance_threshold == 0.5
     assert settings.embedding_base_url == "http://127.0.0.1:4000/v1"
-    assert settings.embedding_model == "embedding"
+    assert settings.embedding_model == "embed-text"
+    assert settings.embedding_dimensions == 768
     assert settings.embedding_timeout == 15.0
 
 

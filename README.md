@@ -101,7 +101,7 @@ HTTP clients must send `Authorization: Bearer $SURF_API_TOKEN`. Keep `.env.docke
 
 Optional: set `SURF_EXA_API_KEY` in `.env.docker` for Exa-backed search. Without it, search falls back to the compose-only SearXNG service at `http://searxng:8080`.
 
-Semantic ranking and section refinement use the OpenAI-compatible LiteLLM embedding route. Set `SURF_EMBEDDING_API_KEY` to a restricted LiteLLM key. The Docker defaults call the `embedding` model alias at `http://litellm:4000/v1`; override `SURF_EMBEDDING_BASE_URL` for a different deployment. If the endpoint is unavailable, ranking falls back to BM25 and refinement leaves sections unchanged.
+Semantic ranking and section refinement use the OpenAI-compatible LiteLLM embedding route. Set `SURF_EMBEDDING_API_KEY` to a restricted LiteLLM key. The Docker defaults call the `embed-text` model alias at `http://litellm:4000/v1` and request 768 dimensions; override `SURF_EMBEDDING_BASE_URL` for a different deployment. Nomic retrieval prefixes are applied once at the query/document boundary. If the endpoint is unavailable, ranking falls back to BM25 and refinement leaves sections unchanged.
 
 ### LiteLLM network
 

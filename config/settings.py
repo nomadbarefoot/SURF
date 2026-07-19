@@ -108,7 +108,8 @@ class Settings(BaseSettings):
     search_refine_min_block_chars: int = Field(default=40)
     embedding_base_url: str = Field(default="http://127.0.0.1:4000/v1")
     embedding_api_key: Optional[str] = Field(default=None)
-    embedding_model: str = Field(default="embedding")
+    embedding_model: str = Field(default="embed-text")
+    embedding_dimensions: int = Field(default=768)
     embedding_timeout: float = Field(default=15.0)
 
     # Performance & Stealth

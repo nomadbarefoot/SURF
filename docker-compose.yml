@@ -14,7 +14,8 @@ services:
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
       - SURF_EMBEDDING_BASE_URL=http://litellm:4000/v1
-      - SURF_EMBEDDING_MODEL=embedding
+      - SURF_EMBEDDING_MODEL=embed-text
+      - SURF_EMBEDDING_DIMENSIONS=768
     volumes:
       - surf-data:/app/data
     depends_on:

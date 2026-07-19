@@ -16,7 +16,10 @@ def reset_embedder_state(monkeypatch):
     embeddings._embed_available = None
     embeddings._embed_provider = None
     monkeypatch.setattr(embeddings.settings, "embedding_api_key", "test-key")
-    monkeypatch.setattr(embeddings.settings, "embedding_model", "embedding")
+    monkeypatch.setattr(
+        embeddings.settings, "embedding_model", "embed-text"
+    )
+    monkeypatch.setattr(embeddings.settings, "embedding_dimensions", 768)
     monkeypatch.setattr(
         embeddings.settings, "embedding_base_url", "http://litellm:4000/v1"
     )
@@ -47,7 +50,11 @@ async def test_encode_many_batches_request_and_normalizes_vectors():
 
     assert captured == {
         "authorization": "Bearer test-key",
-        "payload": {"model": "embedding", "input": ["first", "second"]},
+        "payload": {
+            "model": "embed-text",
+            "input": ["first", "second"],
+            "dimensions": 768,
+        },
     }
     assert vectors is not None
     assert vectors[0] == pytest.approx([0.6, 0.8])
@@ -65,6 +72,53 @@ async def test_encode_returns_single_vector():
     vector = await _provider(handler).encode("query")
 
     assert vector == [1.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_query_and_document_prefixes_are_applied_once():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                ]
+            },
+        )
+
+    embeddings._embed_provider = _provider(handler)
+    vectors = await embeddings._encode_query_and_documents(
+        "topic", ["search_document: already tagged"]
+    )
+
+    assert vectors is not None
+    assert captured["payload"] == {
+        "model": "embed-text",
+        "input": ["search_query: topic", "search_document: already tagged"],
+        "dimensions": 768,
+    }
+
+
+@pytest.mark.asyncio
+async def test_prefixed_inputs_are_bounded_for_nomic_context():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, json={"data": [{"index": 0, "embedding": [1.0, 0.0]}]}
+        )
+
+    embeddings._embed_provider = _provider(handler)
+    await embeddings._encode_document("x" * 10_000)
+
+    value = captured["payload"]["input"][0]
+    assert len(value) == embeddings.MAX_INPUT_CHARS
+    assert value.startswith(embeddings.DOCUMENT_PREFIX)
 
 
 @pytest.mark.asyncio

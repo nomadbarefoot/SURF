@@ -197,10 +197,10 @@ async def filter_sections_by_embedding(
     if not sections or not query or not settings.search_refine_embed_enabled:
         return sections, []
 
-    from services.embeddings import _encode_many, cosine_similarity
+    from services.embeddings import _encode_query_and_documents, cosine_similarity
 
     texts = [section_plain_text(section)[:2000] for section in sections]
-    embeddings = await _encode_many([query, *texts])
+    embeddings = await _encode_query_and_documents(query, texts)
     if not embeddings:
         return sections, []
     q_emb, *document_embeddings = embeddings

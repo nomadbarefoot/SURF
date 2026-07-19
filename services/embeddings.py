@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import httpx
 import structlog
@@ -15,6 +15,12 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 Embedding = List[float]
+EmbeddingInputType = Literal["query", "document"]
+QUERY_PREFIX = "search_query: "
+DOCUMENT_PREFIX = "search_document: "
+# Leave headroom inside Nomic v2's 512-token context for its multilingual
+# tokenizer. The previous SentenceTransformers backend truncated implicitly.
+MAX_INPUT_CHARS = 1_000
 _embed_available: Optional[bool] = None
 _embed_provider: Optional["LiteLLMEmbeddingProvider"] = None
 
@@ -75,7 +81,11 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
                 response = await client.post(
                     f"{settings.embedding_base_url.rstrip('/')}/embeddings",
                     headers=headers,
-                    json={"model": settings.embedding_model, "input": texts},
+                    json={
+                        "model": settings.embedding_model,
+                        "input": texts,
+                        "dimensions": settings.embedding_dimensions,
+                    },
                 )
                 response.raise_for_status()
                 payload = response.json()
@@ -107,11 +117,43 @@ def get_embedder() -> EmbeddingProvider:
 
 
 async def _encode(text: str) -> Optional[Embedding]:
-    return await get_embedder().encode(text)
+    return await _encode_query(text)
+
+
+def _prefix(text: str, input_type: EmbeddingInputType) -> str:
+    """Apply the Nomic retrieval prefix once at the semantic boundary."""
+    prefix = QUERY_PREFIX if input_type == "query" else DOCUMENT_PREFIX
+    while text.startswith((QUERY_PREFIX, DOCUMENT_PREFIX)):
+        text = text.split(": ", 1)[1]
+    return f"{prefix}{text}"[:MAX_INPUT_CHARS]
+
+
+async def _encode_query(text: str) -> Optional[Embedding]:
+    return await get_embedder().encode(_prefix(text, "query"))
+
+
+async def _encode_document(text: str) -> Optional[Embedding]:
+    return await get_embedder().encode(_prefix(text, "document"))
 
 
 async def _encode_many(texts: List[str]) -> Optional[List[Embedding]]:
-    return await get_embedder().encode_many(texts)
+    return await _encode_documents(texts)
+
+
+async def _encode_documents(texts: List[str]) -> Optional[List[Embedding]]:
+    return await get_embedder().encode_many(
+        [_prefix(text, "document") for text in texts]
+    )
+
+
+async def _encode_query_and_documents(
+    query: str, documents: List[str]
+) -> Optional[List[Embedding]]:
+    """Encode one retrieval query and its document candidates in one request."""
+    return await get_embedder().encode_many(
+        [_prefix(query, "query")]
+        + [_prefix(document, "document") for document in documents]
+    )
 
 
 def is_embedder_available() -> bool:

@@ -25,8 +25,9 @@ from services.challenge_resolver import ChallengeResolver
 from services.content_refiner import ContentRefiner
 from services.embeddings import (
     Embedding,
-    _encode,
-    _encode_many,
+    _encode_document,
+    _encode_query,
+    _encode_query_and_documents,
     cosine_similarity,
     is_embedder_available,
 )
@@ -91,8 +92,8 @@ async def _semantic(
     if not doc_text:
         return None
     if q_emb is None:
-        q_emb = await _encode(query)
-    d_emb = await _encode(doc_text)
+        q_emb = await _encode_query(query)
+    d_emb = await _encode_document(doc_text)
     if q_emb is None or d_emb is None:
         return None
     return min(max(cosine_similarity(q_emb, d_emb), 0.0), 1.0)
@@ -115,7 +116,7 @@ async def _relevance_many(items: List[Dict[str, Any]], query: str) -> List[float
         f"{item.get('title', '')} {item.get('snippet', '')}".strip()
         for item in items
     ]
-    embeddings = await _encode_many([query, *document_texts])
+    embeddings = await _encode_query_and_documents(query, document_texts)
     if not embeddings or len(embeddings) != len(items) + 1:
         return [_bm25(item, query) for item in items]
 
