@@ -1,6 +1,7 @@
 services:
   surf:
     build: .
+    image: surf:1.0.0
     container_name: surf
     ports:
       - "127.0.0.1:17777:17777"
