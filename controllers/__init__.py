@@ -6,6 +6,7 @@ from . import health_controller
 from . import auth_controller
 from . import fetch_controller
 from . import download_controller
+from . import artifact_controller
 
 __all__ = [
     "browser_controller",
@@ -13,5 +14,6 @@ __all__ = [
     "health_controller", 
     "auth_controller",
     "fetch_controller",
-    "download_controller"
+    "download_controller",
+    "artifact_controller",
 ]

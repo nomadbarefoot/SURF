@@ -3,6 +3,7 @@ import asyncio
 import random
 import time
 from collections import deque
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from playwright.async_api import Page
 import structlog
@@ -35,6 +36,8 @@ class BrowserService:
     
     def __init__(self):
         self.initialized = False
+        from services.download_service import DownloadService
+        self.artifact_service = DownloadService()
         self.site_memory_manager = (
             create_site_memory_manager(ttl=settings.site_memory_ttl)
             if settings.enable_site_memory
@@ -384,15 +387,18 @@ class BrowserService:
                 {"maxTextLength": max_text_length, "maxItems": max_items, "contentMode": content_mode}
             )
 
-            screenshot_path = None
+            screenshot_artifact = {}
             if include_screenshot:
                 screenshot = await self.take_screenshot(session=session, full_page=False, wait_for_dynamic=False)
-                screenshot_path = screenshot.get("path")
+                screenshot_artifact = {
+                    "screenshot_artifact_id": screenshot.get("artifact_id"),
+                    "screenshot_content_url": screenshot.get("content_url"),
+                }
 
             return {
                 "url": page.url,
                 "title": await page.title(),
-                "screenshot": screenshot_path,
+                **screenshot_artifact,
                 "content_mode": content_mode,
                 "blocker": session.metadata.get("blocker", {}),
                 "blocker_delta": session.metadata.get("last_navigation_blocker", {}),
@@ -871,9 +877,13 @@ class BrowserService:
             
             # Get file size
             file_size = os.path.getsize(path)
+            content_type = "image/jpeg" if Path(path).suffix.lower() in {".jpg", ".jpeg"} else "image/png"
+            artifact = self.artifact_service.register_artifact(
+                path, content_type=content_type, filename=os.path.basename(path)
+            )
             
             result = {
-                "path": path,
+                **artifact,
                 "selector": selector,
                 "full_page": full_page,
                 "size_bytes": file_size,

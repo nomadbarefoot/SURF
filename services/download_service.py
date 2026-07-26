@@ -63,6 +63,35 @@ class DownloadService:
         self._add_record(record)
         return self._public_record(record)
 
+    def register_artifact(
+        self, path: str, *, content_type: str, filename: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Register a server-created file for opaque, authenticated retrieval."""
+        resolved = Path(path).resolve()
+        if not resolved.is_file():
+            raise ValidationError("path", "Artifact file not found")
+        if not self._inside_screenshot_root(resolved) and not is_allowed_export_path(resolved):
+            raise ValidationError("path", "Artifact path is outside configured artifact roots")
+        artifact_id = f"art_{uuid.uuid4().hex}"
+        record = {
+            "download_id": artifact_id,
+            "artifact_id": artifact_id,
+            "filename": self._safe_filename(filename or resolved.name),
+            "path": str(resolved),
+            "external": True,
+            "artifact": True,
+            "content_type": content_type,
+            "created_at_epoch": time.time(),
+            "size_bytes": resolved.stat().st_size,
+        }
+        self._add_record(record)
+        public = self._public_record(record)
+        public["content_url"] = f"/artifacts/{artifact_id}/content"
+        public.pop("path", None)
+        public.pop("absolute_path", None)
+        public.pop("download_id", None)
+        return public
+
     def list_downloads(self) -> List[Dict[str, Any]]:
         with self._lock:
             self.reap_expired()
@@ -75,7 +104,10 @@ class DownloadService:
     def path_for(self, download_id: str) -> Path:
         record = self._record(download_id)
         path = Path(record["path"]).resolve()
-        if record.get("external"):
+        if record.get("artifact"):
+            if not self._inside_screenshot_root(path) and not is_allowed_export_path(path):
+                raise ValidationError("artifact_id", "Artifact path is outside configured artifact roots")
+        elif record.get("external"):
             if not is_allowed_export_path(path):
                 raise ValidationError("download_id", "External download path is outside configured export roots")
         elif not self._inside_root(path):
@@ -152,6 +184,7 @@ class DownloadService:
             self._save_index(records)
 
     def _record(self, download_id: str) -> Dict[str, Any]:
+        self.reap_expired()
         records = self._load_index()
         record = records.get(download_id)
         if not record:
@@ -199,6 +232,13 @@ class DownloadService:
     def _inside_root(self, path: Path) -> bool:
         try:
             path.relative_to(self.root.resolve())
+            return True
+        except ValueError:
+            return False
+
+    def _inside_screenshot_root(self, path: Path) -> bool:
+        try:
+            path.relative_to(self._path(settings.screenshots_dir).resolve())
             return True
         except ValueError:
             return False

@@ -213,6 +213,18 @@ Downloads:
 - `GET /downloads/{download_id}/content`
 - `DELETE /downloads/{download_id}`
 
+Screenshot artifacts:
+
+- `GET /artifacts/{artifact_id}/content`
+
+`POST /browser/screenshot` and screenshot-enabled `POST /browser/observe` return an
+opaque `artifact_id` and `content_url`; container-local paths are not exposed. Fetch
+the URL with the same bearer-token authorization required by other protected SURF
+routes. The response carries media type `image/png`, the original filename via
+`Content-Disposition`, and exact `size_bytes` in the creation response. Artifacts
+use `SURF_DOWNLOAD_RETENTION_SECONDS` (24 hours by default); expired or unknown IDs
+return 404.
+
 Search:
 
 - `POST /search/query`
@@ -266,7 +278,7 @@ For agents, `surfctl.py mcp` and `surfctl.py stdio` keep SURF in-process and exi
 
 ## Observe Modes
 
-`/browser/observe` is the preferred first call for agents. It returns current URL, title, visible text, links, forms, action candidates, tables, warnings, token estimate, blocker stats, per-navigation blocker deltas, and optional screenshot path.
+`/browser/observe` is the preferred first call for agents. It returns current URL, title, visible text, links, forms, action candidates, tables, warnings, token estimate, blocker stats, per-navigation blocker deltas, and optional screenshot artifact ID and content URL.
 
 Modes:
 
