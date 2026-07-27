@@ -582,8 +582,8 @@ class NetworkCaptureResponse(BaseResponse):
     data: Dict[str, Any] = Field(..., description="Network capture data")
 
 
-class FetchResponse(BaseResponse):
-    """Fetch response model"""
+class FetchResponse(BaseModel):
+    """Lean agent-facing fetch response (no envelope boilerplate)."""
 
     success: bool = Field(default=True, description="Fetch success status")
     data: Dict[str, Any] = Field(..., description="Fetch data")

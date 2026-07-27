@@ -307,17 +307,17 @@ class BrowserService:
                                 '[role=main]', '.article', '.story', '.post'
                             ];
                             const bodyText = stripChrome(clone.cloneNode(true));
+                            // Pick the largest candidate: the first >=200-char match is
+                            // often a navigation-like nested element, not the article.
+                            let bestText = '';
                             for (const selector of articleSelectors) {
                                 const article = clone.querySelector(selector);
                                 if (!article) continue;
-                                const articleClone = article.cloneNode(true);
-                                const articleText = stripChrome(articleClone);
-                                if (articleText.length < 200 && bodyText.length > articleText.length * 2) {
-                                    continue;
-                                }
-                                if (articleText.length >= 200 || articleText.length >= bodyText.length * 0.35) {
-                                    return articleText;
-                                }
+                                const articleText = stripChrome(article.cloneNode(true));
+                                if (articleText.length > bestText.length) bestText = articleText;
+                            }
+                            if (bestText.length >= 200 || bestText.length >= bodyText.length * 0.35) {
+                                return bestText;
                             }
                             return stripChrome(clone);
                         }
@@ -450,13 +450,16 @@ class BrowserService:
                     const text = (el) => (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
 
                     let root = document.body;
+                    let bestLength = 0;
                     for (const sel of articleSelectors) {
                         const candidate = document.querySelector(sel);
                         if (!candidate) continue;
                         const t = text(candidate);
-                        if (t.length >= 200) {
+                        // Largest candidate wins: a small nested element (nav,
+                        // breadcrumbs) must not claim the article root.
+                        if (t.length >= 200 && t.length > bestLength) {
                             root = candidate;
-                            break;
+                            bestLength = t.length;
                         }
                     }
 

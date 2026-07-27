@@ -52,7 +52,8 @@ async def test_deep_extract_skips_headed_retry_for_headless_success():
             out = await svc.deep_extract(urls, relevance=relevance)
 
     headed.assert_not_called()
-    assert out["results"][0]["success"] is True
+    assert out["results"][0]["content"] == "body"
+    assert "error" not in out["results"][0]
 
 
 @pytest.mark.asyncio
@@ -77,9 +78,7 @@ async def test_deep_extract_reports_all_failures_at_top_level():
             out = await svc.deep_extract(urls)
 
     assert out["success"] is False
-    assert out["partial"] is False
-    assert out["success_count"] == 0
-    assert out["failure_count"] == 1
+    assert out["results"][0]["error"] == "unreadable"
 
 
 def test_final_markdown_respects_requested_budget():

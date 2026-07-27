@@ -16,6 +16,41 @@ from utils.url_security import safe_url_for_log
 logger = structlog.get_logger()
 router = APIRouter()
 
+# Public text budget for agent-facing fetch responses. JSON bodies are already
+# bounded by the service parse budget; raw text gets a fixed preview cap.
+_PUBLIC_TEXT_CHARS = 50_000
+
+
+def _public_fetch_data(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Project an internal fetch result to the minimal agent-facing shape.
+
+    Keeps only what an agent needs: status, final URL, content type, the body
+    exactly once (parsed JSON when available, otherwise text), a truncation
+    flag, and actionable warnings. Drops header dumps, duplicated body
+    representations, and transport telemetry.
+    """
+    data: Dict[str, Any] = {
+        "status": result.get("status"),
+        "url": result.get("url"),
+    }
+    content_type = (result.get("headers") or {}).get("content-type")
+    if content_type:
+        data["content_type"] = content_type
+    if result.get("download"):
+        data["download"] = result["download"]
+    elif result.get("json") is not None:
+        data["json"] = result["json"]
+    else:
+        text = result.get("text") or ""
+        if len(text) > _PUBLIC_TEXT_CHARS:
+            data["text"] = text[:_PUBLIC_TEXT_CHARS]
+            data["truncated"] = True
+        elif text:
+            data["text"] = text
+    if result.get("warnings"):
+        data["warnings"] = result["warnings"]
+    return data
+
 
 @router.post("/request", response_model=FetchResponse)
 async def fetch_request(
@@ -73,9 +108,7 @@ async def fetch_request(
                 overwrite=request.overwrite
             )
             result["download"] = download
-            result["text"] = ""
-            result["text_preview"] = ""
-        return FetchResponse(success=True, data=result)
+        return FetchResponse(success=True, data=_public_fetch_data(result))
     except OutboundPolicyError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

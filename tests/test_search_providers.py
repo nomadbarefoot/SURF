@@ -191,7 +191,6 @@ async def test_service_uses_primary_provider_results(service):
             result = await service.search("query", max_results=10, provider="exa")
 
     assert result["success"] is True
-    assert result["provider"] == "exa"
     assert len(result["results"]) == 2
     assert "relevance" in result["results"][0]
     primary.search.assert_awaited_once()
@@ -241,7 +240,6 @@ async def test_service_falls_back_when_primary_fails(service):
             )
 
     assert result["success"] is True
-    assert result["provider"] == "searxng"
     assert len(result["results"]) == 1
     primary.search.assert_awaited_once()
     fallback.search.assert_awaited_once()
@@ -292,7 +290,7 @@ async def test_service_falls_back_when_primary_empty(service):
             )
 
     assert result["success"] is True
-    assert result["provider"] == "searxng"
+    assert service._stats["search_fallbacks"] == 1
     fallback.search.assert_awaited_once()
 
 
@@ -440,7 +438,6 @@ async def test_service_returns_top_three_when_none_pass_threshold(service):
     assert result["success"] is False
     assert "No results above relevance threshold" in result["error"]
     assert len(result["results"]) == 3
-    assert result["metadata"]["below_threshold"] is True
 
 
 @pytest.mark.asyncio

@@ -32,6 +32,7 @@ from services.embeddings import (
     is_embedder_available,
 )
 from services.search_providers import SearchProviderRegistry
+from utils.text import clean_snippet as _clean_snippet
 from utils.text import clean_text as _clean_text
 from utils.url_security import safe_url_for_log
 
@@ -251,8 +252,6 @@ class SearchService:
         return {
             "success": False,
             "error": result.get("error") or "No search results",
-            "provider": result.get("provider"),
-            "metadata": result.get("metadata"),
         }
 
     def _record_provider_stats(
@@ -309,8 +308,6 @@ class SearchService:
             return {
                 "success": False,
                 "error": "No results after deduplication",
-                "provider": provider_result.get("provider"),
-                "metadata": provider_result.get("metadata"),
             }
 
         scores = await _relevance_many(results, query)
@@ -333,23 +330,11 @@ class SearchService:
                 "success": False,
                 "error": f"No results above relevance threshold ({threshold})",
                 "results": results,
-                "provider": provider_result.get("provider"),
-                "ms": provider_result.get("ms"),
-                "cost": provider_result.get("cost"),
-                "metadata": {
-                    **(provider_result.get("metadata") or {}),
-                    "relevance_threshold": threshold,
-                    "below_threshold": True,
-                },
             }
 
         return {
             "success": True,
             "results": results,
-            "provider": provider_result.get("provider"),
-            "ms": provider_result.get("ms"),
-            "cost": provider_result.get("cost"),
-            "metadata": provider_result.get("metadata"),
         }
 
     # ---- Stage 2: parallel deep extraction ---------------------------------
@@ -456,11 +441,7 @@ class SearchService:
 
         response = {
             "success": ok > 0,
-            "partial": 0 < ok < len(cleaned),
             "results": cleaned,
-            "success_count": ok,
-            "failure_count": fail,
-            "total_ms": total_ms,
         }
         if include_diagnostics:
             response["diagnostics"] = {
@@ -783,16 +764,13 @@ class SearchService:
 
     @staticmethod
     def _public_result(result: Dict[str, Any]) -> Dict[str, Any]:
-        public = {
-            "url": result.get("url"),
-            "success": bool(result.get("success")),
-            "ms": result.get("ms"),
-        }
+        """Agent-facing extraction result: only decision-relevant fields."""
+        public: Dict[str, Any] = {"url": result.get("url")}
         if result.get("success"):
             public["title"] = result.get("title", "")
             public["content"] = result.get("content", "")
-            public["tokens"] = result.get("tokens", 0)
-            public["truncated"] = bool(result.get("truncated"))
+            if result.get("truncated"):
+                public["truncated"] = True
         else:
             error = result.get("error") or ChallengeResolver.agent_error()
             if result.get(
@@ -807,7 +785,7 @@ class SearchService:
         """Final normalization pass on provider results (cleans and fills defaults)."""
         return {
             "title": _clean_text(raw.get("title", "")),
-            "snippet": _clean_text(raw.get("snippet", "")),
+            "snippet": _clean_snippet(raw.get("snippet", "")),
             "url": raw.get("url", ""),
             "source": raw.get("source"),
             "published": raw.get("published"),
