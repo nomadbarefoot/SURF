@@ -9,6 +9,7 @@ Usage:
   surf search "<query>" [--max-results N]
   surf extract <url> [<url>...]
   surf fetch <url>
+  surf transcript <youtube-url>
   surf preflight
 """
 
@@ -202,6 +203,32 @@ def cmd_fetch(args: argparse.Namespace) -> None:
     print(content)
 
 
+def cmd_transcript(args: argparse.Namespace) -> None:
+    base = _base_url()
+    data = _post(
+        f"{base}/youtube/transcript",
+        {
+            "url": args.url,
+            "languages": args.languages or None,
+            "allow_auto_captions": not args.no_auto_captions,
+            "max_text_length": args.max_text_length,
+        },
+        args.timeout,
+    )
+
+    if args.json:
+        _print_json(data)
+        return
+
+    content = data.get("content") or ""
+    if content:
+        print(content)
+    artifact = data.get("artifact") or {}
+    path = artifact.get("absolute_path") or artifact.get("path")
+    if path:
+        print(f"Saved full transcript: {path}", file=sys.stderr)
+
+
 def cmd_preflight(args: argparse.Namespace) -> None:
     """Run non-mutating service, runtime, SearXNG, and outbound probes."""
     base = _base_url()
@@ -312,6 +339,44 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fetch.add_argument("--timeout", type=float, default=_TIMEOUT, help="HTTP timeout in seconds")
     p_fetch.add_argument("--json", action="store_true", help="Print the raw JSON response")
 
+    p_transcript = sub.add_parser(
+        "transcript",
+        help="Download one public YouTube transcript",
+        description=(
+            "Fetch original-language YouTube captions, print bounded timestamped "
+            "text, and save the complete transcript as a Markdown artifact."
+        ),
+    )
+    p_transcript.add_argument("url", help="Single YouTube video URL")
+    p_transcript.add_argument(
+        "--language",
+        action="append",
+        dest="languages",
+        metavar="LANG",
+        help="Preferred language code; repeat to provide fallbacks",
+    )
+    p_transcript.add_argument(
+        "--no-auto-captions",
+        action="store_true",
+        help="Require a manual caption track",
+    )
+    p_transcript.add_argument(
+        "--max-text-length",
+        type=int,
+        default=20000,
+        metavar="N",
+        help="Maximum transcript characters printed inline (default: 20000)",
+    )
+    p_transcript.add_argument(
+        "--timeout",
+        type=float,
+        default=90.0,
+        help="HTTP timeout in seconds (default: 90)",
+    )
+    p_transcript.add_argument(
+        "--json", action="store_true", help="Print the raw JSON response"
+    )
+
     p_preflight = sub.add_parser(
         "preflight",
         help="Probe service dependencies and outbound access",
@@ -340,6 +405,8 @@ def main() -> None:
         cmd_extract(args)
     elif args.command == "fetch":
         cmd_fetch(args)
+    elif args.command == "transcript":
+        cmd_transcript(args)
     elif args.command == "preflight":
         cmd_preflight(args)
 

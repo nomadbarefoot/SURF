@@ -2,7 +2,7 @@
 
 SURF is a local browser and web-research substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
 
-Beyond single-page browsing, SURF includes **web search** (`search_query` via Exa primary with SearXNG fallback) and **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
+Beyond single-page browsing, SURF includes **web search** (`search_query` via Exa primary with SearXNG fallback), **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering), and **YouTube transcripts** (`youtube_transcript` using original-language captions). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
 
 The goal is reliable occasional browsing, scraping, and research. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, browser-like fetches, search-then-extract pipelines, and typed financial extractors. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
@@ -48,6 +48,7 @@ export SURF_URL=127.0.0.1:17777
 ./surf preflight
 ./surf search "Python official documentation" --max-results 3
 ./surf fetch https://example.com
+./surf transcript https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
 Use `--json` for machine-readable output and `--timeout SECONDS` to override
@@ -74,7 +75,7 @@ SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runti
 
 ## Docker
 
-SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP service with SearXNG. The image uses the official Playwright Python base image; semantic embeddings are supplied by LiteLLM rather than a local ML runtime.
+SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP service with SearXNG. The image uses the official Playwright Python base image. The pinned `yt-dlp[default,deno]` dependency supplies YouTube caption extraction and its JavaScript runtime; transcript-only operation does not require ffmpeg. Semantic embeddings are supplied by LiteLLM rather than a local ML runtime.
 
 ### Quickstart
 
@@ -225,11 +226,20 @@ routes. The response carries media type `image/png`, the original filename via
 use `SURF_DOWNLOAD_RETENTION_SECONDS` (24 hours by default); expired or unknown IDs
 return 404.
 
+YouTube transcripts use the same download sandbox and retention policy. The
+response returns bounded timestamped text plus the complete Markdown download
+record. Its `content_url` uses the authenticated downloads route; local
+loopback callers can also use the returned path.
+
 Search:
 
 - `POST /search/query`
 - `POST /search/extract`
 - `GET /search/stats`
+
+YouTube:
+
+- `POST /youtube/transcript`
 
 Finance:
 
@@ -252,6 +262,25 @@ Health:
 - `GET /health/finance`
 
 Only `GET /health/live` is anonymous. Detailed health, readiness, metrics, runtime, SearXNG, and finance probes require the configured API token and return HTTP 503 when unhealthy.
+
+In loopback mode, `/youtube/` follows the same free-tier policy as `/search/`
+and `/fetch/`. Container deployments still require the global bearer token.
+
+## YouTube Transcripts
+
+`POST /youtube/transcript` and the `youtube_transcript` MCP tool accept one
+public watch, Shorts, embed, or `youtu.be` URL. With no language preference,
+SURF chooses the original manual track, then original automatic captions.
+Pass ordered `languages`, set `allow_auto_captions=false` to require manual
+captions, and use `max_text_length` to bound inline output.
+
+V1 does not download audio or video and does not support playlists, live or
+private videos, machine translation, speech-to-text fallback, or summarization.
+Relevant settings are `SURF_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS`,
+`SURF_YOUTUBE_TRANSCRIPT_CONCURRENCY`,
+`SURF_YOUTUBE_TRANSCRIPT_MAX_CAPTION_BYTES`,
+`SURF_YOUTUBE_TRANSCRIPT_MAX_SEGMENTS`, and
+`SURF_YOUTUBE_TRANSCRIPT_CACHE_TTL_SECONDS`.
 
 ## Session Config
 

@@ -87,6 +87,45 @@ def test_parser_supports_timeout_json_and_preflight():
     assert args.command == "preflight"
     assert args.probe_url == "https://example.com"
 
+    args = parser.parse_args(
+        [
+            "transcript",
+            "https://youtu.be/YE7VzlLtp-4",
+            "--language",
+            "en",
+            "--no-auto-captions",
+        ]
+    )
+    assert args.command == "transcript"
+    assert args.languages == ["en"]
+    assert args.no_auto_captions is True
+
+
+def test_transcript_prints_content_and_artifact_path(monkeypatch, capsys):
+    monkeypatch.setattr(
+        surf_cli,
+        "_post",
+        lambda *_args, **_kwargs: {
+            "success": True,
+            "content": "[00:00:00] hello",
+            "artifact": {"absolute_path": "/tmp/video-transcript.md"},
+        },
+    )
+    args = argparse.Namespace(
+        url="https://youtu.be/YE7VzlLtp-4",
+        languages=None,
+        no_auto_captions=False,
+        max_text_length=20000,
+        timeout=90.0,
+        json=False,
+    )
+
+    surf_cli.cmd_transcript(args)
+
+    captured = capsys.readouterr()
+    assert "[00:00:00] hello" in captured.out
+    assert "/tmp/video-transcript.md" in captured.err
+
 
 def test_preflight_reports_http_failures(monkeypatch, capsys):
     monkeypatch.setattr(

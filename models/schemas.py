@@ -1,7 +1,7 @@
 """Consolidated Pydantic schemas for Surf Browser Service"""
 
 from typing import Optional, Dict, Any, List, Union
-from pydantic import BaseModel, Field, validator, HttpUrl
+from pydantic import BaseModel, Field, validator, HttpUrl, field_validator
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -934,6 +934,53 @@ class SearchExtractRequest(BaseModel):
         max_length=1000,
         description="Research topic/query for section-level embed filtering during extraction",
     )
+
+
+class YoutubeTranscriptRequest(BaseModel):
+    """Request one normalized transcript from a public YouTube video."""
+
+    url: HttpUrl = Field(..., description="Single YouTube video URL")
+    languages: Optional[List[str]] = Field(
+        default=None,
+        max_length=10,
+        description="Ordered preferred language codes; original language when omitted",
+    )
+    allow_auto_captions: bool = Field(
+        default=True,
+        description="Allow YouTube automatically generated captions",
+    )
+    max_text_length: int = Field(
+        default=20000,
+        ge=500,
+        le=50000,
+        description="Maximum transcript characters returned inline",
+    )
+
+    @field_validator("languages")
+    @classmethod
+    def validate_transcript_languages(
+        cls, value: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        if value is None:
+            return None
+        cleaned = []
+        for language in value:
+            normalized = language.strip()
+            if not normalized or len(normalized) > 35:
+                raise ValueError("Language codes must contain 1-35 characters")
+            cleaned.append(normalized)
+        return cleaned
+
+
+class YoutubeTranscriptResponse(BaseModel):
+    """Normalized transcript, metadata, and complete stored artifact."""
+
+    success: bool = True
+    video: Dict[str, Any]
+    track: Dict[str, Any]
+    content: str
+    truncated: bool
+    artifact: Dict[str, Any]
 
 
 class SearchResponse(BaseModel):

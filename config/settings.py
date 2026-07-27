@@ -112,6 +112,13 @@ class Settings(BaseSettings):
     embedding_dimensions: int = Field(default=768)
     embedding_timeout: float = Field(default=15.0)
 
+    # YouTube Transcript Configuration
+    youtube_transcript_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    youtube_transcript_concurrency: int = Field(default=2, ge=1, le=10)
+    youtube_transcript_max_caption_bytes: int = Field(default=5242880, ge=1024)
+    youtube_transcript_max_segments: int = Field(default=50000, ge=1)
+    youtube_transcript_cache_ttl_seconds: int = Field(default=900, ge=1)
+
     # Performance & Stealth
     enable_stealth: bool = Field(default=False)
     stealth_strategy: str = Field(default="minimal")
@@ -301,4 +308,6 @@ settings = get_settings()
 
 # Route prefixes accessible without a bearer token when auth_mode == "loopback".
 # Mirrors the MCP-level FREE_TIER_TOOLS gate for the HTTP layer.
-FREE_TIER_ROUTES: frozenset = frozenset({"/search/", "/fetch/", "/health/"})
+FREE_TIER_ROUTES: frozenset = frozenset(
+    {"/search/", "/fetch/", "/youtube/", "/health/"}
+)

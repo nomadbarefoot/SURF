@@ -65,6 +65,7 @@ flowchart TB
     Dl["/downloads"]
     Srch["/search"]
     Fin["/finance"]
+    YT["/youtube"]
     Hlth["/health"]
   end
 
@@ -76,6 +77,7 @@ flowchart TB
     AB["AdblockService"]
     Search["SearchService"]
     Finance["FinanceService"]
+    Transcript["YoutubeTranscriptService"]
     Emb["embeddings"]
     CR["ContentRefiner"]
     Ch["ChallengeResolver"]
@@ -98,6 +100,7 @@ flowchart TB
   Dl --> DS
   Srch --> Search
   Fin --> Finance
+  YT --> Transcript
   Hlth --> SS
   Hlth --> SXRT
   Hlth --> Finance
@@ -116,6 +119,9 @@ flowchart TB
   Finance --> FS
   Finance --> Search
   Finance --> Cache
+  Transcript --> FS
+  Transcript --> DS
+  Transcript --> Cache
   SS --> PW
   Providers --> ExaAPI["Exa"]
   Providers --> SearX["SearXNG"]
@@ -224,6 +230,7 @@ Mounted routers:
 - `/downloads`: sandboxed file listing/content/deletion.
 - `/search`: Exa/SearXNG queries and parallel deep content extraction.
 - `/finance`: Finance Pack typed endpoints (curated source ladders).
+- `/youtube`: one-video, caption-backed YouTube transcript extraction.
 - `/health`: health, liveness, readiness, metrics, SearXNG probe, finance ladder probe.
 
 ## Services
@@ -236,6 +243,7 @@ Mounted routers:
 - `AdblockService`: ABP-style filter loading and request-block decisions.
 - `SearchService`: Exa primary + SearXNG fallback with hybrid BM25 + semantic relevance scoring, configurable relevance threshold, and parallel deep extraction via ephemeral browser sessions with headless-to-headed retry, challenge resolution, and embedding-based section filtering (`ContentRefiner`). Embeddings are requested in batches from the OpenAI-compatible LiteLLM endpoint (`services/embeddings`), with BM25/no-filter fallbacks when it is unavailable.
 - `FinanceService`: curated source ladders from `config/finance_sources.yaml`; walks known-good endpoints before search fallback; returns structured markdown via `FinanceRenderer`; daily cache for macro/ERP endpoints.
+- `YoutubeTranscriptService`: validates single-video YouTube URLs, uses yt-dlp for caption metadata, selects original manual/automatic tracks, fetches JSON3 through the outbound policy, normalizes timestamped segments, and saves complete Markdown through `DownloadService`.
 - `searxng_runtime`: SearXNG health probe and optional Docker autostart.
 
 ## Runtime Storage
@@ -249,11 +257,11 @@ These paths are ignored by Git.
 
 ## Auth Model
 
-Default `SURF_AUTH_MODE=loopback` allows free-tier search/fetch routes only when SURF is bound to a loopback host. A configured bearer is required for privileged browser/session routes and detailed health probes. `SURF_AUTH_MODE=token` requires `SURF_API_TOKEN` for normal routes; only `/health/live` remains anonymous.
+Default `SURF_AUTH_MODE=loopback` allows free-tier search/fetch/YouTube routes only when SURF is bound to a loopback host. A configured bearer is required for privileged browser/session routes and detailed health probes. `SURF_AUTH_MODE=token` requires `SURF_API_TOKEN` for normal routes; only `/health/live` remains anonymous.
 
 SURF refuses loopback auth on non-loopback hosts. Demo login and runtime API-key creation are disabled.
 
-MCP registers browser/finance tools only when `SURF_API_TOKEN` is set in the process environment; without it, free-tier tools (`search_*`, `browser_fetch`, `browser_health`) remain available.
+MCP registers browser/finance tools only when `SURF_API_TOKEN` is set in the process environment; without it, free-tier tools (`search_*`, `youtube_transcript`, `browser_fetch`, `browser_health`) remain available.
 
 ## Session Model
 

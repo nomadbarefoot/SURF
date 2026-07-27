@@ -7,6 +7,7 @@ from . import auth_controller
 from . import fetch_controller
 from . import download_controller
 from . import artifact_controller
+from . import youtube_controller
 
 __all__ = [
     "browser_controller",
@@ -16,4 +17,5 @@ __all__ = [
     "fetch_controller",
     "download_controller",
     "artifact_controller",
+    "youtube_controller",
 ]

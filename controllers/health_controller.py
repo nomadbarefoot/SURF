@@ -13,6 +13,7 @@ from core.foundation import (
 from models.schemas import HealthResponse
 from services.finance_service import FinanceService
 from services.searxng_runtime import ensure_searxng, probe_searxng
+from services.youtube_transcript_service import YoutubeTranscriptService
 from config.settings import get_settings
 
 logger = structlog.get_logger()
@@ -125,6 +126,7 @@ async def readiness_check(
             "status": "ready",
             "active_sessions": active_sessions,
             "max_sessions": settings.max_sessions,
+            "youtube_transcript": YoutubeTranscriptService.dependency_status(),
             "browser_runtime": (
                 session_service.browser_runtime_state()
                 if session_service
@@ -303,6 +305,7 @@ async def runtime_check(
             "sessions": {
                 "active": session_service.active_session_count if session_service else 0,
             },
+            "youtube_transcript": YoutubeTranscriptService.dependency_status(),
             "browser_runtime": (
                 session_service.browser_runtime_state()
                 if session_service

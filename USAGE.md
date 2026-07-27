@@ -25,6 +25,7 @@ HTTP CLI:
 ./surf search "Python official documentation" --max-results 3
 ./surf extract https://docs.python.org/3/
 ./surf fetch https://example.com
+./surf transcript https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
 Use `--json` for raw response output and `--timeout SECONDS` for longer-lived
@@ -35,7 +36,7 @@ Default auth is loopback-only for the manual HTTP server and does not require lo
 
 ## Agent Flow
 
-SURF MCP tools fall into three families: `browser_*`, `search_*`, and `finance_*`.
+SURF MCP tools cover `browser_*`, `search_*`, `youtube_transcript`, and `finance_*`.
 
 ### Browser
 
@@ -53,6 +54,14 @@ No browser session needed — SURF manages ephemeral sessions internally.
 
 1. `search_query` with your research question.
 2. `search_extract` on the best URLs; pass `refine_query` to trim irrelevant sections.
+
+### YouTube transcript
+
+Call `youtube_transcript` with one public YouTube video URL. It returns bounded,
+timestamped text and saves the full Markdown transcript in SURF downloads.
+Optional ordered `languages` choose a preferred caption language;
+`allow_auto_captions=false` requires a manual track. Audio transcription,
+translation, playlists, and summarization are not part of this version.
 
 ### Finance Pack
 
@@ -91,6 +100,7 @@ Search-then-extract over JSONL (no session required):
 ```jsonl
 {"id":"search","method":"POST","path":"/search/query","data":{"query":"India IPO pipeline 2026","max_results":5}}
 {"id":"extract","method":"POST","path":"/search/extract","data":{"urls":["https://example.com/ipo-list"],"refine_query":"India IPO 2026","content_mode":"reader"}}
+{"id":"transcript","method":"POST","path":"/youtube/transcript","data":{"url":"https://www.youtube.com/watch?v=VIDEO_ID","languages":["en"]}}
 {"id":"quit","method":"QUIT"}
 ```
 

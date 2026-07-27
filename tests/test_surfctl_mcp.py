@@ -40,3 +40,11 @@ async def test_app_call_turns_application_failure_into_tool_error(monkeypatch):
 
     with pytest.raises(ToolError, match="SearXNG down"):
         await surfctl.app_call("POST", "/search/query", {})
+
+
+@pytest.mark.asyncio
+async def test_youtube_transcript_is_registered_in_free_tier(monkeypatch):
+    monkeypatch.delenv("SURF_API_TOKEN", raising=False)
+    server = surfctl.build_mcp_server()
+    names = {tool.name for tool in await server.list_tools()}
+    assert "youtube_transcript" in names

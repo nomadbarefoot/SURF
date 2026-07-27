@@ -581,6 +581,7 @@ _download_service: Optional[Any] = None
 _adblock_service: Optional[Any] = None
 _search_service: Optional[Any] = None
 _finance_service: Optional[Any] = None
+_youtube_transcript_service: Optional[Any] = None
 
 
 async def get_session_service():
@@ -683,6 +684,22 @@ async def get_finance_service():
     return _finance_service
 
 
+async def get_youtube_transcript_service():
+    """Return the caption-backed YouTube transcript service."""
+    global _youtube_transcript_service
+
+    if _youtube_transcript_service is None:
+        from services.youtube_transcript_service import YoutubeTranscriptService
+
+        fetch = await get_fetch_service()
+        downloads = await get_download_service()
+        cache = await get_cache_service()
+        _youtube_transcript_service = YoutubeTranscriptService(
+            fetch, downloads, cache
+        )
+    return _youtube_transcript_service
+
+
 async def get_session_manager():
     """Alias for get_session_service for backward compatibility"""
     return await get_session_service()
@@ -731,7 +748,7 @@ async def validate_url(url: str) -> str:
 # Cleanup function
 async def cleanup_services():
     """Cleanup all services on shutdown"""
-    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service, _search_service, _finance_service
+    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service, _search_service, _finance_service, _youtube_transcript_service
     
     if _session_service:
         await _session_service.cleanup()
@@ -750,3 +767,4 @@ async def cleanup_services():
     _adblock_service = None
     _search_service = None
     _finance_service = None
+    _youtube_transcript_service = None

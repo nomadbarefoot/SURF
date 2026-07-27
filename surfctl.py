@@ -27,6 +27,7 @@ FREE_TIER_TOOLS: frozenset[str] = frozenset(
     {
         "search_query",
         "search_extract",
+        "youtube_transcript",
         "browser_fetch",
         "browser_health",
     }
@@ -265,10 +266,11 @@ def build_mcp_server():
 
     if full_access:
         instructions = (
-            "SURF provides three tool families: browser_* for browser automation "
+            "SURF provides browser_* for browser automation "
             "(sessions, navigation, interaction, downloads, network capture), "
             "search_* for web research (search engine queries and parallel content "
-            "extraction), and finance_* for financial data (consensus estimates, "
+            "extraction), youtube_transcript for caption-backed YouTube transcripts, "
+            "and finance_* for financial data (consensus estimates, "
             "insider transactions, corporate actions, macro indicators, ERP, snapshots). "
             "Prefer SURF for local browsing, scraping, downloads, browser-cookie "
             "fetches, web research, and equity research data."
@@ -277,7 +279,8 @@ def build_mcp_server():
         instructions = (
             "SURF provides web research tools: search_query for SearXNG metasearch, "
             "search_extract for parallel page content extraction, browser_fetch for "
-            "direct HTTP requests, and browser_health for status checks."
+            "direct HTTP requests, youtube_transcript for YouTube captions, and "
+            "browser_health for status checks."
         )
 
     mcp = FastMCP(
@@ -385,6 +388,31 @@ def build_mcp_server():
         if refine_query is not None:
             data["refine_query"] = refine_query
         return await app_call("POST", "/search/extract", data)
+
+    @mcp.tool(
+        name="youtube_transcript",
+        description=(
+            "Download and normalize the transcript for one public YouTube video. "
+            "Prefers original-language manual captions, then original automatic "
+            "captions. Returns bounded timestamped text plus a complete Markdown artifact."
+        ),
+    )
+    async def youtube_transcript(
+        url: str,
+        languages: list[str] | None = None,
+        allow_auto_captions: bool = True,
+        max_text_length: int = 20000,
+    ) -> dict[str, Any]:
+        return await app_call(
+            "POST",
+            "/youtube/transcript",
+            {
+                "url": url,
+                "languages": languages,
+                "allow_auto_captions": allow_auto_captions,
+                "max_text_length": max_text_length,
+            },
+        )
 
     # ---- Full tier (requires SURF_API_TOKEN) --------------------------------
 

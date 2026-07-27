@@ -6,6 +6,7 @@ from .cache_service import CacheService
 from .fetch_service import FetchService
 from .download_service import DownloadService
 from .adblock_service import AdblockService
+from .youtube_transcript_service import YoutubeTranscriptService
 
 __all__ = [
     "BrowserService",
@@ -13,5 +14,6 @@ __all__ = [
     "CacheService",
     "FetchService",
     "DownloadService",
-    "AdblockService"
+    "AdblockService",
+    "YoutubeTranscriptService",
 ]
