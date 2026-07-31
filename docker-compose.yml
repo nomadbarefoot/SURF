@@ -17,6 +17,8 @@ services:
       - SURF_EMBEDDING_BASE_URL=http://litellm:4000/v1
       - SURF_EMBEDDING_MODEL=embed-text
       - SURF_EMBEDDING_DIMENSIONS=768
+      - SURF_ALLOW_AGGRESSIVE_MODE=false
+      - "SURF_ADMIN_TOKEN=${SURF_ADMIN_TOKEN:-}"
     volumes:
       - surf-data:/app/data
     depends_on:

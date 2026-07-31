@@ -70,6 +70,8 @@ class StealthStrategy(str, Enum):
 
     NONE = "none"
     MINIMAL = "minimal"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
     LEGACY = "legacy"
 
 
@@ -255,6 +257,56 @@ class ObserveRequest(BaseModel):
     )
 
 
+class LocatorSpec(BaseModel):
+    """CSS selector locator with optional context."""
+
+    selector: str = Field(..., max_length=1000, description="CSS selector")
+    frame_selector: Optional[str] = Field(
+        default=None, max_length=1000, description="Optional frame/iframe selector"
+    )
+
+
+class ReadinessSpec(BaseModel):
+    """Page readiness conditions for dynamic/SPA content.
+
+    Only one condition is used: the first one *supplied*, in this precedence
+    order — load state, selector, text, URL, JS predicate, then DOM/network
+    stability. These are not raced alternatives; if the chosen condition is not
+    met before the timeout, the wait fails. Supply just the condition that
+    actually gates the content you need.
+    """
+
+    selector: Optional[str] = Field(default=None, description="CSS selector to wait for")
+    text: Optional[str] = Field(default=None, description="Text to wait for")
+    url_contains: Optional[str] = Field(default=None, description="URL fragment to wait for")
+    url_regex: Optional[str] = Field(
+        default=None, description="Regex pattern the URL must match"
+    )
+    js_predicate: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Boolean-returning JavaScript expression; executed in page context",
+    )
+    load_state: Optional[WaitUntil] = Field(
+        default=None, description="Playwright load state to wait for"
+    )
+    dom_stable_ms: Optional[int] = Field(
+        default=None,
+        ge=100,
+        le=30000,
+        description="Wait until DOM mutations are quiet for this many milliseconds",
+    )
+    network_quiet_ms: Optional[int] = Field(
+        default=None,
+        ge=100,
+        le=30000,
+        description="Wait until network is quiet for this many milliseconds",
+    )
+    timeout: int = Field(
+        default=30000, ge=1000, le=300000, description="Timeout in milliseconds"
+    )
+
+
 class WaitRequest(BaseModel):
     """Request model for explicit browser waits"""
 
@@ -264,8 +316,28 @@ class WaitRequest(BaseModel):
     url_contains: Optional[str] = Field(
         default=None, description="URL fragment to wait for"
     )
+    url_regex: Optional[str] = Field(
+        default=None, description="Regex pattern the URL must match"
+    )
+    js_predicate: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Boolean-returning JavaScript expression; executed in page context",
+    )
     load_state: Optional[WaitUntil] = Field(
         default=None, description="Playwright load state to wait for"
+    )
+    dom_stable_ms: Optional[int] = Field(
+        default=None,
+        ge=100,
+        le=30000,
+        description="Wait until DOM mutations are quiet for this many milliseconds",
+    )
+    network_quiet_ms: Optional[int] = Field(
+        default=None,
+        ge=100,
+        le=30000,
+        description="Wait until network is quiet for this many milliseconds",
     )
     timeout: int = Field(
         default=30000, ge=1000, le=300000, description="Timeout in milliseconds"
@@ -403,6 +475,87 @@ class BatchRequest(BaseModel):
     def validate_session_id(cls, v: str) -> str:
         if not v or not v.startswith("sess_"):
             raise ValueError("Invalid session ID format")
+        return v
+
+
+class BrowseRequest(BaseModel):
+    """Request model for one-shot browse workflow."""
+
+    url: HttpUrl = Field(..., description="URL to browse")
+    mode: str = Field(
+        default="standard",
+        max_length=64,
+        description="Locally configured browsing mode/profile",
+    )
+    content_mode: ContentMode = Field(
+        default=ContentMode.COMPACT, description="Observation content mode"
+    )
+    readiness: Optional[ReadinessSpec] = Field(
+        default=None, description="Optional readiness conditions"
+    )
+    include_screenshot: bool = Field(
+        default=False, description="Capture a screenshot"
+    )
+    keep_session: bool = Field(
+        default=False,
+        description="Return a live session instead of closing it",
+    )
+    extract_download: bool = Field(
+        default=True,
+        description="If navigation returns a document, extract its text; set false to skip extraction",
+    )
+    max_text_length: int = Field(
+        default=8000, ge=500, le=50000, description="Maximum visible text length"
+    )
+    max_items: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        description="Maximum links/forms/actions/tables to return",
+    )
+    timeout: int = Field(
+        default=30000, ge=1000, le=300000, description="Overall timeout in milliseconds"
+    )
+
+
+class ScrollRequest(BaseModel):
+    """Request model for bounded page or element scrolling."""
+
+    session_id: str = Field(..., description="Session ID")
+    selector: Optional[str] = Field(
+        default=None, max_length=1000, description="Element to scroll into view"
+    )
+    direction: str = Field(default="down", description="Scroll direction: up or down")
+    amount: Optional[int] = Field(
+        default=None, description="Pixels to scroll; defaults to 80% of viewport height"
+    )
+    until_selector: Optional[str] = Field(
+        default=None, description="Stop when this selector appears"
+    )
+    until_text: Optional[str] = Field(
+        default=None, description="Stop when this text appears"
+    )
+    max_steps: int = Field(
+        default=50, ge=1, le=500, description="Maximum scroll steps"
+    )
+    dwell_ms: int = Field(
+        default=300, ge=50, le=5000, description="Milliseconds to dwell between steps"
+    )
+    timeout: Optional[int] = Field(
+        default=None, ge=1000, le=300000, description="Timeout in milliseconds"
+    )
+
+    @validator("session_id")
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.startswith("sess_"):
+            raise ValueError("Invalid session ID format")
+        return v
+
+    @validator("direction")
+    def validate_direction(cls, v: str) -> str:
+        v = v.lower()
+        if v not in {"up", "down"}:
+            raise ValueError("direction must be 'up' or 'down'")
         return v
 
 
@@ -659,6 +812,57 @@ class BatchResponse(BaseResponse):
         }
 
 
+class TransitionResult(BaseModel):
+    """Diagnostics for a navigate or click-triggered page transition."""
+
+    initial_url: str = Field(..., description="URL before the transition")
+    final_url: str = Field(..., description="URL after settling")
+    route_changed: bool = Field(
+        default=False, description="Whether the History API route changed"
+    )
+    response_status: Optional[int] = Field(
+        default=None, description="Main navigation response status"
+    )
+    elapsed_ms: int = Field(..., description="Total transition and settlement time")
+    readiness_reason: str = Field(
+        ..., description="Which readiness condition was satisfied"
+    )
+    timeout_stage: Optional[str] = Field(
+        default=None, description="Stage that timed out, if any"
+    )
+    challenge_state: Optional[str] = Field(
+        default=None, description="Detected challenge state"
+    )
+
+
+class BrowseResponse(BaseResponse):
+    """One-shot browse workflow response."""
+
+    success: bool = Field(..., description="Browse success status")
+    url: str = Field(..., description="Final URL")
+    title: Optional[str] = Field(default=None, description="Page title")
+    content: Optional[str] = Field(default=None, description="Extracted content")
+    content_mode: str = Field(default="compact", description="Content mode used")
+    transition: TransitionResult = Field(..., description="Transition diagnostics")
+    challenge: Optional[Dict[str, Any]] = Field(
+        default=None, description="Challenge classification and recommendation"
+    )
+    screenshot_artifact: Optional[Dict[str, Any]] = Field(
+        default=None, description="Protected screenshot artifact metadata"
+    )
+    session_id: Optional[str] = Field(
+        default=None, description="Live session ID when keep_session is true"
+    )
+    warnings: List[str] = Field(default_factory=list, description="Page warnings")
+
+
+class ScrollResponse(BaseResponse):
+    """Scroll operation response model"""
+
+    success: bool = Field(default=True, description="Scroll success status")
+    data: Dict[str, Any] = Field(..., description="Scroll result data")
+
+
 # ============================================================================
 # SESSION SCHEMAS
 # ============================================================================
@@ -704,6 +908,9 @@ class SessionConfig(BaseModel):
     )
     locale: str = Field(default="en-US", description="Browser locale")
     timezone_id: str = Field(default="Asia/Kolkata", description="Browser timezone ID")
+    proxy: Optional[Dict[str, Any]] = Field(
+        default=None, description="Proxy server options for the context"
+    )
 
     class Config:
         use_enum_values = True
@@ -800,6 +1007,15 @@ class SessionData(BaseModel):
     )
     context_obj: Optional[Any] = Field(
         default=None, exclude=True, description="Playwright context object"
+    )
+    pages: Optional[Dict[str, Any]] = Field(
+        default=None, exclude=True, description="Page registry keyed by page_id"
+    )
+    page_locks: Optional[Dict[str, Any]] = Field(
+        default=None, exclude=True, description="Per-page asyncio locks"
+    )
+    active_page_id: Optional[str] = Field(
+        default=None, exclude=True, description="Currently active page id"
     )
 
     class Config:

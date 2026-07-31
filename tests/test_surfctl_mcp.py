@@ -7,8 +7,10 @@ from mcp.server.fastmcp.exceptions import ToolError
 class FakeBridge:
     def __init__(self, payload):
         self.payload = payload
+        self.calls = []
 
-    async def request(self, *_args, **_kwargs):
+    async def request(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
         return self.payload
 
 
@@ -48,3 +50,29 @@ async def test_youtube_transcript_is_registered_in_free_tier(monkeypatch):
     server = surfctl.build_mcp_server()
     names = {tool.name for tool in await server.list_tools()}
     assert "youtube_transcript" in names
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("admin_token", "expected_headers"),
+    [
+        ("admin-secret", {"X-Surf-Admin-Token": "admin-secret"}),
+        (None, None),
+        ("", None),
+    ],
+)
+async def test_browser_browse_admin_token_header(
+    monkeypatch, admin_token, expected_headers
+):
+    bridge = FakeBridge({"ok": True, "json": {"success": True}})
+    monkeypatch.setattr(surfctl, "MCP_BRIDGE", bridge)
+    server = surfctl.build_mcp_server()
+    arguments = {"url": "https://example.com"}
+    if admin_token is not None:
+        arguments["admin_token"] = admin_token
+
+    await server.call_tool("browser_browse", arguments)
+
+    args, kwargs = bridge.calls[-1]
+    assert args[:2] == ("POST", "/browse/browse")
+    assert kwargs["headers"] == expected_headers

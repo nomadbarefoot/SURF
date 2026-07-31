@@ -18,7 +18,8 @@ from core.foundation import (
     ResourceLimitError,
     ConfigurationError,
     SessionBusyError,
-    ProfileInUseError
+    ProfileInUseError,
+    BrowserOperationError
 )
 from models.schemas import (
     SessionData,
@@ -31,8 +32,6 @@ from models.schemas import (
     StealthStrategy
 )
 from utils.stealth import setup_stealth_mode
-from utils.helpers import get_random_user_agent
-from utils.anti_detection import get_enhanced_stealth_config, user_agent_pool
 from services.outbound_policy import OutboundPolicyError, get_outbound_policy
 
 logger = structlog.get_logger()
@@ -196,17 +195,25 @@ class SessionService:
                 # blocking is disabled. This covers redirects and page subresources.
                 await context.route("**/*", lambda route: self._handle_route(route, session_data))
 
+                # Instrument History API so SPA route changes are observable.
+                await context.add_init_script(self._route_tracking_script())
+
                 # Create page
                 page = context.pages[0] if context.pages else await context.new_page()
                 session_data.page = page
                 session_data.context.page_id = str(id(page))
 
+                # Initialize the page registry with the first page.
+                initial_page_id = "page_0"
+                session_data.pages = {initial_page_id: page}
+                session_data.page_locks = {initial_page_id: asyncio.Lock()}
+                session_data.active_page_id = initial_page_id
+
                 stealth_strategy = self._enum_value(config.stealth_strategy)
-                if stealth_strategy == StealthStrategy.LEGACY.value or config.stealth:
-                    stealth_config = get_enhanced_stealth_config()
-                    await setup_stealth_mode(page, stealth_config["device_info"])
-                elif stealth_strategy == StealthStrategy.MINIMAL.value:
-                    await self._setup_minimal_profile(page)
+                if stealth_strategy == StealthStrategy.NONE.value:
+                    pass
+                else:
+                    await setup_stealth_mode(page, strategy=stealth_strategy)
 
                 self.operation_locks[session_id] = asyncio.Lock()
                 if config.persist_profile:
@@ -406,9 +413,85 @@ class SessionService:
                 "last_navigation_blocker": session.metadata.get("last_navigation_blocker", {}),
                 "stats": session.stats.dict()
             })
-        
+
         return sessions
-    
+
+    async def create_page(self, session_id: str) -> Dict[str, Any]:
+        """Create a new page in the session and return its opaque id."""
+        async with self.session_lock:
+            session = await self.get_session(session_id, touch=True)
+            max_pages = settings.max_pages_per_session
+            current = len(session.pages or {})
+            if current >= max_pages:
+                raise ResourceLimitError("pages_per_session", max_pages, current)
+
+            page_id = f"page_{len(session.pages or {})}"
+            page = await session.context_obj.new_page()
+            if session.pages is None:
+                session.pages = {}
+                session.page_locks = {}
+            session.pages[page_id] = page
+            session.page_locks[page_id] = asyncio.Lock()
+            session.active_page_id = page_id
+            session.page = page
+            session.context.page_id = str(id(page))
+            return {"page_id": page_id, "active": True, "pages": list(session.pages.keys())}
+
+    async def list_pages(self, session_id: str) -> List[Dict[str, Any]]:
+        """List pages in a session."""
+        session = await self.get_session(session_id, touch=False)
+        pages = session.pages or {}
+        return [
+            {
+                "page_id": pid,
+                "active": pid == session.active_page_id,
+                "url": getattr(page, "url", None),
+            }
+            for pid, page in pages.items()
+        ]
+
+    async def switch_page(self, session_id: str, page_id: str) -> Dict[str, Any]:
+        """Switch the session's active page."""
+        async with self.session_lock:
+            session = await self.get_session(session_id, touch=True)
+            pages = session.pages or {}
+            if page_id not in pages:
+                raise SessionNotFoundError(page_id)
+            session.active_page_id = page_id
+            session.page = pages[page_id]
+            session.context.page_id = str(id(session.page))
+            return {
+                "page_id": page_id,
+                "active": True,
+                "url": session.page.url,
+                "pages": list(pages.keys()),
+            }
+
+    async def close_page(self, session_id: str, page_id: str) -> Dict[str, Any]:
+        """Close a page in the session. Cannot close the only remaining page."""
+        async with self.session_lock:
+            session = await self.get_session(session_id, touch=True)
+            pages = session.pages or {}
+            if page_id not in pages:
+                raise SessionNotFoundError(page_id)
+            if len(pages) <= 1:
+                raise BrowserOperationError("close_page", "Cannot close the only page in the session")
+
+            page = pages.pop(page_id)
+            session.page_locks.pop(page_id, None)
+            try:
+                await page.close()
+            except Exception as exc:
+                logger.debug("Page close failed", page_id=page_id, error=str(exc))
+
+            # If we closed the active page, switch to another.
+            if session.active_page_id == page_id:
+                session.active_page_id = next(iter(pages))
+                session.page = pages[session.active_page_id]
+                session.context.page_id = str(id(session.page))
+
+            return {"closed_page_id": page_id, "active_page_id": session.active_page_id}
+
     def _build_session_config(self, user_config: Optional[Dict[str, Any]]) -> SessionConfig:
         """Build session configuration with smart defaults"""
         
@@ -443,13 +526,21 @@ class SessionService:
             default_config["silent"] = not bool(user_config["headed"])
         else:
             default_config["silent"] = not bool(default_config["headed"])
-        
+
+        browser_type = default_config.get("browser_type", "chromium")
+        if browser_type not in {"chromium", "firefox", "webkit"}:
+            raise ConfigurationError("browser_type", f"Unsupported browser type: {browser_type}")
+
         return SessionConfig(**default_config)
 
     async def _create_browser_context(self, config: SessionConfig, session_id: str) -> BrowserContext:
         """Create a browser context using a persistent headed profile by default."""
         if self._enum_value(config.mode) == SessionMode.FETCH_ONLY.value:
             raise ConfigurationError("session_mode", "fetch_only sessions do not create browser contexts yet")
+
+        browser_type = self._enum_value(config.browser_type)
+        if browser_type not in {"chromium", "firefox", "webkit"}:
+            raise ConfigurationError("browser_type", f"Unsupported browser type: {browser_type}")
 
         launch_args = [
             "--disable-dev-shm-usage",
@@ -475,8 +566,18 @@ class SessionService:
         }
         if config.user_agent:
             context_options["user_agent"] = config.user_agent
+        if config.proxy:
+            context_options["proxy"] = config.proxy
 
+        browser_api = getattr(self.playwright, browser_type)
+
+        # Persistent profiles are supported only by Chromium in this stack.
         if config.persist_profile or config.headed:
+            if browser_type != "chromium":
+                raise ConfigurationError(
+                    "browser_type",
+                    f"Persistent/headed profiles require chromium; requested {browser_type}",
+                )
             profile_dir = self._profile_root()
             if config.persist_profile:
                 user_data_dir = profile_dir / self._safe_profile_id(config.profile_id)
@@ -484,16 +585,28 @@ class SessionService:
                 user_data_dir = profile_dir / "_ephemeral" / session_id
                 self.ephemeral_profile_dirs[session_id] = user_data_dir
             user_data_dir.mkdir(parents=True, exist_ok=True)
-            return await self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(user_data_dir),
-                **context_options
-            )
+            try:
+                return await browser_api.launch_persistent_context(
+                    user_data_dir=str(user_data_dir),
+                    **context_options
+                )
+            except Exception as exc:
+                msg = str(exc)
+                if "executable" in msg.lower() or "doesn't exist" in msg.lower() or "is not installed" in msg.lower():
+                    raise ConfigurationError("browser_type", f"{browser_type} is not installed: {msg}")
+                raise
 
         if self.browser is None:
-            self.browser = await self.playwright.chromium.launch(
-                headless=not config.headed,
-                args=launch_args
-            )
+            try:
+                self.browser = await browser_api.launch(
+                    headless=not config.headed,
+                    args=launch_args
+                )
+            except Exception as exc:
+                msg = str(exc)
+                if "executable" in msg.lower() or "doesn't exist" in msg.lower() or "is not installed" in msg.lower():
+                    raise ConfigurationError("browser_type", f"{browser_type} is not installed: {msg}")
+                raise
         new_context_options = {
             "viewport": config.viewport,
             "java_script_enabled": config.java_script_enabled,
@@ -504,6 +617,8 @@ class SessionService:
         }
         if config.user_agent:
             new_context_options["user_agent"] = config.user_agent
+        if config.proxy:
+            new_context_options["proxy"] = config.proxy
         return await self.browser.new_context(**new_context_options)
 
     def start_navigation_snapshot(self, session: SessionData) -> Dict[str, Any]:
@@ -538,19 +653,38 @@ class SessionService:
         session.metadata["last_navigation_blocker"] = delta
         return delta
 
-    async def _setup_minimal_profile(self, page: Page) -> None:
-        """Apply only low-risk automation cleanup without broad fingerprint spoofing."""
-        await page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-            });
-        """)
-
     def _safe_profile_id(self, profile_id: str) -> str:
         """Return a filesystem-safe profile id."""
         allowed = [c if c.isalnum() or c in ("-", "_") else "_" for c in profile_id]
         safe = "".join(allowed).strip("_")
         return safe or "default"
+
+    @staticmethod
+    def _route_tracking_script() -> str:
+        """Return a context init script that exposes SPA route generation."""
+        return """
+        (() => {
+            if (typeof window.__surf_route_generation === 'number') return;
+            window.__surf_route_generation = 0;
+            window.__surf_last_route_at = performance.now();
+            const bump = () => {
+                window.__surf_route_generation += 1;
+                window.__surf_last_route_at = performance.now();
+            };
+            const wrap = (name) => {
+                const original = history[name];
+                history[name] = function(...args) {
+                    const result = original.apply(this, args);
+                    bump();
+                    return result;
+                };
+            };
+            if (history.pushState) wrap('pushState');
+            if (history.replaceState) wrap('replaceState');
+            window.addEventListener('popstate', bump);
+            window.addEventListener('hashchange', bump);
+        })();
+        """
 
     def _profile_root(self) -> Path:
         profile_dir = Path(settings.profiles_dir)

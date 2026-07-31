@@ -1,0 +1,162 @@
+# SURF Browser Profiles
+#
+# Named browsing modes that map to deterministic session, anti-detection,
+# challenge, and proxy settings. Clients may request a mode by name; arbitrary
+# per-request proxy, patch, or fingerprint overrides are rejected.
+#
+# aggressive mode is opt-in and requires SURF_ALLOW_AGGRESSIVE_MODE=true.
+
+version: "1.0"
+default_mode: standard
+
+modes:
+  standard:
+    description: Default balanced mode. Low-risk automation cleanup only.
+    enabled: true
+    session_overrides:
+      headed: false
+      stealth_strategy: minimal
+      block_mode: conservative
+      block_resources: []
+      viewport:
+        width: 1920
+        height: 1080
+      locale: en-US
+      timezone_id: Asia/Kolkata
+      user_agent: null  # Use Playwright's bundled Chromium UA
+    challenge_ladder:
+      passive_wait_ms: 12000
+      max_passive_attempts: 2
+      allow_reload: false
+      allow_headed_retry: false
+      allow_checkbox_assist: false
+      max_total_attempts: 2
+    human_behavior:
+      enabled: false
+    proxy:
+      mode: direct  # No proxy by default
+
+  resilient:
+    description: Slower, quieter profile for sites that flag automation signals.
+    enabled: true
+    session_overrides:
+      headed: false
+      stealth_strategy: balanced
+      block_mode: conservative
+      block_resources:
+        - image
+        - media
+        - font
+      viewport:
+        width: 1920
+        height: 1080
+      locale: en-US
+      timezone_id: America/New_York
+      user_agent: null
+    challenge_ladder:
+      passive_wait_ms: 20000
+      max_passive_attempts: 3
+      allow_reload: true
+      allow_headed_retry: false
+      allow_checkbox_assist: false
+      max_total_attempts: 4
+    human_behavior:
+      enabled: true
+      scroll_pauses: 2
+      mouse_movements: true
+      typing_speed: 0.1
+      min_delay: 0.5
+      max_delay: 1.5
+    proxy:
+      mode: sticky  # Pick one proxy and keep it for the session
+
+  interactive:
+    description: Headed session with human-like pacing for consent walls and soft challenges.
+    enabled: true
+    session_overrides:
+      headed: true
+      background_headed: true
+      stealth_strategy: balanced
+      block_mode: conservative
+      block_resources:
+        - image
+        - media
+      viewport:
+        width: 1440
+        height: 900
+      locale: en-US
+      timezone_id: America/New_York
+      user_agent: null
+    challenge_ladder:
+      passive_wait_ms: 25000
+      max_passive_attempts: 3
+      allow_reload: true
+      allow_headed_retry: true
+      allow_checkbox_assist: true
+      max_total_attempts: 6
+    human_behavior:
+      enabled: true
+      scroll_pauses: 3
+      mouse_movements: true
+      typing_speed: 0.08
+      min_delay: 0.8
+      max_delay: 2.0
+    proxy:
+      mode: sticky
+
+  aggressive:
+    description: Opt-in experimental profile. May improve protected sites but increases detection risk and resource use.
+    enabled: false
+    requires_env: SURF_ALLOW_AGGRESSIVE_MODE
+    session_overrides:
+      headed: true
+      background_headed: true
+      stealth_strategy: aggressive
+      block_mode: token_saver
+      block_resources:
+        - image
+        - media
+        - font
+      viewport:
+        width: 1920
+        height: 1080
+      locale: en-US
+      timezone_id: America/New_York
+      user_agent: null
+    challenge_ladder:
+      passive_wait_ms: 30000
+      max_passive_attempts: 4
+      allow_reload: true
+      allow_headed_retry: true
+      allow_checkbox_assist: true
+      max_total_attempts: 8
+    human_behavior:
+      enabled: true
+      scroll_pauses: 4
+      mouse_movements: true
+      typing_speed: 0.06
+      min_delay: 1.0
+      max_delay: 3.0
+    proxy:
+      mode: sticky
+
+# Exact-origin site rules. The origin is scheme + host + port.
+# A requested mode is honored only if it is enabled; otherwise the default_mode
+# is returned and a warning is emitted.
+sites: []
+# Example:
+# - origin: "https://example.com"
+#   mode: resilient
+#   reason: "Frequently serves soft bot checks"
+
+# Proxy pool used when a mode selects mode: sticky.
+# Credentials are read from environment variables at runtime. No secrets are
+# stored in this file.
+proxy_pool:
+  reset_interval_seconds: 3600
+  max_failures_before_mark: 3
+  # Example entry (commented out). Add real entries without hard-coded secrets:
+  # - server: "http://proxy.example.com:8080"
+  #   username: "${PROXY_USER}"
+  #   password: "${PROXY_PASS}"
+  #   protocol: "http"

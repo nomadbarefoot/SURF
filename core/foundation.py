@@ -575,6 +575,9 @@ def require_scope(required_scope: str):
 # Service dependencies
 _session_service: Optional[Any] = None
 _browser_service: Optional[Any] = None
+_browse_service: Optional[Any] = None
+_browser_profile_service: Optional[Any] = None
+_document_extract_service: Optional[Any] = None
 _cache_service: Optional[Any] = None
 _fetch_service: Optional[Any] = None
 _download_service: Optional[Any] = None
@@ -604,13 +607,48 @@ def get_session_service_if_initialized() -> Optional[Any]:
 async def get_browser_service():
     """Get browser service instance"""
     global _browser_service
-    
+
     if _browser_service is None:
         from services.browser_service import BrowserService
         _browser_service = BrowserService()
         await _browser_service.initialize()
-    
+
     return _browser_service
+
+
+async def get_browse_service():
+    """Get browse service instance"""
+    global _browse_service
+
+    if _browse_service is None:
+        from services.browse_service import BrowseService
+        _browse_service = BrowseService()
+        await _browse_service.initialize()
+
+    return _browse_service
+
+
+async def get_browser_profile_service():
+    """Get browser profile service instance"""
+    global _browser_profile_service
+
+    if _browser_profile_service is None:
+        from services.browser_profile_service import BrowserProfileService
+        _browser_profile_service = BrowserProfileService()
+        _browser_profile_service.load()
+
+    return _browser_profile_service
+
+
+async def get_document_extract_service():
+    """Get document extract service instance"""
+    global _document_extract_service
+
+    if _document_extract_service is None:
+        from services.document_extract_service import DocumentExtractService
+        _document_extract_service = DocumentExtractService()
+
+    return _document_extract_service
 
 
 async def get_cache_service():
@@ -748,16 +786,26 @@ async def validate_url(url: str) -> str:
 # Cleanup function
 async def cleanup_services():
     """Cleanup all services on shutdown"""
-    global _session_service, _browser_service, _cache_service, _fetch_service, _download_service, _adblock_service, _search_service, _finance_service, _youtube_transcript_service
-    
+    global _session_service, _browser_service, _browse_service, _browser_profile_service, _document_extract_service, _cache_service, _fetch_service, _download_service, _adblock_service, _search_service, _finance_service, _youtube_transcript_service
+
     if _session_service:
         await _session_service.cleanup()
         _session_service = None
-    
+
     if _browser_service:
         await _browser_service.cleanup()
         _browser_service = None
-    
+
+    if _browse_service:
+        await _browse_service.cleanup()
+        _browse_service = None
+
+    if _browser_profile_service:
+        _browser_profile_service = None
+
+    if _document_extract_service:
+        _document_extract_service = None
+
     if _cache_service:
         await _cache_service.cleanup()
         _cache_service = None

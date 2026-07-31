@@ -16,7 +16,7 @@ from core.foundation import (
     RequestIDMiddleware,
     cleanup_services
 )
-from controllers import browser_controller, session_controller, health_controller, auth_controller, fetch_controller, download_controller, artifact_controller, search_controller, finance_controller, youtube_controller
+from controllers import browser_controller, session_controller, health_controller, auth_controller, fetch_controller, download_controller, artifact_controller, search_controller, finance_controller, youtube_controller, browse_controller
 from utils.logging import configure_logging
 
 # Configure logging
@@ -102,6 +102,7 @@ app.include_router(health_controller.router, prefix="/health", tags=["Health"])
 app.include_router(search_controller.router, prefix="/search", tags=["Search"])
 app.include_router(youtube_controller.router, prefix="/youtube", tags=["YouTube"])
 app.include_router(finance_controller.router, prefix="/finance", tags=["Finance"])
+app.include_router(browse_controller.router, prefix="/browse", tags=["Browse"])
 
 # Root endpoint
 @app.get("/")

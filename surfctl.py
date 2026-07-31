@@ -223,10 +223,15 @@ def session_config(
     return merged
 
 
-async def app_call(method: str, path: str, data: Any = None) -> dict[str, Any]:
+async def app_call(
+    method: str,
+    path: str,
+    data: Any = None,
+    headers: dict[str, str] | None = None,
+) -> dict[str, Any]:
     if MCP_BRIDGE is None:
         raise RuntimeError("SURF MCP bridge is not initialized")
-    payload = await MCP_BRIDGE.request(method, path, data)
+    payload = await MCP_BRIDGE.request(method, path, data, headers=headers)
     if not payload.get("ok"):
         raise_mcp_tool_error(payload)
     result = payload.get("json") if payload.get("json") is not None else payload
@@ -457,10 +462,17 @@ def build_mcp_server():
             url: str,
             wait_until: str = "domcontentloaded",
             timeout: int | None = None,
+            readiness: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
-            data = {"session_id": session_id, "url": url, "wait_until": wait_until}
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "url": url,
+                "wait_until": wait_until,
+            }
             if timeout is not None:
                 data["timeout"] = timeout
+            if readiness is not None:
+                data["readiness"] = readiness
             return await app_call("POST", "/browser/navigate", data)
 
         @mcp.tool(name="browser_observe", description="Observe page.")
@@ -516,20 +528,29 @@ def build_mcp_server():
             selector: str | None = None,
             text: str | None = None,
             url_contains: str | None = None,
+            url_regex: str | None = None,
+            js_predicate: str | None = None,
             load_state: str | None = None,
+            dom_stable_ms: int | None = None,
+            network_quiet_ms: int | None = None,
             timeout: int = 30000,
         ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "selector": selector,
+                "text": text,
+                "url_contains": url_contains,
+                "url_regex": url_regex,
+                "js_predicate": js_predicate,
+                "load_state": load_state,
+                "dom_stable_ms": dom_stable_ms,
+                "network_quiet_ms": network_quiet_ms,
+                "timeout": timeout,
+            }
             return await app_call(
                 "POST",
                 "/browser/wait",
-                {
-                    "session_id": session_id,
-                    "selector": selector,
-                    "text": text,
-                    "url_contains": url_contains,
-                    "load_state": load_state,
-                    "timeout": timeout,
-                },
+                {k: v for k, v in data.items() if v is not None},
             )
 
         @mcp.tool(name="browser_links", description="Extract links.")
@@ -566,6 +587,143 @@ def build_mcp_server():
                     ).lower()
                 ]
             return {"success": True, "count": len(links), "links": links[:max_items]}
+
+        @mcp.tool(name="browser_screenshot", description="Screenshot.")
+        async def browser_screenshot(
+            session_id: str,
+            selector: str | None = None,
+            full_page: bool = False,
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {"session_id": session_id, "full_page": full_page}
+            if selector is not None:
+                data["selector"] = selector
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/screenshot", data)
+
+        @mcp.tool(name="browser_extract_structured", description="Extract structured data.")
+        async def browser_extract_structured(
+            session_id: str,
+            content_type: str = "general",
+            selector: str | None = None,
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "content_type": content_type,
+            }
+            if selector is not None:
+                data["selector"] = selector
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/extract-structured", data)
+
+        @mcp.tool(name="browser_scroll", description="Scroll.")
+        async def browser_scroll(
+            session_id: str,
+            selector: str | None = None,
+            direction: str = "down",
+            amount: int | None = None,
+            until_selector: str | None = None,
+            until_text: str | None = None,
+            max_steps: int = 50,
+            dwell_ms: int = 300,
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "selector": selector,
+                "direction": direction,
+                "max_steps": max_steps,
+                "dwell_ms": dwell_ms,
+            }
+            if amount is not None:
+                data["amount"] = amount
+            if until_selector is not None:
+                data["until_selector"] = until_selector
+            if until_text is not None:
+                data["until_text"] = until_text
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/scroll", data)
+
+        @mcp.tool(name="browser_hover", description="Hover.")
+        async def browser_hover(
+            session_id: str, selector: str, timeout: int | None = None
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "action": "hover",
+                "selector": selector,
+            }
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/interact", data)
+
+        @mcp.tool(name="browser_select", description="Select.")
+        async def browser_select(
+            session_id: str,
+            selector: str,
+            value: str,
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "session_id": session_id,
+                "action": "select",
+                "selector": selector,
+                "value": value,
+            }
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/interact", data)
+
+        @mcp.tool(name="browser_detect_challenge", description="Detect challenge.")
+        async def browser_detect_challenge(
+            session_id: str,
+            selector: str | None = None,
+            timeout: int | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {"session_id": session_id}
+            if selector is not None:
+                data["selector"] = selector
+            if timeout is not None:
+                data["timeout"] = timeout
+            return await app_call("POST", "/browser/detect-captcha", data)
+
+        @mcp.tool(name="browser_browse", description="One-shot browse.")
+        async def browser_browse(
+            url: str,
+            mode: str = "standard",
+            content_mode: str = "compact",
+            readiness: dict[str, Any] | None = None,
+            include_screenshot: bool = False,
+            keep_session: bool = False,
+            extract_download: bool = True,
+            max_text_length: int = 8000,
+            max_items: int = 100,
+            timeout: int = 30000,
+            admin_token: str | None = None,
+        ) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "url": url,
+                "mode": mode,
+                "content_mode": content_mode,
+                "include_screenshot": include_screenshot,
+                "keep_session": keep_session,
+                "extract_download": extract_download,
+                "max_text_length": max_text_length,
+                "max_items": max_items,
+                "timeout": timeout,
+            }
+            if readiness is not None:
+                data["readiness"] = readiness
+            headers = (
+                {"X-Surf-Admin-Token": admin_token}
+                if admin_token
+                else None
+            )
+            return await app_call("POST", "/browse/browse", data, headers=headers)
 
         @mcp.tool(name="browser_download", description="Download.")
         async def browser_download(

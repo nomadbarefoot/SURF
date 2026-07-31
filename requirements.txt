@@ -29,6 +29,13 @@ structlog==25.5.0
 psutil==7.2.2
 
 # ==============================================================================
+# Document Parsing (Optional - required for PDF/DOCX/XLSX extraction)
+# ==============================================================================
+pypdf>=4.0,<5.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+
+# ==============================================================================
 # Caching (Optional - has in-memory fallback)
 # ==============================================================================
 # Redis is optional - falls back to in-memory cache if not available

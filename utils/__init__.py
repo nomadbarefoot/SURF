@@ -10,9 +10,9 @@ from .helpers import (
     calculate_file_size,
     format_duration
 )
-from .stealth import setup_stealth_mode, enhance_stealth_mode, simulate_human_behavior
+from .stealth import setup_stealth_mode, enhance_stealth_mode, simulate_human_behavior, apply_human_behavior
 from .anti_detection import (
-    SmartWaiter, CAPTCHADetector, HumanMimicry, 
+    SmartWaiter, CAPTCHADetector, HumanMimicry,
     get_enhanced_stealth_config, user_agent_pool
 )
 from .proxy_manager import initialize_proxies, get_proxy_for_request
@@ -22,7 +22,7 @@ __all__ = [
     "configure_logging",
     "get_logger",
     "validate_url",
-    "validate_session_id", 
+    "validate_session_id",
     "sanitize_input",
     "get_random_user_agent",
     "random_delay",
@@ -33,8 +33,9 @@ __all__ = [
     "setup_stealth_mode",
     "enhance_stealth_mode",
     "simulate_human_behavior",
+    "apply_human_behavior",
     "SmartWaiter",
-    "CAPTCHADetector", 
+    "CAPTCHADetector",
     "HumanMimicry",
     "get_enhanced_stealth_config",
     "user_agent_pool",

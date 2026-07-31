@@ -12,9 +12,10 @@ from models.schemas import (
     ObserveRequest, ObserveResponse, WaitRequest, WaitResponse,
     NetworkCaptureRequest, NetworkCaptureResponse,
     DownloadClickRequest, DownloadResponse,
-    StructuredDataRequest, StructuredDataResponse, 
+    StructuredDataRequest, StructuredDataResponse,
     CaptchaDetectionRequest, CaptchaDetectionResponse,
     BatchRequest, BatchOperationResponse, ExtractType, InteractionAction,
+    ScrollRequest, ScrollResponse,
 )
 from services.browser_service import BrowserService
 from services.session_service import SessionService
@@ -31,7 +32,7 @@ async def navigate(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Navigate to a URL with intelligent waiting"""
-    
+
     try:
         async with session_service.session_operation(request.session_id, "navigate") as session:
             session_service.start_navigation_snapshot(session)
@@ -39,21 +40,22 @@ async def navigate(
                 session=session,
                 url=str(request.url),
                 wait_until=request.wait_until,
-                timeout=request.timeout
+                timeout=request.timeout,
+                readiness=request.dict().get("readiness"),
             )
             result["blocker_delta"] = session_service.finish_navigation_snapshot(session)
-        
+
         # Update session stats
         await session_service.update_session_stats(
             request.session_id,
             {"operation": "navigate", "duration": result.get("duration_ms", 0) / 1000}
         )
-        
+
         return NavigationResponse(
             success=True,
             data=result
         )
-        
+
     except HTTPException:
         raise
     except OutboundPolicyError as e:
@@ -160,7 +162,7 @@ async def interact_with_element(
             success=True,
             data=result
         )
-        
+
     except SessionNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -172,6 +174,35 @@ async def interact_with_element(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Element interaction failed"
         )
+
+
+@router.post("/scroll", response_model=ScrollResponse)
+async def scroll_page(
+    request: ScrollRequest,
+    browser_service: BrowserService = Depends(get_browser_service),
+    session_service: SessionService = Depends(get_session_service),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Bounded page or element scrolling with stop conditions"""
+    try:
+        async with session_service.session_operation(request.session_id, "scroll") as session:
+            result = await browser_service.scroll_page(
+                session=session,
+                selector=request.selector,
+                direction=request.direction,
+                amount=request.amount,
+                until_selector=request.until_selector,
+                until_text=request.until_text,
+                max_steps=request.max_steps,
+                dwell_ms=request.dwell_ms,
+                timeout=request.timeout,
+            )
+        return ScrollResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error("Scroll failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Scroll failed")
 
 
 @router.post("/screenshot", response_model=ScreenshotResponse)
@@ -258,7 +289,11 @@ async def wait_for_condition(
                 selector=request.selector,
                 text=request.text,
                 url_contains=request.url_contains,
+                url_regex=request.url_regex,
+                js_predicate=request.js_predicate,
                 load_state=request.load_state,
+                dom_stable_ms=request.dom_stable_ms,
+                network_quiet_ms=request.network_quiet_ms,
                 timeout=request.timeout
             )
         return WaitResponse(success=True, data=result)

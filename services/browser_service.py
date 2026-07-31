@@ -1,11 +1,12 @@
 """Enhanced browser operations service for Surf Browser Service"""
 import asyncio
+import os
 import random
 import time
 from collections import deque
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from playwright.async_api import Page
+from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 import structlog
 
 from core.foundation import BrowserOperationError, ValidationError
@@ -25,6 +26,7 @@ from utils.site_memory import create_site_memory_manager
 from utils.semantic_chunker import SemanticChunker
 from config.settings import settings
 from services.outbound_policy import get_outbound_policy
+from services.page_readiness_service import PageReadinessService, ReadinessTimeoutError
 from utils.path_policy import resolve_export_file
 from utils.url_security import safe_url_for_log
 
@@ -68,24 +70,26 @@ class BrowserService:
         session: SessionData,
         url: str,
         wait_until: WaitUntil = WaitUntil.NETWORKIDLE,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        readiness: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Navigate to URL with intelligent waiting and error handling"""
-        
+
         if not self.initialized:
             raise BrowserOperationError("navigate", "Browser service not initialized")
 
         await get_outbound_policy().validate(url)
-        
+
         start_time = time.time()
+        initial_url = session.context.url
         try:
             # Get page from session
             page = self._get_page_from_session(session)
-            
+
             # Apply adaptive rate limiting if enabled
             if settings.enable_adaptive_rate_limiting:
                 await adaptive_rate_limiter.wait_if_needed(success=True)
-            
+
             # Load site memory if enabled
             site_memory = None
             if self.site_memory_manager is not None:
@@ -98,49 +102,54 @@ class BrowserService:
                         site_url=safe_url_for_log(url),
                         access_count=site_memory.access_count,
                     )
-            
+
             # Set timeout
             actual_timeout = timeout or session.config.timeout
-            
+
             # Navigate with retry logic
             response = await self._navigate_with_retry(
                 page, url, wait_until, actual_timeout
             )
-            
-            # Wait for content to fully load
-            # Quick content load check (reduced wait time)
+
+            # SPA / dynamic settlement
+            # Copy: the caller's dict must not gain a timeout as a side effect.
+            readiness_spec = dict(readiness or {})
+            if not readiness_spec.get("timeout"):
+                readiness_spec["timeout"] = actual_timeout
             try:
-                await page.wait_for_load_state("domcontentloaded", timeout=10000)
-            except:
-                pass  # Continue even if timeout
-            
-            # Enhanced human behavior simulation with Gaussian delays
-            if settings.enable_enhanced_mouse_movement:
-                await HumanMouseMovement.random_mouse_wiggle(page, intensity=2)
-                # Enhanced reading simulation based on content length
-                await HumanMimicry.simulate_reading_behavior_enhanced(page)
-            else:
-                await HumanMimicry.gaussian_delay(1.0, 0.3)
-            
+                settle = await PageReadinessService.wait(
+                    page, readiness_spec, start_url=initial_url
+                )
+            except ReadinessTimeoutError as rte:
+                settle = {
+                    "success": False,
+                    "initial_url": initial_url or url,
+                    "final_url": page.url,
+                    "route_changed": (initial_url or url) != page.url,
+                    "readiness_reason": "timeout",
+                    "elapsed_ms": rte.elapsed_ms,
+                    "timeout_stage": rte.stage,
+                }
+
             duration = time.time() - start_time
-            
+
             # Update session context
             session.context.url = page.url
             session.context.title = await page.title()
-            
+
             # Update site memory with success
             if self.site_memory_manager is not None:
                 await asyncio.to_thread(
                     self.site_memory_manager.update_access_stats, url, True
                 )
-            
+
             # Update resource monitoring
             resource_monitor.update_session_metrics(
                 session_id=session.session_id,
                 success=True,
                 response_time=duration
             )
-            
+
             result = {
                 "url": page.url,
                 "status": response.status if response else None,
@@ -148,32 +157,59 @@ class BrowserService:
                 "duration_ms": int(duration * 1000),
                 "success": True,
                 "site_memory_loaded": site_memory is not None,
-                "warnings": self._navigation_warnings(response.status if response else None, page.url)
+                "warnings": self._navigation_warnings(response.status if response else None, page.url),
+                "transition": {
+                    "initial_url": settle.get("initial_url", initial_url or url),
+                    "final_url": settle.get("final_url", page.url),
+                    "route_changed": settle.get("route_changed", False),
+                    "response_status": response.status if response else None,
+                    "elapsed_ms": settle.get("elapsed_ms", int(duration * 1000)),
+                    "readiness_reason": settle.get("readiness_reason", "unknown"),
+                    "timeout_stage": settle.get("timeout_stage"),
+                },
+                "content_type": response.headers.get("content-type", "").split(";")[0].strip() if response else None,
+                "document_body": None,
             }
-            
+
+            # If the navigation landed on a downloadable document, capture the
+            # response body so the caller can route it to DocumentExtractService.
+            if response and self._is_document_content_type(result["content_type"]):
+                try:
+                    body = await response.body()
+                    if body and len(body) <= settings.max_download_size_bytes:
+                        result["document_body"] = body
+                        result["warnings"].append(
+                            f"Document response detected ({result['content_type']}); use document extraction."
+                        )
+                    elif body:
+                        result["warnings"].append("Document response exceeds download size limit; not captured.")
+                except Exception as exc:
+                    logger.debug("Failed to capture document response body", error=str(exc))
+
             logger.info(
                 "Navigation completed",
                 session_id=session.session_id,
                 url=safe_url_for_log(result["url"]),
                 status=result["status"],
                 duration_ms=result["duration_ms"],
+                readiness_reason=result["transition"]["readiness_reason"],
             )
             return result
-            
+
         except Exception as e:
             # Update site memory with failure
             if self.site_memory_manager is not None:
                 await asyncio.to_thread(
                     self.site_memory_manager.update_access_stats, url, False
                 )
-            
+
             # Update resource monitoring with failure
             resource_monitor.update_session_metrics(
                 session_id=session.session_id,
                 success=False,
                 response_time=time.time() - start_time
             )
-            
+
             logger.error(
                 "Navigation failed",
                 session_id=session.session_id,
@@ -582,33 +618,43 @@ class BrowserService:
         selector: Optional[str] = None,
         text: Optional[str] = None,
         url_contains: Optional[str] = None,
+        url_regex: Optional[str] = None,
+        js_predicate: Optional[str] = None,
         load_state: Optional[WaitUntil] = None,
+        dom_stable_ms: Optional[int] = None,
+        network_quiet_ms: Optional[int] = None,
         timeout: int = 30000
     ) -> Dict[str, Any]:
         """Wait for an explicit browser condition."""
         page = self._get_page_from_session(session)
         started = time.time()
+        initial_url = page.url
+        spec = {
+            "selector": selector,
+            "text": text,
+            "url_contains": url_contains,
+            "url_regex": url_regex,
+            "js_predicate": js_predicate,
+            "load_state": load_state,
+            "dom_stable_ms": dom_stable_ms,
+            "network_quiet_ms": network_quiet_ms,
+            "timeout": timeout,
+        }
+        # Remove None values so the service uses sensible defaults.
+        spec = {k: v for k, v in spec.items() if v is not None}
         try:
-            if load_state:
-                state_value = load_state.value if hasattr(load_state, "value") else str(load_state)
-                await page.wait_for_load_state(state_value, timeout=timeout)
-            if selector:
-                await page.wait_for_selector(selector, timeout=timeout)
-            if text:
-                await page.get_by_text(text).first.wait_for(timeout=timeout)
-            if url_contains:
-                await page.wait_for_function(
-                    "(fragment) => window.location.href.includes(fragment)",
-                    url_contains,
-                    timeout=timeout
-                )
+            settle = await PageReadinessService.wait(page, spec, start_url=initial_url)
             return {
                 "success": True,
                 "url": page.url,
-                "duration_ms": int((time.time() - started) * 1000)
+                "duration_ms": int((time.time() - started) * 1000),
+                "transition": settle,
             }
-        except Exception as e:
-            raise BrowserOperationError("wait", str(e))
+        except ReadinessTimeoutError as rte:
+            raise BrowserOperationError(
+                "wait",
+                f"Timeout waiting for condition ({rte.stage}) after {rte.elapsed_ms}ms",
+            )
 
     async def start_network_capture(
         self,
@@ -818,35 +864,103 @@ class BrowserService:
             logger.error("Interaction failed", session_id=session.session_id, action=action, selector=selector, error=str(e))
             raise BrowserOperationError("interact", str(e))
     
+    async def scroll_page(
+        self,
+        session: SessionData,
+        selector: Optional[str] = None,
+        direction: str = "down",
+        amount: Optional[int] = None,
+        until_selector: Optional[str] = None,
+        until_text: Optional[str] = None,
+        max_steps: int = 50,
+        dwell_ms: int = 300,
+        timeout: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Scroll the page or an element with bounded steps and stop conditions."""
+        if not self.initialized:
+            raise BrowserOperationError("scroll", "Browser service not initialized")
+
+        page = self._get_page_from_session(session)
+        actual_timeout = timeout or session.config.timeout
+        deadline = time.time() + (actual_timeout / 1000.0)
+        started = time.time()
+        steps = 0
+        last_hash = ""
+
+        async def page_state_hash() -> str:
+            return await page.evaluate(
+                "() => document.documentElement.scrollHeight + '|' + document.documentElement.scrollTop"
+            )
+
+        while steps < max_steps and time.time() < deadline:
+            if selector:
+                element = page.locator(selector).first
+                await element.scroll_into_view_if_needed(timeout=5000)
+            else:
+                viewport_h = await page.evaluate("() => window.innerHeight")
+                scroll_by = amount or int(viewport_h * 0.8)
+                if direction == "up":
+                    scroll_by = -scroll_by
+                await page.evaluate(f"window.scrollBy(0, {scroll_by})")
+
+            steps += 1
+            await asyncio.sleep(dwell_ms / 1000.0)
+
+            if until_selector:
+                try:
+                    await page.wait_for_selector(until_selector, timeout=1000)
+                    break
+                except PlaywrightTimeoutError:
+                    pass
+            if until_text:
+                try:
+                    await page.get_by_text(until_text).first.wait_for(timeout=1000)
+                    break
+                except PlaywrightTimeoutError:
+                    pass
+
+            current_hash = await page_state_hash()
+            if current_hash == last_hash:
+                break
+            last_hash = current_hash
+
+        return {
+            "success": True,
+            "steps": steps,
+            "url": page.url,
+            "duration_ms": int((time.time() - started) * 1000),
+        }
+
     async def take_screenshot(
         self,
         session: SessionData,
         selector: Optional[str] = None,
         full_page: bool = False,
+        wait_for_dynamic: bool = False,
+        timeout: Optional[int] = None,
         path: Optional[str] = None,
         quality: Optional[int] = None,
-        timeout: Optional[int] = None,
-        wait_for_dynamic: bool = True
     ) -> Dict[str, Any]:
-        """Capture page or element screenshots with enhanced options and smart waiting for dynamic content"""
-        
+        """Capture a viewport, full-page, or element screenshot and register it as an artifact."""
+
         if not self.initialized:
             raise BrowserOperationError("screenshot", "Browser service not initialized")
-        
+
         try:
             page = self._get_page_from_session(session)
             actual_timeout = timeout or session.config.timeout
-            
+
             # Quick wait for dynamic content if requested
             if wait_for_dynamic:
                 try:
                     await page.wait_for_load_state("networkidle", timeout=5000)
-                except:
+                except Exception:
                     pass  # Continue even if timeout
-                
+
                 # Quick check for images (reduced wait)
                 try:
-                    await page.wait_for_function("""
+                    await page.wait_for_function(
+                        """
                         () => {
                             const images = document.querySelectorAll('img');
                             let loadedCount = 0;
@@ -855,52 +969,61 @@ class BrowserService:
                             });
                             return images.length === 0 || loadedCount / images.length > 0.5;
                         }
-                    """, timeout=3000)
-                except:
+                        """,
+                        timeout=3000,
+                    )
+                except Exception:
                     pass  # Continue even if images not fully loaded
 
             # Quick delay before screenshot
             await asyncio.sleep(random.uniform(0.2, 0.8))
-            
+
             # Generate path if not provided
             if not path:
                 timestamp = int(time.time())
                 path = f"{session.session_id}_{timestamp}.png"
             path = str(resolve_export_file(path, default_root="screenshots_dir"))
 
-            import os
-            
+            screenshot_options: Dict[str, Any] = {"path": path, "full_page": full_page}
+            if quality is not None:
+                # Playwright requires jpeg type when quality is set.
+                screenshot_options["type"] = "jpeg"
+                screenshot_options["quality"] = quality
+                if Path(path).suffix.lower() not in {".jpg", ".jpeg"}:
+                    path = str(Path(path).with_suffix(".jpg"))
+                    screenshot_options["path"] = path
+
             # Take screenshot
             if selector:
                 element = page.locator(selector)
                 await element.wait_for(state="visible", timeout=actual_timeout)
-                await element.screenshot(path=path)
+                await element.screenshot(**screenshot_options)
             else:
-                await page.screenshot(path=path, full_page=full_page)
-            
+                await page.screenshot(**screenshot_options)
+
             # Get file size
             file_size = os.path.getsize(path)
             content_type = "image/jpeg" if Path(path).suffix.lower() in {".jpg", ".jpeg"} else "image/png"
             artifact = self.artifact_service.register_artifact(
                 path, content_type=content_type, filename=os.path.basename(path)
             )
-            
+
             result = {
                 **artifact,
                 "selector": selector,
                 "full_page": full_page,
                 "size_bytes": file_size,
                 "success": True,
-                "dynamic_content_waited": wait_for_dynamic
+                "dynamic_content_waited": wait_for_dynamic,
             }
-            
+
             logger.info("Screenshot captured", session_id=session.session_id, **result)
             return result
-            
+
         except Exception as e:
             logger.error("Screenshot failed", session_id=session.session_id, error=str(e))
             raise BrowserOperationError("screenshot", str(e))
-    
+
     def _get_page_from_session(self, session: SessionData) -> Page:
         """Get page object from session data"""
         if not hasattr(session, 'page') or session.page is None:
@@ -918,6 +1041,29 @@ class BrowserService:
         elif status and status >= 500:
             warnings.append("Server error response detected; retry conservatively.")
         return warnings
+
+    @staticmethod
+    def _is_document_content_type(content_type: Optional[str]) -> bool:
+        """Return True if the content-type indicates a downloadable document."""
+        if not content_type:
+            return False
+        ct = content_type.lower().split(";")[0].strip()
+        document_types = {
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/csv",
+            "text/plain",
+            "application/json",
+            "application/xml",
+            "text/xml",
+        }
+        if ct in document_types:
+            return True
+        # application/*+xml (e.g., atom+xml) are XML documents.
+        if ct.endswith("+xml"):
+            return True
+        return False
 
     def _page_warnings(self, title: str, visible_text: str) -> List[str]:
         """Detect common challenge/login-wall indicators without bypassing them."""

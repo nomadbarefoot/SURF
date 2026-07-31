@@ -29,7 +29,8 @@ class FetchService:
         backend: FetchBackend = FetchBackend.AUTO,
         cookies: Optional[List[Dict[str, Any]]] = None,
         impersonate: Optional[str] = "chrome",
-        browser_context: Optional[Any] = None
+        browser_context: Optional[Any] = None,
+        extract_documents: bool = False,
     ) -> Dict[str, Any]:
         """Execute a one-off HTTP request."""
         backend_value = backend.value if hasattr(backend, "value") else str(backend)
@@ -54,6 +55,8 @@ class FetchService:
             result["backend"] = selected_backend
             result["duration_ms"] = int((time.time() - started) * 1000)
             result["warnings"] = self._response_warnings(result.get("status"))
+            if extract_documents:
+                result = self._maybe_extract_document(result)
             return result
         except (OutboundPolicyError, ResourceLimitError):
             raise
@@ -342,6 +345,23 @@ class FetchService:
         except Exception:
             data["json"] = None
         return data
+
+    def _maybe_extract_document(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """If the response is a supported document, extract its text."""
+        content_type = self._header(result.get("headers", {}), "content-type") or ""
+        from services.document_extract_service import DocumentExtractService
+        extractor = DocumentExtractService()
+        extract = extractor.extract_from_bytes(
+            result.get("_content_bytes", b""),
+            filename=result.get("url", "").rsplit("/", 1)[-1].split("?")[0] or "download.bin",
+            content_type=content_type,
+        )
+        result["document_extract"] = extract.to_dict()
+        if extract.success:
+            result["text"] = extract.content
+            result["text_preview"] = extract.content[:4000]
+            result["warnings"] = result.get("warnings", []) + [f"Document extracted ({extract.format})"]
+        return result
 
     def _enforce_content_length(self, headers: Any) -> None:
         from config import get_settings

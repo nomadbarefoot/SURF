@@ -30,7 +30,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30)
     algorithm: str = Field(default="HS256")
     api_token: Optional[str] = Field(default=None)
+    admin_token: Optional[str] = Field(default=None)
     auth_mode: str = Field(default="loopback")
+    # Readiness js_predicate runs caller-supplied JavaScript in the page
+    # context, which can exfiltrate whatever the session's cookies can reach.
+    # Off by default; enable only for trusted callers.
+    readiness_allow_js_predicate: bool = Field(default=False)
 
     # Rate Limiting
     rate_limit_requests: int = Field(default=100)
@@ -39,6 +44,7 @@ class Settings(BaseSettings):
     # Session Management
     max_sessions: int = Field(default=3)
     max_headed_sessions: int = Field(default=1)
+    max_pages_per_session: int = Field(default=10)
     session_ttl: int = Field(default=7200)
     idle_timeout_seconds: int = Field(default=600)
     hard_ttl_seconds: int = Field(default=7200)
