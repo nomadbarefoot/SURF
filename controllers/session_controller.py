@@ -23,7 +23,10 @@ async def create_session(
     
     try:
         user_config = dict(request.config or {})
-        for key in ("user_agent", "viewport", "silent", "stealth", "block_resources"):
+        for key in (
+            "user_agent", "viewport", "silent", "stealth", "block_resources",
+            "profile_id", "persist_profile",
+        ):
             value = getattr(request, key, None)
             if value is not None:
                 user_config[key] = value

@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     block_resources: List[str] = Field(default=[])
     block_mode: str = Field(default="conservative")
     content_mode: str = Field(default="compact")
+    observe_inventory_default_limit: int = Field(default=75, ge=1, le=100)
     adblock_enabled: bool = Field(default=True)
     adblock_filter_urls: List[str] = Field(
         default=[

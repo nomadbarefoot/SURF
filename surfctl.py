@@ -497,27 +497,46 @@ def build_mcp_server():
 
         @mcp.tool(name="browser_click", description="Click.")
         async def browser_click(
-            session_id: str, selector: str, timeout: int | None = None
+            session_id: str,
+            selector: str | None = None,
+            handle: str | None = None,
+            timeout: int | None = None,
+            contract_version: str | None = None,
         ) -> dict[str, Any]:
             data: dict[str, Any] = {
                 "session_id": session_id,
                 "action": "click",
-                "selector": selector,
             }
+            if selector is not None:
+                data["selector"] = selector
+            if handle is not None:
+                data["handle"] = handle
+            if contract_version is not None:
+                data["contract_version"] = contract_version
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)
 
         @mcp.tool(name="browser_type", description="Type.")
         async def browser_type(
-            session_id: str, selector: str, value: str, timeout: int | None = None
+            session_id: str,
+            value: str,
+            selector: str | None = None,
+            handle: str | None = None,
+            timeout: int | None = None,
+            contract_version: str | None = None,
         ) -> dict[str, Any]:
             data: dict[str, Any] = {
                 "session_id": session_id,
                 "action": "type",
-                "selector": selector,
                 "value": value,
             }
+            if selector is not None:
+                data["selector"] = selector
+            if handle is not None:
+                data["handle"] = handle
+            if contract_version is not None:
+                data["contract_version"] = contract_version
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)
@@ -650,13 +669,22 @@ def build_mcp_server():
 
         @mcp.tool(name="browser_hover", description="Hover.")
         async def browser_hover(
-            session_id: str, selector: str, timeout: int | None = None
+            session_id: str,
+            selector: str | None = None,
+            handle: str | None = None,
+            timeout: int | None = None,
+            contract_version: str | None = None,
         ) -> dict[str, Any]:
             data: dict[str, Any] = {
                 "session_id": session_id,
                 "action": "hover",
-                "selector": selector,
             }
+            if selector is not None:
+                data["selector"] = selector
+            if handle is not None:
+                data["handle"] = handle
+            if contract_version is not None:
+                data["contract_version"] = contract_version
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)
@@ -664,16 +692,23 @@ def build_mcp_server():
         @mcp.tool(name="browser_select", description="Select.")
         async def browser_select(
             session_id: str,
-            selector: str,
             value: str,
+            selector: str | None = None,
+            handle: str | None = None,
             timeout: int | None = None,
+            contract_version: str | None = None,
         ) -> dict[str, Any]:
             data: dict[str, Any] = {
                 "session_id": session_id,
                 "action": "select",
-                "selector": selector,
                 "value": value,
             }
+            if selector is not None:
+                data["selector"] = selector
+            if handle is not None:
+                data["handle"] = handle
+            if contract_version is not None:
+                data["contract_version"] = contract_version
             if timeout is not None:
                 data["timeout"] = timeout
             return await app_call("POST", "/browser/interact", data)

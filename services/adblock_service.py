@@ -139,8 +139,9 @@ class AdblockService:
     def _resource_blocks_for_mode(self, mode: str) -> set:
         if mode == "token_saver":
             return {"image", "media", "font"}
-        if mode == "conservative":
-            return {"media", "font"}
+        # conservative applies filter lists only. Blanket font and media blocking
+        # breaks visual fidelity for UI testing and screenshots; callers that want
+        # the bandwidth savings should ask for token_saver or set block_resources.
         return set()
 
     def _protected_conservative_request(self, url: str, source_url: str, resource_type: str) -> bool:

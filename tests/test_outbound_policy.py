@@ -9,6 +9,11 @@ from services.fetch_service import FetchService
 from services.outbound_policy import OutboundPolicy, OutboundPolicyError, ValidatedTarget
 
 
+@pytest.fixture(autouse=True)
+def _pin_egress_guard(deny_private_networks):
+    """Every assertion in this module is about the guard being shut."""
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "url",

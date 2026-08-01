@@ -33,6 +33,8 @@ from models.schemas import (
 )
 from utils.stealth import setup_stealth_mode
 from services.outbound_policy import OutboundPolicyError, get_outbound_policy
+from services.element_registry import element_registry
+from services.observation_script import LISTENER_INIT_SCRIPT
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -197,6 +199,8 @@ class SessionService:
 
                 # Instrument History API so SPA route changes are observable.
                 await context.add_init_script(self._route_tracking_script())
+                # Record dynamically attached listeners on every browser engine.
+                await context.add_init_script(LISTENER_INIT_SCRIPT)
 
                 # Create page
                 page = context.pages[0] if context.pages else await context.new_page()
@@ -208,6 +212,7 @@ class SessionService:
                 session_data.pages = {initial_page_id: page}
                 session_data.page_locks = {initial_page_id: asyncio.Lock()}
                 session_data.active_page_id = initial_page_id
+                self._wire_element_registry(session_id, initial_page_id, page)
 
                 stealth_strategy = self._enum_value(config.stealth_strategy)
                 if stealth_strategy == StealthStrategy.NONE.value:
@@ -260,6 +265,7 @@ class SessionService:
             
             # Remove from active sessions
             del self.active_sessions[session_id]
+            element_registry.evict_session(session_id)
             self.operation_locks.pop(session_id, None)
             self._release_profile_lease(session)
             self._cleanup_ephemeral_profile(session_id)
@@ -273,6 +279,7 @@ class SessionService:
             # Still remove from active sessions even if close fails
             if session_id in self.active_sessions:
                 del self.active_sessions[session_id]
+            element_registry.evict_session(session_id)
             self.operation_locks.pop(session_id, None)
             self._release_profile_lease(session)
             self._cleanup_ephemeral_profile(session_id)
@@ -435,7 +442,15 @@ class SessionService:
             session.active_page_id = page_id
             session.page = page
             session.context.page_id = str(id(page))
+            self._wire_element_registry(session_id, page_id, page)
             return {"page_id": page_id, "active": True, "pages": list(session.pages.keys())}
+
+    @staticmethod
+    def _wire_element_registry(session_id: str, page_id: str, page: Page) -> None:
+        """Invalidate string-only locator records when a document/frame is replaced."""
+        page.on("framenavigated", lambda _frame: element_registry.evict_page(session_id, page_id))
+        page.on("framedetached", lambda _frame: element_registry.evict_page(session_id, page_id))
+        page.on("close", lambda: element_registry.evict_page(session_id, page_id))
 
     async def list_pages(self, session_id: str) -> List[Dict[str, Any]]:
         """List pages in a session."""
@@ -478,6 +493,7 @@ class SessionService:
                 raise BrowserOperationError("close_page", "Cannot close the only page in the session")
 
             page = pages.pop(page_id)
+            element_registry.evict_page(session_id, page_id)
             session.page_locks.pop(page_id, None)
             try:
                 await page.close()
@@ -751,6 +767,25 @@ class SessionService:
                     "reason": decision.get("reason"),
                     "filter": decision.get("filter")
                 })
+            navigation_flag = getattr(request, "is_navigation_request", False)
+            is_navigation = navigation_flag() if callable(navigation_flag) else navigation_flag
+            if is_navigation:
+                stats["blocked_navigation_sequence"] = (
+                    stats.get("blocked_navigation_sequence", 0) + 1
+                )
+                try:
+                    frame_id = str(request.frame._impl_obj._guid)
+                except Exception:
+                    frame_id = ""
+                blocked_navigations = stats.setdefault("blocked_navigations", [])
+                blocked_navigations.append({
+                    "sequence": stats["blocked_navigation_sequence"],
+                    "frame_id": frame_id,
+                    "url": request.url,
+                    "reason": decision.get("reason", "unknown"),
+                    "filter": decision.get("filter"),
+                })
+                del blocked_navigations[:-100]
             await route.abort()
         else:
             stats["allowed_by_reason"][decision.get("reason", "allowed")] = (
@@ -776,7 +811,9 @@ class SessionService:
             "blocked_by_reason": {},
             "blocked_by_resource_type": {},
             "allowed_by_reason": {},
-            "blocked_samples": []
+            "blocked_samples": [],
+            "blocked_navigation_sequence": 0,
+            "blocked_navigations": [],
         }
 
     def _dict_delta(self, current: Dict[str, int], start: Dict[str, int]) -> Dict[str, int]:

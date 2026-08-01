@@ -147,9 +147,12 @@ async def interact_with_element(
                 session=session,
                 action=request.action,
                 selector=request.selector,
+                handle=request.handle,
                 value=request.value,
-                options=request.options,
-                timeout=request.timeout
+                options=request.options.model_dump() if request.options else None,
+                timeout=request.timeout,
+                contract_version=request.contract_version,
+                structured_outcomes=request.structured_outcomes,
             )
         
         # Update session stats
@@ -158,12 +161,25 @@ async def interact_with_element(
             {"operation": "interact"}
         )
         
+        structured = request.contract_version == "interaction.v1" or request.structured_outcomes
         return InteractResponse(
-            success=True,
+            success=result.get("reason") == "completed" if structured else True,
             data=result
         )
 
     except SessionNotFoundError as e:
+        if request.contract_version == "interaction.v1" or request.structured_outcomes:
+            return InteractResponse(success=False, data={
+                "outcome": "failure", "reason": "session_unavailable",
+                "action": request.action.value, "target": {
+                    "input_kind": "handle" if request.handle else "selector",
+                    "handle": request.handle, "locator": request.selector,
+                },
+                "timing": {"timeout_ms": request.timeout}, "recoveries": [],
+                "element_before": None, "element_after": None, "effect": {},
+                "error": {"type": type(e).__name__, "message": str(e)},
+                "candidates": [],
+            })
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
@@ -264,7 +280,14 @@ async def observe_page(
                 include_screenshot=request.include_screenshot,
                 max_text_length=request.max_text_length,
                 max_items=request.max_items,
-                content_mode=request.content_mode or session.config.content_mode
+                content_mode=request.content_mode or session.config.content_mode,
+                cursor=request.cursor,
+                limit=request.limit,
+                role=request.role,
+                action=request.action,
+                visibility=request.visibility,
+                name_contains=request.name_contains,
+                scope_handle=request.scope_handle,
             )
         return ObserveResponse(success=True, data=result)
     except SessionNotFoundError as e:

@@ -26,6 +26,12 @@ from utils.site_memory import create_site_memory_manager
 from utils.semantic_chunker import SemanticChunker
 from config.settings import settings
 from services.outbound_policy import get_outbound_policy
+from services.element_registry import element_registry
+from services.observation_script import (
+    OBSERVATION_SCRIPT,
+    ROLE_OF_ELEMENT,
+    SENSITIVE_ELEMENT_PREDICATE,
+)
 from services.page_readiness_service import PageReadinessService, ReadinessTimeoutError
 from utils.path_policy import resolve_export_file
 from utils.url_security import safe_url_for_log
@@ -64,6 +70,20 @@ class BrowserService:
         resource_monitor.stop_monitoring()
         
         logger.info("Browser service cleaned up")
+
+    @staticmethod
+    def _frame_identity(frame) -> str:
+        """Return Playwright's stable identity for a live frame object."""
+        if isinstance(frame, Page):
+            frame = frame.main_frame
+        return str(frame._impl_obj._guid)
+
+    @classmethod
+    def _frame_by_identity(cls, page, frame_id: str):
+        return next(
+            (frame for frame in page.frames if cls._frame_identity(frame) == str(frame_id)),
+            None,
+        )
     
     async def navigate_to_url(
         self,
@@ -85,6 +105,7 @@ class BrowserService:
         try:
             # Get page from session
             page = self._get_page_from_session(session)
+            element_registry.evict_page(session.session_id, session.active_page_id or "page_0")
 
             # Apply adaptive rate limiting if enabled
             if settings.enable_adaptive_rate_limiting:
@@ -299,7 +320,14 @@ class BrowserService:
         include_screenshot: bool = False,
         max_text_length: int = 8000,
         max_items: int = 100,
-        content_mode: str = "compact"
+        content_mode: str = "compact",
+        cursor: Optional[str] = None,
+        limit: Optional[Any] = None,
+        role: Optional[str] = None,
+        action: Optional[str] = None,
+        visibility: Optional[str] = None,
+        name_contains: Optional[str] = None,
+        scope_handle: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return a compact agent-friendly observation of the current page."""
         if not self.initialized:
@@ -307,121 +335,147 @@ class BrowserService:
 
         try:
             page = self._get_page_from_session(session)
-            observation = await page.evaluate(
-                """
-                ({maxTextLength, maxItems, contentMode}) => {
-                    const noiseSelector = [
-                        '[class*="ad-"]', '[class*="ads"]', '[id*="ad-"]', '[id*="ads"]',
-                        '[class*="cookie"]', '[id*="cookie"]', '[class*="newsletter"]',
-                        '[class*="subscribe"]', '[aria-label*="advertisement" i]',
-                        'aside', 'footer'
-                    ].join(',');
-                    const visible = (el) => {
-                        const style = window.getComputedStyle(el);
-                        const rect = el.getBoundingClientRect();
-                        return style && style.visibility !== 'hidden' &&
-                            style.display !== 'none' && rect.width > 0 && rect.height > 0;
-                    };
-                    const noisy = (el) => contentMode !== 'full' && !!el.closest(noiseSelector);
-                    const text = (el) => (el.innerText || el.textContent || '').trim();
-                    const attr = (el, name) => el.getAttribute(name) || '';
-                    const clip = (value, length = 300) => (value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
-                    const sourceText = () => document.body ? (document.body.innerText || document.body.textContent || '') : '';
-                    const readableText = () => {
-                        if (!document.body) return '';
-                        if (contentMode === 'full') return document.body.innerText || '';
-                        const clone = document.body.cloneNode(true);
-                        clone.querySelectorAll(noiseSelector + ', script, style, noscript, svg').forEach((el) => el.remove());
-                        const stripChrome = (root) => {
-                            root.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
-                            return (root.innerText || root.textContent || '').trim();
-                        };
-                        if (contentMode === 'reader') {
-                            const articleSelectors = [
-                                '.entry-content', '.post-content', '.article-content', '.article-body',
-                                '.story-body', 'article .content', 'main article', 'article', 'main',
-                                '[role=main]', '.article', '.story', '.post'
-                            ];
-                            const bodyText = stripChrome(clone.cloneNode(true));
-                            // Pick the largest candidate: the first >=200-char match is
-                            // often a navigation-like nested element, not the article.
-                            let bestText = '';
-                            for (const selector of articleSelectors) {
-                                const article = clone.querySelector(selector);
-                                if (!article) continue;
-                                const articleText = stripChrome(article.cloneNode(true));
-                                if (articleText.length > bestText.length) bestText = articleText;
-                            }
-                            if (bestText.length >= 200 || bestText.length >= bodyText.length * 0.35) {
-                                return bestText;
-                            }
-                            return stripChrome(clone);
-                        }
-                        if (contentMode === 'data') {
-                            clone.querySelectorAll('nav, header, footer, aside, form, button').forEach((el) => el.remove());
-                        } else {
-                            clone.querySelectorAll('nav, header, footer, aside, form, button, input, textarea, select').forEach((el) => el.remove());
-                        }
-                        return clone.innerText || clone.textContent || '';
-                    };
-
-                    const links = Array.from(document.querySelectorAll('a[href]')).filter((el) => visible(el) && !noisy(el)).slice(0, maxItems).map((a) => ({
-                        text: clip(text(a), 160),
-                        href: a.href
-                    }));
-
-                    const forms = Array.from(document.querySelectorAll('form')).filter((el) => !noisy(el)).slice(0, maxItems).map((form, index) => ({
-                        index,
-                        action: form.action || '',
-                        method: (form.method || 'get').toUpperCase(),
-                        fields: Array.from(form.querySelectorAll('input, textarea, select')).slice(0, 50).map((field) => ({
-                            tag: field.tagName.toLowerCase(),
-                            type: attr(field, 'type'),
-                            name: attr(field, 'name'),
-                            id: field.id || '',
-                            placeholder: attr(field, 'placeholder'),
-                            label: clip(field.labels && field.labels[0] ? text(field.labels[0]) : '', 120)
-                        }))
-                    }));
-
-                    const actions = Array.from(document.querySelectorAll('button, input[type=button], input[type=submit], [role=button], [onclick]'))
-                        .filter((el) => visible(el) && !noisy(el)).slice(0, maxItems).map((el) => ({
-                            tag: el.tagName.toLowerCase(),
-                            text: clip(text(el) || attr(el, 'value') || attr(el, 'aria-label'), 160),
-                            id: el.id || '',
-                            name: attr(el, 'name'),
-                            selector_hint: el.id ? `#${CSS.escape(el.id)}` : ''
-                        }));
-
-                    const tables = Array.from(document.querySelectorAll('table')).filter((el) => !noisy(el)).slice(0, Math.min(maxItems, 20)).map((table, index) => ({
-                        index,
-                        rows: table.rows.length,
-                        columns: table.rows[0] ? table.rows[0].cells.length : 0,
-                        preview: Array.from(table.rows).slice(0, 5).map((row) =>
-                            Array.from(row.cells).slice(0, 8).map((cell) => clip(text(cell), 120))
-                        )
-                    }));
-
-                    const rawText = sourceText();
-                    const selectedText = readableText();
-                    const visibleText = clip(selectedText, maxTextLength);
+            page_id = session.active_page_id or "page_0"
+            scope_record = None
+            scope_element = None
+            if scope_handle:
+                try:
+                    scope_record = element_registry.get(scope_handle, session.session_id, page_id)
+                    scope_frame = self._frame_by_identity(page, scope_record.frame_id)
+                    if scope_frame is None:
+                        raise ValueError("Scope frame is unavailable")
+                    scope_locator = scope_frame.locator(scope_record.locator)
+                    if await scope_locator.count() != 1:
+                        raise ValueError("Scope locator is stale or ambiguous")
+                    scope_element = await scope_locator.element_handle()
+                    if scope_element is None:
+                        raise ValueError("Scope element is detached")
+                    actual = await self._interaction_fingerprint(scope_element)
+                    if any(
+                        actual.get(key, "") != scope_record.fingerprint.get(key, "")
+                        for key in scope_record.fingerprint
+                    ):
+                        raise ValueError("Scope fingerprint mismatch")
+                except ValueError as exc:
                     return {
-                        visible_text: visibleText,
-                        visible_text_length: visibleText.length,
-                        token_estimate: Math.ceil(visibleText.length / 4),
-                        source_text_length: rawText.length,
-                        selected_text_length: selectedText.length,
-                        truncated: selectedText.length > visibleText.length,
-                        reduction_ratio: rawText.length ? Math.round((1 - (visibleText.length / rawText.length)) * 10000) / 10000 : 0,
-                        links,
-                        forms,
-                        actions,
-                        tables
-                    };
-                }
-                """,
-                {"maxTextLength": max_text_length, "maxItems": max_items, "contentMode": content_mode}
-            )
+                        "outcome": "failure", "reason": "stale_handle",
+                        "error": {"type": type(exc).__name__, "message": str(exc)},
+                    }
+
+            extracted = []
+            for frame_index, frame in enumerate(page.frames):
+                frame_id = self._frame_identity(frame)
+                if scope_record and frame_id != scope_record.frame_id:
+                    continue
+                payload = await frame.evaluate(
+                    OBSERVATION_SCRIPT,
+                    {
+                        "maxTextLength": max_text_length,
+                        "contentMode": content_mode,
+                        "scopeElement": scope_element if scope_record else None,
+                    },
+                )
+                for raw in payload.pop("elements", []):
+                    candidates = raw.pop("locator_candidates", [])
+                    locator = candidates[0] if candidates else ""
+                    if not locator:
+                        continue
+                    fingerprint = raw.pop("fingerprint")
+                    raw["locator"] = locator
+                    raw["_fingerprint"] = fingerprint
+                    raw["_frame_id"] = frame_id
+                    if frame_index:
+                        raw["context"] = {"frame_index": frame_index}
+                    raw["_legacy"] = raw.pop("legacy")
+                    extracted.append(raw)
+                extracted.append({"_frame_payload": payload, "_frame_index": frame_index})
+
+            frame_payloads = [item["_frame_payload"] for item in extracted if "_frame_payload" in item]
+            all_elements = [item for item in extracted if "_frame_payload" not in item]
+            filtered = all_elements
+            if role:
+                filtered = [item for item in filtered if item["role"] == role]
+            if action:
+                filtered = [item for item in filtered if action in item["actions"]]
+            if visibility and visibility != "all":
+                wanted = visibility == "visible"
+                filtered = [item for item in filtered if item["state"]["visible"] is wanted]
+            if name_contains:
+                needle = name_contains.casefold()
+                filtered = [item for item in filtered if needle in item["name"].casefold()]
+
+            counts_by_role: Dict[str, int] = {}
+            counts_by_action: Dict[str, int] = {}
+            for item in filtered:
+                counts_by_role[item["role"]] = counts_by_role.get(item["role"], 0) + 1
+                for item_action in item["actions"]:
+                    counts_by_action[item_action] = counts_by_action.get(item_action, 0) + 1
+            inventory_limit = {"slim": 25, "verbose": 100}.get(limit, limit)
+            inventory_limit = inventory_limit or settings.observe_inventory_default_limit
+            offset = int(cursor or 0)
+            page_elements = filtered[offset:offset + inventory_limit]
+            for index, item in enumerate(page_elements, start=offset):
+                item["handle"] = element_registry.register(
+                    session.session_id,
+                    page_id,
+                    item.pop("_frame_id"),
+                    item["locator"],
+                    item.pop("_fingerprint"),
+                )
+                item["index"] = index
+            next_cursor = str(offset + inventory_limit) if offset + inventory_limit < len(filtered) else None
+
+            links = []
+            actions = []
+            form_groups: Dict[str, Dict[str, Any]] = {}
+            for item in all_elements:
+                legacy = item["_legacy"]
+                if item.get("link") and item["state"]["visible"]:
+                    links.append({
+                        "index": len(links), "text": item["name"],
+                        "href": item["link"]["resolved"], "resolved": item["link"]["resolved"],
+                        "visible": item["link"]["visible"],
+                    })
+                if "click" in item["actions"] and item["state"]["visible"]:
+                    actions.append({
+                        "tag": item["tag"], "text": item["name"], "id": legacy["id"],
+                        "name": legacy["name"], "selector_hint": item["locator"],
+                    })
+                if item.get("form"):
+                    form = item["form"]
+                    key = f"{form['id']}|{form['action']}|{form['method']}"
+                    group = form_groups.setdefault(key, {"action": form["action"], "method": form["method"], "fields": []})
+                    group["fields"].append({
+                        "tag": item["tag"], "type": item.get("input_type", ""), "name": legacy["name"],
+                        "id": legacy["id"], "placeholder": item.get("placeholder", ""), "label": item["name"],
+                    })
+            forms = [
+                {"index": index, **form, "fields": form["fields"][:50]}
+                for index, form in enumerate(form_groups.values())
+            ][:max_items]
+            links = links[:max_items]
+            actions = actions[:max_items]
+            for item in page_elements:
+                item.pop("_legacy", None)
+            main_payload = frame_payloads[0] if frame_payloads else {
+                "visible_text": "", "visible_text_length": 0, "token_estimate": 0,
+                "source_text_length": 0, "selected_text_length": 0, "truncated": False,
+                "reduction_ratio": 0, "tables": [],
+            }
+            observation = {
+                **main_payload,
+                "elements": page_elements,
+                "total": len(filtered),
+                "next_cursor": next_cursor,
+                "counts_by_role": counts_by_role,
+                "counts_by_action": counts_by_action,
+                "visible_count": sum(1 for item in filtered if item["state"]["visible"]),
+                "hidden_count": sum(1 for item in filtered if not item["state"]["visible"]),
+                "links": links,
+                "forms": forms,
+                "actions": actions,
+                "tables": main_payload.get("tables", [])[:min(max_items, 20)],
+            }
 
             screenshot_artifact = {}
             if include_screenshot:
@@ -799,10 +853,35 @@ class BrowserService:
         self,
         session: SessionData,
         action: InteractionAction,
+        selector: Optional[str] = None,
+        handle: Optional[str] = None,
+        value: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+        contract_version: Optional[str] = None,
+        structured_outcomes: bool = False,
+    ) -> Dict[str, Any]:
+        """Perform an interaction, preserving the legacy path unless explicitly opted in."""
+        if contract_version == "interaction.v1" or structured_outcomes:
+            return await self._interact_structured(
+                session=session, action=action, selector=selector, handle=handle,
+                value=value, options=options, timeout=timeout,
+            )
+        # The new explicit handle is additive; legacy selectors and errors retain
+        # their original implementation and controller boundary unchanged.
+        return await self._interact_legacy(
+            session=session, action=action, selector=handle or selector or "",
+            value=value, options=options, timeout=timeout,
+        )
+
+    async def _interact_legacy(
+        self,
+        session: SessionData,
+        action: InteractionAction,
         selector: str,
         value: Optional[str] = None,
         options: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Perform element interactions with human-like behavior"""
         
@@ -814,15 +893,54 @@ class BrowserService:
             actual_timeout = timeout or session.config.timeout
             options = options or {}
             
+            # Handles use the same legacy selector field during the additive migration.
+            target_page = page
+            target_selector = selector
+            if selector.startswith("surf:e1:"):
+                page_id = session.active_page_id or "page_0"
+                record = element_registry.get(selector, session.session_id, page_id)
+                target_page = self._frame_by_identity(page, record.frame_id)
+                if target_page is None:
+                    raise ValidationError("selector", "Element handle frame is unavailable")
+                target_selector = record.locator
+                matches = target_page.locator(target_selector)
+                if await matches.count() != 1:
+                    raise ValidationError("selector", "Element handle is stale or ambiguous")
+                element = await matches.first.element_handle()
+                if element is None:
+                    raise ValidationError("selector", "Element handle is stale")
+                actual = await element.evaluate("""el => {
+                    const tag = el.tagName.toLowerCase(), type = (el.getAttribute('type') || (tag === 'input' ? 'text' : '')).toLowerCase();
+                    let role = el.getAttribute('role') || '';
+                    if (!role && tag === 'a' && el.hasAttribute('href')) role = 'link';
+                    else if (!role && (tag === 'button' || (tag === 'input' && ['button','submit','reset','image'].includes(type)))) role = 'button';
+                    else if (!role && tag === 'textarea') role = 'textbox';
+                    else if (!role && tag === 'select') role = el.multiple ? 'listbox' : 'combobox';
+                    else if (!role && tag === 'input') role = type === 'checkbox' ? 'checkbox' : type === 'radio' ? 'radio' : type === 'range' ? 'slider' : 'textbox';
+                    else if (!role && tag === 'summary') role = 'button';
+                    else if (!role) role = 'generic';
+                    const labelledby = el.getAttribute('aria-labelledby') || '';
+                    const referenced = labelledby ? labelledby.split(/\\s+/).map(id => document.getElementById(id)).filter(Boolean).map(x => x.innerText || '').join(' ') : '';
+                    const controlValue = tag === 'input' && ['button','submit','reset','image'].includes(type) ? el.getAttribute('value') : '';
+                    let name = referenced || el.getAttribute('aria-label') || (el.labels && el.labels.length ? Array.from(el.labels).map(x => x.innerText || '').join(' ') : '') || el.innerText || controlValue || el.getAttribute('placeholder') || el.getAttribute('title') || '';
+                    const contextNode = el.closest('li,label,[role=listitem],tr,form') || el.parentElement;
+                    const context = contextNode ? (contextNode.innerText || '').replace(/\\s+/g,' ').trim().slice(0,160) : '';
+                    return {tag, role, type, name: name.replace(/\\s+/g,' ').trim().slice(0,160), id: el.id || '', testid: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa') || '', context};
+                }""")
+                expected = record.fingerprint
+                if any(actual.get(key, "") != expected.get(key, "") for key in expected):
+                    raise ValidationError("selector", "Element handle fingerprint mismatch")
+
             # Wait for element to be actionable
-            element = page.locator(selector)
+            if not selector.startswith("surf:e1:"):
+                element = target_page.locator(target_selector)
             await element.wait_for(state="visible", timeout=actual_timeout)
             
             # Enhanced mouse movement and element-specific timing
             if settings.enable_enhanced_mouse_movement and action in [InteractionAction.CLICK, InteractionAction.DOUBLE_CLICK, InteractionAction.RIGHT_CLICK]:
                 await HumanMouseMovement.human_like_move(
-                    page, 
-                    selector,
+                    target_page,
+                    target_selector,
                     bezier_points=settings.mouse_movement_bezier_points,
                     min_delay=settings.mouse_movement_min_delay,
                     max_delay=settings.mouse_movement_max_delay,
@@ -831,7 +949,7 @@ class BrowserService:
                 )
             
             # Element-specific timing for all interactions
-            await HumanMimicry.element_specific_timing(page, selector, action.value)
+            await HumanMimicry.element_specific_timing(target_page, target_selector, action.value)
             
             # Perform action based on type
             if action == InteractionAction.CLICK:
@@ -863,6 +981,438 @@ class BrowserService:
         except Exception as e:
             logger.error("Interaction failed", session_id=session.session_id, action=action, selector=selector, error=str(e))
             raise BrowserOperationError("interact", str(e))
+
+    async def _interact_structured(
+        self,
+        session: SessionData,
+        action: InteractionAction,
+        selector: Optional[str],
+        handle: Optional[str],
+        value: Optional[str],
+        options: Optional[Dict[str, Any]],
+        timeout: Optional[int],
+    ) -> Dict[str, Any]:
+        """Execute interaction.v1 within one caller-owned deadline."""
+        started = time.monotonic()
+        timeout_ms = timeout or session.config.timeout
+        deadline = started + timeout_ms / 1000
+        recoveries: List[Dict[str, Any]] = []
+        input_kind = "handle" if handle else "selector"
+        target: Dict[str, Any] = {
+            "input_kind": input_kind,
+            "handle": handle,
+            "locator": selector,
+            "match_count": None,
+        }
+        before = None
+        page = None
+        locator = None
+
+        def remaining() -> int:
+            return max(1, int((deadline - time.monotonic()) * 1000))
+
+        async def bounded(awaitable):
+            """Cancel any interaction await when the caller-owned deadline expires."""
+            seconds = deadline - time.monotonic()
+            if seconds <= 0:
+                close = getattr(awaitable, "close", None)
+                if close:
+                    close()
+                raise asyncio.TimeoutError()
+            async with asyncio.timeout(seconds):
+                return await awaitable
+
+        def outcome(
+            reason: str,
+            *,
+            error: Optional[Exception] = None,
+            candidates: Optional[List[Dict[str, Any]]] = None,
+            after: Optional[Dict[str, Any]] = None,
+            effect: Optional[Dict[str, Any]] = None,
+            extra_error: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            elapsed = int((time.monotonic() - started) * 1000)
+            error_data = None
+            if error is not None:
+                error_data = {
+                    "type": type(error).__name__,
+                    "message": str(error)[:1000],
+                }
+            if extra_error:
+                error_data = {**(error_data or {}), **extra_error}
+            return {
+                "outcome": "success" if reason == "completed" else "failure",
+                "reason": reason,
+                "action": action.value,
+                "target": target,
+                "timing": {
+                    "timeout_ms": timeout_ms,
+                    "elapsed_ms": elapsed,
+                    "deadline_exhausted": time.monotonic() >= deadline,
+                },
+                "recoveries": recoveries,
+                "element_before": before,
+                "element_after": after,
+                "effect": effect or {},
+                "error": error_data,
+                "candidates": (candidates or [])[:10],
+            }
+
+        if not self.initialized:
+            return outcome("browser_error", error=BrowserOperationError("interact", "Browser service not initialized"))
+        if bool(handle) == bool(selector):
+            return outcome("invalid_target", extra_error={"message": "Provide exactly one of handle or selector"})
+        if action not in {
+            InteractionAction.CLICK, InteractionAction.TYPE,
+            InteractionAction.SELECT, InteractionAction.HOVER,
+        }:
+            return outcome("action_not_supported")
+        if action in {InteractionAction.TYPE, InteractionAction.SELECT} and value is None:
+            return outcome("invalid_target", extra_error={"message": f"Value is required for {action.value}"})
+
+        try:
+            browser_page = self._get_page_from_session(session)
+            page = browser_page
+            resolved_selector = selector
+            record = None
+            if handle:
+                page_id = session.active_page_id or "page_0"
+                try:
+                    record = element_registry.get(handle, session.session_id, page_id)
+                except ValueError as exc:
+                    return outcome("stale_handle", error=exc, extra_error={"stale_cause": "registry_unavailable"})
+                target["locator"] = record.locator
+                page = self._frame_by_identity(browser_page, record.frame_id)
+                if page is None:
+                    return outcome("stale_handle", extra_error={"stale_cause": "frame_unavailable"})
+                resolved_selector = record.locator
+
+            locator = page.locator(resolved_selector)
+            count = await bounded(locator.count())
+            target["match_count"] = count
+            if handle:
+                if count != 1:
+                    cause = "not_found" if count == 0 else "ambiguous"
+                    return outcome("stale_handle", extra_error={"stale_cause": cause})
+                locator = await bounded(locator.first.element_handle())
+                if locator is None:
+                    return outcome("stale_handle", extra_error={"stale_cause": "detached"})
+                actual = await bounded(self._interaction_fingerprint(locator))
+                if any(actual.get(key, "") != record.fingerprint.get(key, "") for key in record.fingerprint):
+                    return outcome("stale_handle", extra_error={"stale_cause": "fingerprint_mismatch"})
+            elif count == 0:
+                try:
+                    await bounded(locator.first.wait_for(state="attached", timeout=remaining()))
+                    count = await bounded(locator.count())
+                    target["match_count"] = count
+                except Exception as exc:
+                    return outcome("not_found", error=exc)
+
+            if count > 1:
+                candidate_data = await bounded(self._interaction_candidates(
+                    session, page, resolved_selector, locator, count
+                ))
+                if time.monotonic() >= deadline:
+                    return outcome("timeout")
+                actionable = [item for item in candidate_data if item.get("_actionable", False)]
+                if len(actionable) == 1:
+                    chosen = actionable[0]
+                    locator = await bounded(locator.nth(chosen["match_index"]).element_handle())
+                    if locator is None:
+                        return outcome("detached")
+                    actual = await bounded(self._interaction_fingerprint(locator))
+                    if any(
+                        actual.get(key, "") != chosen["_fingerprint"].get(key, "")
+                        for key in chosen["_fingerprint"]
+                    ):
+                        return outcome("detached")
+                    target["handle"] = chosen["handle"]
+                    target["locator"] = chosen["locator"]
+                    recoveries.append({"reason": "ambiguous", "resolution": "single_actionable_match"})
+                else:
+                    for item in candidate_data:
+                        item.pop("_actionable", None)
+                        item.pop("_fingerprint", None)
+                    target["match_count"] = count
+                    return outcome("ambiguous", candidates=candidate_data)
+            elif not handle:
+                locator = await bounded(locator.first.element_handle())
+                if locator is None:
+                    return outcome("detached")
+
+            if time.monotonic() >= deadline:
+                return outcome("timeout")
+            before = await bounded(self._interaction_snapshot(locator))
+            if action == InteractionAction.TYPE:
+                if before.get("readonly"):
+                    return outcome("readonly")
+                if not before.get("editable", False):
+                    return outcome("not_editable")
+            if action == InteractionAction.SELECT:
+                option_matches = await bounded(locator.evaluate(
+                    """(el, value) => Array.from(el.options || []).filter(
+                        option => option.value === value || option.label === value
+                    ).map(option => ({value: option.value, label: option.label}))""",
+                    value,
+                ))
+                if len(option_matches) == 0:
+                    return outcome("option_not_found")
+                if len(option_matches) > 1:
+                    return outcome("option_ambiguous")
+                select_by = "value" if option_matches[0]["value"] == value else "label"
+            old_url = browser_page.url
+            blocker_stats = session.metadata.get("blocker", {})
+            blocker_watermark = blocker_stats.get("blocked_navigation_sequence", 0)
+            interaction_frame_id = self._frame_identity(page)
+            try:
+                if not before.get("visible", False):
+                    if action in {InteractionAction.CLICK, InteractionAction.HOVER}:
+                        recoveries.append({
+                            "reason": "not_visible",
+                            "resolution": "hover_then_recheck",
+                        })
+                        try:
+                            await bounded(self._hover_to_reveal(
+                                locator, min(remaining(), 100)
+                            ))
+                            revealed = await bounded(self._interaction_snapshot(locator))
+                            if revealed.get("visible", False):
+                                before = revealed
+                        except Exception:
+                            pass
+                    if not before.get("visible", False):
+                        recoveries.append({"reason": "not_visible", "resolution": "wait_visible"})
+                        try:
+                            await bounded(self._wait_element_visible(
+                                locator, max(1, remaining() - 10)
+                            ))
+                        except Exception as exc:
+                            return outcome("not_visible", error=exc)
+                if time.monotonic() >= deadline:
+                    return outcome("timeout")
+                recoveries.append({"reason": "actionability", "resolution": "scroll_and_recheck"})
+                await bounded(locator.scroll_into_view_if_needed(timeout=remaining()))
+                if time.monotonic() >= deadline:
+                    return outcome("timeout")
+                dispatch_options = dict(options or {})
+                if action == InteractionAction.SELECT:
+                    dispatch_options["_select_by"] = select_by
+                await bounded(self._perform_structured_action(
+                    locator, action, value, dispatch_options, remaining()
+                ))
+            except Exception as exc:
+                reason = self._normalize_interaction_error(exc, action, before)
+                if handle and reason == "detached":
+                    return outcome(
+                        "stale_handle", error=exc,
+                        extra_error={"stale_cause": "detached_after_verification"},
+                    )
+                return outcome(reason, error=exc)
+
+            new_blocked_navigations = [
+                entry
+                for entry in session.metadata.get("blocker", {}).get("blocked_navigations", [])
+                if entry.get("sequence", 0) > blocker_watermark
+                and entry.get("frame_id") == interaction_frame_id
+            ]
+            if new_blocked_navigations:
+                blocked = new_blocked_navigations[0]
+                return outcome(
+                    "navigation_blocked",
+                    effect={
+                        "blocker_delta": {
+                            "blocked_navigations": new_blocked_navigations,
+                            "requests_blocked": len(new_blocked_navigations),
+                        },
+                        "url_before": old_url,
+                        "attempted_url": blocked.get("url"),
+                        "block_reason": blocked.get("reason"),
+                        "filter": blocked.get("filter"),
+                    },
+                )
+
+            after = None
+            try:
+                after = await bounded(self._interaction_snapshot(
+                    locator,
+                    expected_value=value,
+                    check_value=action in {InteractionAction.TYPE, InteractionAction.SELECT},
+                ))
+            except Exception:
+                pass
+            if action in {InteractionAction.TYPE, InteractionAction.SELECT} and (
+                after is None or (
+                    after.get("value_applied") is not True
+                    if after.get("value_redacted")
+                    else after.get("value") != value
+                )
+            ):
+                return outcome("value_not_applied", after=after)
+            effect = self._interaction_effect(before, after, old_url, browser_page.url)
+            return outcome("completed", after=after, effect=effect)
+        except Exception as exc:
+            return outcome(self._normalize_interaction_error(exc, action, before), error=exc)
+
+    @staticmethod
+    async def _interaction_fingerprint(locator) -> Dict[str, str]:
+        script = """el => {
+            const tag = el.tagName.toLowerCase();
+            const type = (el.getAttribute('type') || (tag === 'input' ? 'text' : '')).toLowerCase();
+            const role = (__SURF_ROLE_OF_ELEMENT__)(el);
+            const labelledby = el.getAttribute('aria-labelledby') || '';
+            const referenced = labelledby ? labelledby.split(/\\s+/).map(id => document.getElementById(id)).filter(Boolean).map(x => x.innerText || '').join(' ') : '';
+            const controlValue = tag === 'input' && ['button','submit','reset','image'].includes(type) ? el.getAttribute('value') : '';
+            const name = (referenced || el.getAttribute('aria-label') || (el.labels && el.labels.length ? Array.from(el.labels).map(x => x.innerText || '').join(' ') : '') || el.innerText || controlValue || el.getAttribute('placeholder') || el.getAttribute('title') || '').replace(/\\s+/g,' ').trim().slice(0,160);
+            const contextNode = el.closest('li,label,[role=listitem],tr,form') || el.parentElement;
+            const context = contextNode ? (contextNode.innerText || '').replace(/\\s+/g,' ').trim().slice(0,160) : '';
+            return {tag, role, type, name, id: el.id || '', testid: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa') || '', context};
+        }""".replace("__SURF_ROLE_OF_ELEMENT__", ROLE_OF_ELEMENT)
+        return await locator.evaluate(script)
+
+    @staticmethod
+    async def _interaction_snapshot(
+        locator, expected_value: Optional[str] = None, check_value: bool = False
+    ) -> Dict[str, Any]:
+        script = """(el, expected) => {
+            const rect = el.getBoundingClientRect(), style = getComputedStyle(el);
+            const visible = style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+            const contextNode = el.closest('li,label,[role=listitem],tr,form') || el.parentElement;
+            const result = {tag: el.tagName.toLowerCase(), role: (__SURF_ROLE_OF_ELEMENT__)(el), name: (el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || '').replace(/\\s+/g,' ').trim().slice(0,160), context_text: contextNode ? (contextNode.innerText || '').replace(/\\s+/g,' ').trim().slice(0,160) : '', visible, enabled: !(el.disabled || el.getAttribute('aria-disabled') === 'true'), readonly: Boolean(el.readOnly || el.getAttribute('aria-readonly') === 'true'), editable: Boolean(el.isContentEditable || ['input','textarea'].includes(el.tagName.toLowerCase()))};
+            const sensitive = (__SURF_SENSITIVE_ELEMENT_PREDICATE__)(el);
+            if ('value' in el) {
+              if (sensitive) {
+                result.value_redacted = true;
+                if (expected.check) result.value_applied = String(el.value ?? '') === expected.value;
+              } else result.value = String(el.value ?? '').slice(0,500);
+            }
+            if ((el.type === 'checkbox' || el.type === 'radio') || ['checkbox','radio','switch'].includes(result.role)) result.checked = el.getAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true' : Boolean(el.checked);
+            if (el.hasAttribute('aria-expanded')) result.expanded = el.getAttribute('aria-expanded') === 'true';
+            return result;
+        }""".replace(
+            "__SURF_SENSITIVE_ELEMENT_PREDICATE__", SENSITIVE_ELEMENT_PREDICATE
+        ).replace("__SURF_ROLE_OF_ELEMENT__", ROLE_OF_ELEMENT)
+        return await locator.evaluate(
+            script, {"value": expected_value, "check": check_value}
+        )
+
+    async def _interaction_candidates(self, session, page, selector, locator, count):
+        page_id = session.active_page_id or "page_0"
+        frame_id = self._frame_identity(page)
+        candidates = []
+        for index in range(min(count, 10)):
+            item = locator.nth(index)
+            fingerprint = await self._interaction_fingerprint(item)
+            snapshot = await self._interaction_snapshot(item)
+            candidate_locator = f"{selector} >> nth={index}"
+            candidate_handle = element_registry.register(
+                session.session_id, page_id, frame_id, candidate_locator, fingerprint
+            )
+            candidates.append({
+                "match_index": index, "handle": candidate_handle,
+                "locator": candidate_locator, "role": fingerprint["role"],
+                "name": fingerprint["name"],
+                "context": {"text": snapshot["context_text"]}, "state": {
+                    "visible": snapshot["visible"], "enabled": snapshot["enabled"],
+                },
+                "_actionable": snapshot["visible"] and snapshot["enabled"],
+                "_fingerprint": fingerprint,
+            })
+        return candidates
+
+    @staticmethod
+    async def _wait_element_visible(locator, timeout):
+        """Wait on the already-resolved node without consulting its selector."""
+        await locator.evaluate(
+            """(el, timeout) => new Promise((resolve, reject) => {
+              const started = performance.now();
+              const check = () => {
+                const rect = el.getBoundingClientRect();
+                const style = getComputedStyle(el);
+                if (style.display !== 'none' && style.visibility !== 'hidden' &&
+                    rect.width > 0 && rect.height > 0) return resolve();
+                if (performance.now() - started >= timeout) {
+                  return reject(new Error('Timeout waiting for element to become visible'));
+                }
+                requestAnimationFrame(check);
+              };
+              check();
+            })""",
+            timeout,
+        )
+
+    @staticmethod
+    async def _hover_to_reveal(locator, timeout):
+        """Hover a stable containing affordance so CSS :hover can reveal target."""
+        handle = await locator.evaluate_handle(
+            "el => el.closest('li,tr,[role=row],[role=menuitem]') || el.parentElement || el"
+        )
+        try:
+            element = handle.as_element()
+            if element is not None:
+                await element.hover(timeout=timeout)
+        finally:
+            await handle.dispose()
+
+    @staticmethod
+    async def _perform_structured_action(locator, action, value, options, timeout):
+        force = options.get("force", False)
+        if not isinstance(force, bool):
+            raise ValidationError("options.force", "force must be a boolean")
+        if action == InteractionAction.CLICK:
+            await locator.click(timeout=timeout, force=force)
+        elif action == InteractionAction.TYPE:
+            await locator.fill(value, timeout=timeout, force=force)
+        elif action == InteractionAction.SELECT:
+            if options.get("_select_by") == "label":
+                await locator.select_option(label=value, timeout=timeout, force=force)
+            else:
+                await locator.select_option(value=value, timeout=timeout, force=force)
+        elif action == InteractionAction.HOVER:
+            await locator.hover(timeout=timeout, force=force)
+
+    @staticmethod
+    def _normalize_interaction_error(error: Exception, action: InteractionAction, before=None) -> str:
+        message = str(error).lower()
+        if "strict mode violation" in message:
+            return "ambiguous"
+        if "page, context or browser has been closed" in message or "target page" in message and "closed" in message:
+            return "page_closed"
+        if "frame was detached" in message or "frame has been detached" in message:
+            return "frame_unavailable"
+        if "element is not attached" in message or "detached" in message:
+            return "detached"
+        if "intercepts pointer events" in message or "another element" in message and "receives" in message:
+            return "covered_by"
+        if "not visible" in message or "hidden" in message:
+            return "not_visible"
+        if "not enabled" in message or "disabled" in message or before and not before.get("enabled", True):
+            return "disabled"
+        if "not editable" in message:
+            return "not_editable"
+        if "not writable" in message or "read only" in message or "readonly" in message:
+            return "readonly"
+        if action == InteractionAction.SELECT and "did not find" in message:
+            return "option_not_found"
+        if "element is not stable" in message:
+            return "unstable"
+        if "navigation" in message and "interrupted" in message:
+            return "navigation_interrupted"
+        if "timeout" in message or isinstance(error, (PlaywrightTimeoutError, asyncio.TimeoutError)):
+            return "timeout"
+        return "browser_error"
+
+    @staticmethod
+    def _interaction_effect(before, after, old_url, new_url):
+        changed = {}
+        if before and after:
+            for key in sorted(set(before) | set(after)):
+                if before.get(key) != after.get(key):
+                    changed[key] = {"before": before.get(key), "after": after.get(key)}
+        return {
+            "element_changed": bool(changed), "changed_fields": changed,
+            "url_changed": old_url != new_url, "url_before": old_url,
+            "url_after": new_url, "element_detached": after is None,
+        }
     
     async def scroll_page(
         self,

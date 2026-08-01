@@ -1,7 +1,7 @@
 """Consolidated Pydantic schemas for Surf Browser Service"""
 
 from typing import Optional, Dict, Any, List, Union
-from pydantic import BaseModel, Field, validator, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, validator, HttpUrl, field_validator
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -100,6 +100,56 @@ class ContentMode(str, Enum):
     READER = "reader"
     DATA = "data"
     FULL = "full"
+    UI = "ui"
+
+
+class ElementEntry(BaseModel):
+    """A compact, actionable entry in the flat UI element inventory."""
+
+    index: int
+    handle: str
+    locator: str
+    role: str
+    name: str = Field(default="", max_length=160)
+    tag: str
+    input_type: Optional[str] = None
+    text: Optional[str] = None
+    placeholder: Optional[str] = None
+    actions: List[str] = Field(default_factory=list)
+    state: Dict[str, Any] = Field(default_factory=dict)
+    value: Optional[str] = None
+    value_redacted: bool = False
+    options: Optional[List[Dict[str, Any]]] = None
+    link: Optional[Dict[str, Any]] = None
+    form: Optional[Dict[str, Any]] = None
+    context: Optional[Dict[str, Any]] = None
+    discovery: str
+
+
+class ElementInventory(BaseModel):
+    elements: List[ElementEntry] = Field(default_factory=list)
+    total: int
+    next_cursor: Optional[str] = None
+    counts_by_role: Dict[str, int] = Field(default_factory=dict)
+    counts_by_action: Dict[str, int] = Field(default_factory=dict)
+    visible_count: int
+    hidden_count: int
+
+
+class InteractionOutcome(BaseModel):
+    """Scaffolding for the later interaction.v1 outcome migration."""
+
+    outcome: str
+    reason: str
+    action: str
+    target: Dict[str, Any] = Field(default_factory=dict)
+    timing: Dict[str, Any] = Field(default_factory=dict)
+    recoveries: List[Dict[str, Any]] = Field(default_factory=list)
+    element_before: Optional[Dict[str, Any]] = None
+    element_after: Optional[Dict[str, Any]] = None
+    effect: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[Dict[str, Any]] = None
+    candidates: List[Dict[str, Any]] = Field(default_factory=list, max_length=10)
 
 
 # ============================================================================
@@ -126,6 +176,12 @@ class SessionCreateRequest(BaseModel):
     stealth: Optional[bool] = Field(default=None, description="Enable stealth mode")
     block_resources: Optional[List[str]] = Field(
         default=None, description="Resource types to block"
+    )
+    profile_id: Optional[str] = Field(
+        default=None, max_length=200, description="Browser profile identifier"
+    )
+    persist_profile: Optional[bool] = Field(
+        default=None, description="Persist browser storage across sessions"
     )
 
     @validator("viewport")
@@ -178,16 +234,32 @@ class ExtractRequest(BaseModel):
         return v
 
 
+class InteractionOptions(BaseModel):
+    """Strictly typed interaction behavior flags."""
+
+    model_config = ConfigDict(extra="allow")
+
+    force: StrictBool = False
+    hover_first: StrictBool = True
+
+
 class InteractRequest(BaseModel):
     """Request model for element interaction"""
 
     session_id: str = Field(..., description="Session ID")
     action: InteractionAction = Field(..., description="Action to perform")
-    selector: str = Field(..., max_length=1000, description="CSS selector")
+    handle: Optional[str] = Field(default=None, max_length=200, description="Verified SURF element handle")
+    selector: Optional[str] = Field(default=None, max_length=1000, description="Playwright selector")
+    contract_version: Optional[str] = Field(
+        default=None, description="Set to interaction.v1 for structured outcomes"
+    )
+    structured_outcomes: bool = Field(
+        default=False, description="Return the interaction.v1 structured outcome contract"
+    )
     value: Optional[str] = Field(
         default=None, max_length=10000, description="Value for type/select actions"
     )
-    options: Optional[Dict[str, Any]] = Field(
+    options: Optional[InteractionOptions] = Field(
         default=None, description="Additional options"
     )
     timeout: Optional[int] = Field(
@@ -207,6 +279,18 @@ class InteractRequest(BaseModel):
         action = values.get("action")
         if action in ["type", "select"] and not v:
             raise ValueError(f"Value is required for action '{action}'")
+        return v
+
+    @validator("selector", always=True)
+    def validate_target(cls, v: Optional[str], values: Dict[str, Any]) -> Optional[str]:
+        if not v and not values.get("handle"):
+            raise ValueError("Either selector or handle is required")
+        return v
+
+    @validator("contract_version")
+    def validate_contract_version(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v != "interaction.v1":
+            raise ValueError("Unsupported interaction contract version")
         return v
 
 
@@ -255,6 +339,24 @@ class ObserveRequest(BaseModel):
         default=None,
         description="Observation content mode; defaults to the session config",
     )
+    cursor: Optional[str] = Field(default=None, max_length=32)
+    limit: Optional[Union[int, str]] = Field(
+        default=None, description="Inventory page size (1-100), or slim/verbose preset"
+    )
+    role: Optional[str] = Field(default=None, max_length=64)
+    action: Optional[str] = Field(default=None, max_length=32)
+    visibility: Optional[str] = Field(default=None, pattern="^(visible|hidden|all)$")
+    name_contains: Optional[str] = Field(default=None, max_length=160)
+    scope_handle: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("limit")
+    @classmethod
+    def validate_inventory_limit(cls, value):
+        if value is None or value in ("slim", "verbose"):
+            return value
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 100:
+            raise ValueError("limit must be 1-100, slim, or verbose")
+        return value
 
 
 class LocatorSpec(BaseModel):
