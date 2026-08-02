@@ -10,15 +10,18 @@ services:
     environment:
       - SURF_HOST=0.0.0.0
       - SURF_PORT=17777
-      - SURF_AUTH_MODE=token
-      - "SURF_API_TOKEN=${SURF_API_TOKEN:?Set SURF_API_TOKEN in .env.docker}"
+      - SURF_KEYLESS_WEB_ENABLED=true
+      - SURF_MCP_ALLOWED_HOSTS=surf:17777
+      - "SURF_BROWSE_KEY=${SURF_BROWSE_KEY:-}"
+      - "SURF_UI_KEY=${SURF_UI_KEY:-}"
+      - "SURF_FINANCE_KEY=${SURF_FINANCE_KEY:-}"
+      - "SURF_OPS_KEY=${SURF_OPS_KEY:-}"
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
       - SURF_EMBEDDING_BASE_URL=http://litellm:4000/v1
       - SURF_EMBEDDING_MODEL=embed-text
       - SURF_EMBEDDING_DIMENSIONS=768
       - SURF_ALLOW_AGGRESSIVE_MODE=false
-      - "SURF_ADMIN_TOKEN=${SURF_ADMIN_TOKEN:-}"
     volumes:
       - surf-data:/app/data
     depends_on:

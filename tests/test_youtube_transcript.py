@@ -7,10 +7,11 @@ import os
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.foundation import get_youtube_transcript_service
-from main import app
+from controllers import youtube_controller
+from core.foundation import SecurityMiddleware, get_youtube_transcript_service
 from services.youtube_transcript_service import (
     TranscriptServiceError,
     YoutubeTranscriptService,
@@ -257,15 +258,18 @@ def test_youtube_route_is_available_in_loopback_free_tier(tmp_path, monkeypatch)
                 "cache_hit": False,
             }
 
-    app.dependency_overrides[get_youtube_transcript_service] = lambda: FakeService()
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityMiddleware)
+    test_app.include_router(youtube_controller.router, prefix="/youtube")
+    test_app.dependency_overrides[get_youtube_transcript_service] = lambda: FakeService()
     try:
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(test_app, raise_server_exceptions=False) as client:
             response = client.post(
                 "/youtube/transcript",
                 json={"url": f"https://youtu.be/{VIDEO_ID}"},
             )
     finally:
-        app.dependency_overrides.pop(get_youtube_transcript_service, None)
+        test_app.dependency_overrides.pop(get_youtube_transcript_service, None)
 
     assert response.status_code == 200
     assert response.json()["video"]["id"] == VIDEO_ID

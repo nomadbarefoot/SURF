@@ -6,17 +6,14 @@ import uuid
 from typing import Callable, Optional, Dict, Any
 from fastapi import Request, Response, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
 import structlog
 
 from config import get_settings, SecurityConfig
-from config.settings import FREE_TIER_ROUTES
 
 logger = structlog.get_logger()
 settings = get_settings()
-security = HTTPBearer(auto_error=False)
 
 
 # ============================================================================
@@ -198,32 +195,34 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     """Security middleware for request validation and protection"""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Route-tier gate: when running in loopback mode without a bearer token,
-        # restrict access to FREE_TIER_ROUTES (mirrors FREE_TIER_TOOLS on the MCP layer).
-        if settings.auth_mode == "loopback":
-            auth_header = request.headers.get("authorization", "")
-            provided_token = ""
-            if auth_header.lower().startswith("bearer "):
-                provided_token = auth_header[len("bearer "):].strip()
-            has_valid_token = bool(
-                provided_token
-                and settings.api_token
-                and secrets.compare_digest(provided_token, settings.api_token)
+        allowed = _route_profiles(request.method, request.url.path)
+        principal, invalid_bearer = _request_principal(request)
+        if principal is None and "web" in allowed and not invalid_bearer:
+            if settings.allows_keyless_web():
+                principal = {
+                    "username": "surf-web",
+                    "profile": "web",
+                    "scopes": ["web:read"],
+                    "auth_type": "keyless_private",
+                }
+        if principal is None:
+            profile_keys = settings.profile_keys()
+            specialist_allowed = allowed.intersection(profile_keys)
+            if specialist_allowed and all(
+                profile_keys[profile] is None for profile in specialist_allowed
+            ):
+                return JSONResponse(status_code=404, content={"detail": "Profile disabled"})
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required"},
+                headers={"WWW-Authenticate": "Bearer"},
             )
-            if not has_valid_token:
-                path = request.url.path
-                # Always allow the root endpoint
-                if path != "/" and not any(path.startswith(prefix) for prefix in FREE_TIER_ROUTES):
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "success": False,
-                            "error": {
-                                "code": "FORBIDDEN",
-                                "message": "This route requires an API token. Set SURF_API_TOKEN and pass it as a Bearer token."
-                            }
-                        }
-                    )
+        if principal["profile"] not in allowed:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Profile is not allowed for this route"},
+            )
+        request.state.user = principal
 
         # Add security headers
         response = await call_next(request)
@@ -234,6 +233,65 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         
         return response
+
+
+_UI_ONLY_BROWSER_PATHS = frozenset(
+    {"/browser/press-key", "/browser/viewport", "/browser/interact", "/browser/batch"}
+)
+
+
+def _route_profiles(method: str, path: str) -> frozenset[str]:
+    """Return the exact profile set authorized for one HTTP route."""
+    if path in {"/", "/health/live", "/health/ready"}:
+        return frozenset({"web"})
+    if path.startswith("/mcp/"):
+        profile = path.split("/", 3)[2]
+        return frozenset({profile}) if profile in {"web", "browse", "ui", "finance"} else frozenset({"ops"})
+    if path.startswith(("/search/", "/youtube/")):
+        return frozenset({"web"})
+    if path.startswith("/fetch/"):
+        return frozenset({"web", "browse", "ui"})
+    if path.startswith("/artifacts/"):
+        return frozenset({"web", "browse", "ui", "finance"})
+    if path.startswith("/finance/"):
+        return frozenset({"finance"})
+    if path in {"/sessions/monitor", "/sessions/reap"}:
+        return frozenset({"ops"})
+    if path.startswith("/sessions/"):
+        return frozenset({"browse", "ui"})
+    if path in _UI_ONLY_BROWSER_PATHS:
+        return frozenset({"ui"})
+    if path.startswith(("/browser/", "/browse/", "/downloads/")):
+        return frozenset({"browse", "ui"})
+    if path == "/health/finance":
+        return frozenset({"finance", "ops"})
+    if path == "/health/runtime":
+        return frozenset({"browse", "ui", "ops"})
+    if path == "/health/searxng" and method.upper() == "GET":
+        return frozenset({"web", "ops"})
+    if path.startswith("/health/") or path == "/health":
+        return frozenset({"ops"})
+    return frozenset({"ops"})
+
+
+def _request_principal(request: Request) -> tuple[Optional[Dict[str, Any]], bool]:
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header:
+        return None, False
+    if not auth_header.lower().startswith("bearer "):
+        return None, True
+    provided = auth_header[len("bearer "):].strip()
+    if not provided:
+        return None, True
+    for profile, expected in settings.profile_keys().items():
+        if expected and secrets.compare_digest(provided, expected):
+            return {
+                "username": f"surf-{profile}",
+                "profile": profile,
+                "scopes": [f"{profile}:access"],
+                "auth_type": "profile_key",
+            }, False
+    return None, True
 
 
 class RequestSizeLimitMiddleware:
@@ -480,53 +538,26 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 # ============================================================================
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    request: Request,
 ) -> Optional[Dict[str, Any]]:
-    """Return a local principal for loopback mode or validate the static bearer token."""
-
-    scopes = ["browser:read", "browser:write", "sessions:manage", "downloads:manage"]
-    if settings.auth_mode == "loopback":
-        if (
-            credentials
-            and settings.api_token
-            and secrets.compare_digest(credentials.credentials, settings.api_token)
-        ):
-            return {
-                "username": "local-token",
-                "scopes": scopes,
-                "auth_type": "local_token",
-            }
-        return {
-            "username": "local-loopback",
-            "scopes": [],
-            "auth_type": "loopback"
-        }
-
-    if (
-        not credentials
-        or not settings.api_token
-        or not secrets.compare_digest(credentials.credentials, settings.api_token)
-    ):
+    """Return the profile principal established by SecurityMiddleware."""
+    user = getattr(request.state, "user", None)
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"}
         )
-
-    return {
-        "username": "local-token",
-        "scopes": scopes,
-        "auth_type": "local_token"
-    }
+    return user
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    request: Request,
 ) -> Optional[Dict[str, Any]]:
     """Get current user if authenticated, otherwise return None"""
     
     try:
-        return await get_current_user(credentials)
+        return await get_current_user(request)
     except (AuthenticationError, HTTPException):
         return None
 
@@ -549,12 +580,7 @@ async def require_auth(
 async def require_full_access(
     user: Dict[str, Any] = Depends(require_auth),
 ) -> Dict[str, Any]:
-    """Require a validated bearer token, including in loopback mode."""
-    if user.get("auth_type") != "local_token":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="A configured API token is required",
-        )
+    """Require the profile already authorized for this route by middleware."""
     return user
 
 

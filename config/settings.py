@@ -1,5 +1,6 @@
 """Enhanced configuration management for Surf Browser Service"""
 
+import os
 from typing import List, Dict, Any, Optional
 from ipaddress import ip_address
 from pydantic import Field, validator
@@ -29,9 +30,11 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="your-secret-key-change-this")
     access_token_expire_minutes: int = Field(default=30)
     algorithm: str = Field(default="HS256")
-    api_token: Optional[str] = Field(default=None)
-    admin_token: Optional[str] = Field(default=None)
-    auth_mode: str = Field(default="loopback")
+    browse_key: Optional[str] = Field(default=None, repr=False)
+    ui_key: Optional[str] = Field(default=None, repr=False)
+    finance_key: Optional[str] = Field(default=None, repr=False)
+    ops_key: Optional[str] = Field(default=None, repr=False)
+    keyless_web_enabled: bool = Field(default=False)
     # Readiness js_predicate runs caller-supplied JavaScript in the page
     # context, which can exfiltrate whatever the session's cookies can reach.
     # Off by default; enable only for trusted callers.
@@ -220,6 +223,14 @@ class Settings(BaseSettings):
     mouse_movement_reaction_delay_min: float = Field(default=0.1)
     mouse_movement_reaction_delay_max: float = Field(default=0.3)
 
+    @validator("browse_key", "ui_key", "finance_key", "ops_key", pre=True)
+    def normalize_profile_key(cls, value: Any) -> Optional[str]:
+        """Treat blank optional profile-key settings as disabled profiles."""
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
     @validator("log_level")
     def validate_log_level(cls, v: str) -> str:
         """Validate log level"""
@@ -227,13 +238,6 @@ class Settings(BaseSettings):
         if v.upper() not in valid_levels:
             raise ValueError(f"Log level must be one of {valid_levels}")
         return v.upper()
-
-    @validator("auth_mode")
-    def validate_auth_mode(cls, v: str) -> str:
-        value = v.lower()
-        if value not in {"loopback", "token"}:
-            raise ValueError("auth_mode must be 'loopback' or 'token'")
-        return value
 
     def is_loopback_host(self) -> bool:
         """Return True when SURF is bound only to a local loopback host."""
@@ -246,13 +250,38 @@ class Settings(BaseSettings):
             return False
 
     def validate_runtime_security(self) -> None:
-        """Refuse unsafe local-browser control exposure."""
-        if self.auth_mode == "token" and not self.api_token:
-            raise ValueError("SURF_AUTH_MODE=token requires SURF_API_TOKEN")
-        if self.auth_mode == "loopback" and not self.is_loopback_host():
-            raise ValueError(
-                "SURF_AUTH_MODE=loopback is only allowed on loopback hosts"
-            )
+        """Refuse legacy or ambiguous agent-service authentication."""
+        legacy = [
+            name
+            for name in ("SURF_API_TOKEN", "SURF_ADMIN_TOKEN", "SURF_AUTH_MODE")
+            if os.getenv(name)
+        ]
+        if legacy:
+            raise ValueError(f"legacy SURF authentication is unsupported: {', '.join(legacy)}")
+        configured = {
+            name: value
+            for name, value in self.profile_keys().items()
+            if value is not None
+        }
+        short = [name for name, value in configured.items() if len(value) < 32]
+        if short:
+            raise ValueError(f"SURF profile keys must be at least 32 characters: {', '.join(short)}")
+        values = list(configured.values())
+        if len(values) != len(set(values)):
+            raise ValueError("SURF profile keys must be distinct")
+        if self.keyless_web_enabled and not self.is_loopback_host() and self.debug:
+            raise ValueError("keyless web cannot be combined with a non-loopback debug bind")
+
+    def profile_keys(self) -> Dict[str, Optional[str]]:
+        return {
+            "browse": self.browse_key,
+            "ui": self.ui_key,
+            "finance": self.finance_key,
+            "ops": self.ops_key,
+        }
+
+    def allows_keyless_web(self) -> bool:
+        return self.is_loopback_host() or self.keyless_web_enabled
 
     @validator("block_resources", pre=True)
     def parse_block_resources(cls, v: Any) -> List[str]:
@@ -312,9 +341,3 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
-
-# Route prefixes accessible without a bearer token when auth_mode == "loopback".
-# Mirrors the MCP-level FREE_TIER_TOOLS gate for the HTTP layer.
-FREE_TIER_ROUTES: frozenset = frozenset(
-    {"/search/", "/fetch/", "/youtube/", "/health/"}
-)

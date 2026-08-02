@@ -62,6 +62,25 @@ async def fetch_request(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Execute a one-off HTTP request, optionally using cookies from a browser session."""
+    if user.get("profile") == "web":
+        unsafe = (
+            request.method.upper() != "GET"
+            or request.headers is not None
+            or request.body is not None
+            or request.json_body is not None
+            or request.session_id is not None
+            or request.backend.value != "auto"
+            or request.save_to_downloads
+            or request.download_filename is not None
+            or request.output_dir is not None
+            or request.overwrite
+            or request.timeout > 30000
+        )
+        if unsafe:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="surf/web permits only a bounded public GET",
+            )
     guard.check_url(str(request.url))
     try:
         if request.session_id:

@@ -6,7 +6,10 @@ import pytest
 
 from config import get_settings
 from services.fetch_service import FetchService
-from services.outbound_policy import OutboundPolicy, OutboundPolicyError, ValidatedTarget
+from services.outbound_policy import (
+    OutboundPolicy, OutboundPolicyError, OutboundResolutionError, ValidatedTarget,
+)
+from services.session_service import SessionService
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +48,38 @@ async def test_policy_blocks_private_dns_answer():
     with patch.object(policy, "_resolve", new=AsyncMock(return_value=("10.0.0.8",))):
         with pytest.raises(OutboundPolicyError):
             await policy.validate("https://internal.example/")
+
+
+@pytest.mark.asyncio
+async def test_dns_resolution_failure_is_distinct_from_policy_denial():
+    policy = OutboundPolicy()
+    with patch.object(
+        policy, "_resolve", new=AsyncMock(side_effect=OutboundResolutionError("DNS failed"))
+    ):
+        with pytest.raises(OutboundResolutionError) as exc_info:
+            await policy.validate("https://missing.example/")
+    assert exc_info.value.error_code == "OUTBOUND_DNS_RESOLUTION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_browser_route_reports_dns_resolution_reason():
+    route = AsyncMock()
+    route.request.url = "https://missing.example/app.js"
+    route.request.resource_type = "script"
+    route.request.is_navigation_request = False
+    session = type("Session", (), {})()
+    session.config = type("Config", (), {
+        "block_resources": [], "block_mode": "off"
+    })()
+    session.metadata = {}
+    policy = AsyncMock()
+    policy.validate.side_effect = OutboundResolutionError("DNS failed")
+
+    with patch("services.session_service.get_outbound_policy", return_value=policy):
+        await SessionService()._handle_route(route, session)
+
+    route.abort.assert_awaited_once()
+    assert session.metadata["blocker"]["blocked_samples"][0]["reason"] == "dns_resolution"
 
 
 @pytest.mark.asyncio

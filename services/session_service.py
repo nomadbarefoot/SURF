@@ -32,7 +32,7 @@ from models.schemas import (
     StealthStrategy
 )
 from utils.stealth import setup_stealth_mode
-from services.outbound_policy import OutboundPolicyError, get_outbound_policy
+from services.outbound_policy import OutboundPolicyError, OutboundResolutionError, get_outbound_policy
 from services.element_registry import element_registry
 from services.observation_script import LISTENER_INIT_SCRIPT
 
@@ -736,6 +736,8 @@ class SessionService:
                     request.url,
                     allowed_schemes=("http", "https", "ws", "wss"),
                 )
+            except OutboundResolutionError:
+                decision = {"blocked": True, "reason": "dns_resolution"}
             except OutboundPolicyError:
                 decision = {"blocked": True, "reason": "outbound_policy"}
 

@@ -50,7 +50,7 @@ def main() -> None:
 
 
 def auth_headers() -> dict[str, str]:
-    token = os.getenv("SURF_API_TOKEN")
+    token = os.getenv("SURF_BROWSE_KEY")
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 

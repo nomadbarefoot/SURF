@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from config import get_settings
 from controllers import artifact_controller
-from core.foundation import get_download_service
+from core.foundation import SecurityMiddleware, get_download_service
 from services.download_service import DownloadService
 
 
@@ -18,10 +18,10 @@ def test_screenshot_artifact_contract_and_security(tmp_path, monkeypatch):
     screenshot.write_bytes(b"\x89PNG\r\nscreenshot-bytes")
     monkeypatch.setattr(settings, "screenshots_dir", str(screenshots))
     monkeypatch.setattr(settings, "downloads_dir", str(tmp_path / "downloads"))
-    monkeypatch.setattr(settings, "auth_mode", "token")
-    monkeypatch.setattr(settings, "api_token", "artifact-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
     service = DownloadService()
     test_app = FastAPI()
+    test_app.add_middleware(SecurityMiddleware)
     test_app.include_router(artifact_controller.router, prefix="/artifacts")
     test_app.dependency_overrides[get_download_service] = lambda: service
 
@@ -34,17 +34,19 @@ def test_screenshot_artifact_contract_and_security(tmp_path, monkeypatch):
     assert "absolute_path" not in artifact
 
     with TestClient(test_app, raise_server_exceptions=False) as client:
-        assert client.get(artifact["content_url"]).status_code == 401
+        # Artifact IDs are unguessable capabilities and web-generated artifacts
+        # (for example transcripts) remain available to the keyless web profile.
+        assert client.get(artifact["content_url"]).status_code == 200
         response = client.get(
             artifact["content_url"],
-            headers={"Authorization": "Bearer artifact-token"},
+            headers={"Authorization": f"Bearer {'b' * 32}"},
         )
         assert response.status_code == 200
         assert response.content == screenshot.read_bytes()
         assert response.headers["content-type"] == "image/png"
         assert 'filename="page.png"' in response.headers["content-disposition"]
 
-        headers = {"Authorization": "Bearer artifact-token"}
+        headers = {"Authorization": f"Bearer {'b' * 32}"}
         assert client.get("/artifacts/art_unknown/content", headers=headers).status_code == 404
         assert client.get("/artifacts/art_..%2F..%2Fetc%2Fpasswd/content", headers=headers).status_code == 404
 

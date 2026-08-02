@@ -1,0 +1,15 @@
+interface:
+  display_name: "SURF Web"
+  short_description: "Retrieve and read public web content"
+  default_prompt: "Use $surf-web to research this topic from public web sources."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "surf-web"
+      description: "SURF public retrieval profile"
+      transport: "streamable_http"
+      url: "http://127.0.0.1:17777/mcp/web"
+
+policy:
+  allow_implicit_invocation: true

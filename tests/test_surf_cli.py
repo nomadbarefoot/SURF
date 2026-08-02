@@ -101,6 +101,22 @@ def test_parser_supports_timeout_json_and_preflight():
     assert args.no_auto_captions is True
 
 
+def test_cli_selects_only_the_route_profile_key(monkeypatch):
+    monkeypatch.setenv("SURF_BROWSE_KEY", "browse-key")
+    monkeypatch.setenv("SURF_UI_KEY", "ui-key")
+    monkeypatch.setenv("SURF_FINANCE_KEY", "finance-key")
+    assert surf_cli._headers("http://127.0.0.1:17777/search/query") == {}
+    assert surf_cli._headers("http://127.0.0.1:17777/browser/navigate") == {
+        "Authorization": "Bearer browse-key"
+    }
+    assert surf_cli._headers("http://127.0.0.1:17777/browser/interact") == {
+        "Authorization": "Bearer ui-key"
+    }
+    assert surf_cli._headers("http://127.0.0.1:17777/finance/macro") == {
+        "Authorization": "Bearer finance-key"
+    }
+
+
 def test_transcript_prints_content_and_artifact_path(monkeypatch, capsys):
     monkeypatch.setattr(
         surf_cli,

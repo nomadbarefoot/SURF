@@ -1,0 +1,15 @@
+interface:
+  display_name: "SURF Finance"
+  short_description: "Retrieve focused market and macro data"
+  default_prompt: "Use $surf-finance to gather the relevant market and macro data."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "surf-finance"
+      description: "SURF structured finance profile"
+      transport: "streamable_http"
+      url: "http://127.0.0.1:17777/mcp/finance"
+
+policy:
+  allow_implicit_invocation: true

@@ -52,6 +52,7 @@ class BrowserService:
             else None
         )
         self.network_captures: Dict[str, Dict[str, Any]] = {}
+        self.console_captures: Dict[str, Dict[str, Any]] = {}
     
     async def initialize(self) -> None:
         """Initialize browser service"""
@@ -68,8 +69,106 @@ class BrowserService:
         
         # Stop resource monitoring
         resource_monitor.stop_monitoring()
+        for capture in list(self.console_captures.values()):
+            capture["page"].remove_listener("console", capture["listener"])
+            capture["page"].remove_listener("close", capture["close_listener"])
+        self.console_captures.clear()
         
         logger.info("Browser service cleaned up")
+
+    def _console_key(self, session: SessionData) -> str:
+        return f"{session.session_id}:{session.active_page_id or 'page_0'}"
+
+    async def manage_console_capture(
+        self, session: SessionData, action: str = "read", limit: int = 100,
+        clear_after_read: bool = False,
+    ) -> Dict[str, Any]:
+        """Start/read/clear/stop a page-scoped, bounded console message buffer."""
+        page = self._get_page_from_session(session)
+        key = self._console_key(session)
+        capture = self.console_captures.get(key)
+        if action == "start":
+            if capture:
+                capture["page"].remove_listener("console", capture["listener"])
+                capture["page"].remove_listener("close", capture["close_listener"])
+            buffer = deque(maxlen=limit)
+            def listener(message):
+                buffer.append({
+                    "type": message.type,
+                    "text": message.text[:10000],
+                    "location": dict(message.location or {}),
+                    "timestamp_ms": int(time.time() * 1000),
+                })
+            def close_listener():
+                self.console_captures.pop(key, None)
+            page.on("console", listener)
+            page.on("close", close_listener)
+            capture = {"page": page, "listener": listener, "close_listener": close_listener, "entries": buffer, "capacity": limit}
+            self.console_captures[key] = capture
+        elif action in {"clear", "stop"} and capture:
+            capture["entries"].clear()
+            if action == "stop":
+                capture["page"].remove_listener("console", capture["listener"])
+                capture["page"].remove_listener("close", capture["close_listener"])
+                self.console_captures.pop(key, None)
+                capture = None
+
+        entries = list(capture["entries"])[-limit:] if capture else []
+        result = {
+            "active": capture is not None,
+            "entries": entries,
+            "count": len(entries),
+            "capacity": capture["capacity"] if capture else 0,
+            "action": action,
+        }
+        if action == "read" and clear_after_read and capture:
+            capture["entries"].clear()
+        return result
+
+    async def press_key(
+        self, session: SessionData, key: str, selector: Optional[str] = None,
+        handle: Optional[str] = None, timeout: int = 30000,
+    ) -> Dict[str, Any]:
+        """Press a raw key, preserving focus unless an exact target is supplied."""
+        page = self._get_page_from_session(session)
+        async with asyncio.timeout(timeout / 1000):
+            target = None
+            target_kind = "active_element"
+            if handle:
+                page_id = session.active_page_id or "page_0"
+                record = element_registry.get(handle, session.session_id, page_id)
+                frame = self._frame_by_identity(page, record.frame_id)
+                if frame is None:
+                    raise BrowserOperationError("press_key", "Target frame unavailable")
+                locator = frame.locator(record.locator)
+                if await locator.count() != 1:
+                    raise BrowserOperationError("press_key", "Verified target is stale")
+                target = await locator.first.element_handle()
+                actual = await self._interaction_fingerprint(target) if target else {}
+                if target is None or any(actual.get(k, "") != v for k, v in record.fingerprint.items()):
+                    raise BrowserOperationError("press_key", "Verified target is stale")
+                target_kind = "handle"
+            elif selector:
+                locator = page.locator(selector)
+                count = await locator.count()
+                if count != 1:
+                    raise BrowserOperationError("press_key", f"Target matched {count} elements")
+                target = await locator.first.element_handle()
+                target_kind = "selector"
+            if target is not None:
+                await target.focus()
+            await page.keyboard.press(key)
+        return {"key": key, "target": target_kind, "focus_behavior": "target_focused" if target else "preserved", "timeout_ms": timeout}
+
+    async def resize_viewport(
+        self, session: SessionData, width: int, height: int, timeout: int = 30000,
+    ) -> Dict[str, Any]:
+        """Resize the active page in place and report browser-observed dimensions."""
+        page = self._get_page_from_session(session)
+        async with asyncio.timeout(timeout / 1000):
+            await page.set_viewport_size({"width": width, "height": height})
+            actual = await page.evaluate("() => ({width: window.innerWidth, height: window.innerHeight})")
+        return {"requested": {"width": width, "height": height}, "actual": actual, "page_id": session.active_page_id or "page_0"}
 
     @staticmethod
     def _frame_identity(frame) -> str:
@@ -1197,8 +1296,14 @@ class BrowserService:
                 dispatch_options = dict(options or {})
                 if action == InteractionAction.SELECT:
                     dispatch_options["_select_by"] = select_by
+                # Let Playwright's action timeout surface its specific
+                # actionability diagnosis before our caller-owned deadline.
+                # Without this reporting margin, a permanently covered target
+                # races the outer asyncio timeout and degrades to opaque
+                # ``timeout`` instead of ``covered_by``.
+                action_timeout = max(1, remaining() - 10)
                 await bounded(self._perform_structured_action(
-                    locator, action, value, dispatch_options, remaining()
+                    locator, action, value, dispatch_options, action_timeout
                 ))
             except Exception as exc:
                 reason = self._normalize_interaction_error(exc, action, before)
@@ -1322,16 +1427,16 @@ class BrowserService:
     @staticmethod
     async def _wait_element_visible(locator, timeout):
         """Wait on the already-resolved node without consulting its selector."""
-        await locator.evaluate(
+        visible = await locator.evaluate(
             """(el, timeout) => new Promise((resolve, reject) => {
               const started = performance.now();
               const check = () => {
                 const rect = el.getBoundingClientRect();
                 const style = getComputedStyle(el);
                 if (style.display !== 'none' && style.visibility !== 'hidden' &&
-                    rect.width > 0 && rect.height > 0) return resolve();
+                    rect.width > 0 && rect.height > 0) return resolve(true);
                 if (performance.now() - started >= timeout) {
-                  return reject(new Error('Timeout waiting for element to become visible'));
+                  return resolve(false);
                 }
                 requestAnimationFrame(check);
               };
@@ -1339,6 +1444,8 @@ class BrowserService:
             })""",
             timeout,
         )
+        if not visible:
+            raise TimeoutError("Timeout waiting for element to become visible")
 
     @staticmethod
     async def _hover_to_reveal(locator, timeout):
@@ -1950,14 +2057,57 @@ class BrowserService:
             page = self._get_page_from_session(session)
             actual_timeout = timeout or session.config.timeout
             
-            # Extract content first
+            # Extract content first. General extraction retains a bounded raw-text
+            # projection for compatibility and adds deterministic DOM structure.
             if selector:
                 text = await ContentProcessor.extract_smart_content(page, selector)
             else:
                 text = await ContentProcessor.extract_smart_content(page, 'body')
+            if content_type == "general":
+                text = text[:50000]
             
             # Extract structured data
             structured_data = ContentProcessor.extract_structured_data(text, content_type)
+            if content_type == "general":
+                root = page.locator(selector or "body")
+                if await root.count() != 1:
+                    raise ValueError("General structured extraction selector must match exactly one element")
+                structured_data["extracted_elements"] = await root.evaluate(
+                    """(root) => {
+                      const clean = (value, limit) => (value || '').replace(/\\s+/g, ' ').trim().slice(0, limit);
+                      const visible = (el) => {
+                        const style = getComputedStyle(el);
+                        const rect = el.getBoundingClientRect();
+                        return style.display !== 'none' && style.visibility !== 'hidden' &&
+                          rect.width > 0 && rect.height > 0 && !el.hidden && el.getAttribute('aria-hidden') !== 'true';
+                      };
+                      const take = (query, limit) => Array.from(root.querySelectorAll(query)).filter(visible).slice(0, limit);
+                      const headings = take('h1,h2,h3,h4,h5,h6', 50).map((el) => ({
+                        level: Number(el.tagName.slice(1)), text: clean(el.innerText, 500)
+                      })).filter((item) => item.text);
+                      const paragraphs = take('p', 100).map((el) => clean(el.innerText, 2000)).filter(Boolean);
+                      const lists = take('ul,ol', 30).map((el) => ({
+                        ordered: el.tagName === 'OL',
+                        items: Array.from(el.children).filter((child) => child.tagName === 'LI' && visible(child))
+                          .slice(0, 40).map((child) => clean(child.innerText, 500)).filter(Boolean)
+                      })).filter((item) => item.items.length);
+                      const tables = take('table', 20).map((table) => ({
+                        rows: Array.from(table.rows).slice(0, 30).map((row) =>
+                          Array.from(row.cells).slice(0, 20).map((cell) => clean(cell.innerText, 300))
+                        ).filter((row) => row.some(Boolean))
+                      })).filter((item) => item.rows.length);
+                      const links = take('a[href]', 100).map((el) => ({
+                        text: clean(el.innerText || el.getAttribute('aria-label'), 500),
+                        url: el.href
+                      }));
+                      return {
+                        schema: 'general.dom.v1', headings, paragraphs, lists, tables, links,
+                        limits: {headings: 50, paragraphs: 100, lists: 30, list_items: 40,
+                          tables: 20, table_rows: 30, table_columns: 20, links: 100,
+                          raw_content_characters: 50000}
+                      };
+                    }"""
+                )
             
             # Add page metadata
             structured_data["page_metadata"] = {

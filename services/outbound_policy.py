@@ -26,6 +26,13 @@ class OutboundPolicyError(SurfException):
         super().__init__(message, error_code="OUTBOUND_TARGET_BLOCKED")
 
 
+class OutboundResolutionError(OutboundPolicyError):
+    """Raised when a permitted hostname cannot be resolved to any address."""
+
+    def __init__(self, message: str):
+        SurfException.__init__(self, message, error_code="OUTBOUND_DNS_RESOLUTION_FAILED")
+
+
 @dataclass(frozen=True)
 class ValidatedTarget:
     url: str
@@ -76,7 +83,7 @@ class OutboundPolicy:
         host_allowed = self._host_allowed(host, settings.outbound_allowed_hosts)
         addresses = await self._resolve(host, port)
         if not addresses:
-            raise OutboundPolicyError("Outbound hostname did not resolve")
+            raise OutboundResolutionError("Outbound hostname did not resolve")
 
         if not settings.outbound_allow_private_networks and not host_allowed:
             blocked = [address for address in addresses if not self._is_public(address)]
@@ -122,7 +129,7 @@ class OutboundPolicy:
                     timeout=settings.outbound_dns_timeout_seconds,
                 )
             except (asyncio.TimeoutError, OSError, socket.gaierror) as exc:
-                raise OutboundPolicyError("Outbound hostname resolution failed") from exc
+                raise OutboundResolutionError("Outbound hostname resolution failed") from exc
 
             addresses = tuple(dict.fromkeys(info[4][0] for info in infos))
             self._dns_cache[key] = (

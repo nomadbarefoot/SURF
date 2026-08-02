@@ -249,7 +249,10 @@ class InteractRequest(BaseModel):
     session_id: str = Field(..., description="Session ID")
     action: InteractionAction = Field(..., description="Action to perform")
     handle: Optional[str] = Field(default=None, max_length=200, description="Verified SURF element handle")
-    selector: Optional[str] = Field(default=None, max_length=1000, description="Playwright selector")
+    selector: Optional[str] = Field(
+        default=None, max_length=1000,
+        description="Deprecated selector-only target; prefer a verified handle (supported until migration step 8)",
+    )
     contract_version: Optional[str] = Field(
         default=None, description="Set to interaction.v1 for structured outcomes"
     )
@@ -291,6 +294,58 @@ class InteractRequest(BaseModel):
     def validate_contract_version(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v != "interaction.v1":
             raise ValueError("Unsupported interaction contract version")
+        return v
+
+
+class KeyPressRequest(BaseModel):
+    """Bounded raw keyboard input, optionally focused on one verified target."""
+
+    session_id: str = Field(..., description="Session ID")
+    key: str = Field(..., min_length=1, max_length=100, description="Playwright key chord")
+    handle: Optional[str] = Field(default=None, max_length=200)
+    selector: Optional[str] = Field(default=None, max_length=1000)
+    timeout: int = Field(default=30000, ge=100, le=60000)
+
+    @validator("session_id")
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.startswith("sess_"):
+            raise ValueError("Invalid session ID format")
+        return v
+
+    @validator("selector", always=True)
+    def validate_target_union(cls, v: Optional[str], values: Dict[str, Any]) -> Optional[str]:
+        if v and values.get("handle"):
+            raise ValueError("Provide at most one of selector or handle")
+        return v
+
+
+class ConsoleCaptureRequest(BaseModel):
+    """Manage bounded console capture for the active page."""
+
+    session_id: str = Field(..., description="Session ID")
+    action: str = Field(default="read", pattern="^(start|read|clear|stop)$")
+    limit: int = Field(default=100, ge=1, le=1000)
+    clear_after_read: bool = False
+
+    @validator("session_id")
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.startswith("sess_"):
+            raise ValueError("Invalid session ID format")
+        return v
+
+
+class ViewportResizeRequest(BaseModel):
+    """Resize the active page viewport without replacing its context."""
+
+    session_id: str = Field(..., description="Session ID")
+    width: int = Field(..., ge=100, le=4096)
+    height: int = Field(..., ge=100, le=4096)
+    timeout: int = Field(default=30000, ge=100, le=60000)
+
+    @validator("session_id")
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.startswith("sess_"):
+            raise ValueError("Invalid session ID format")
         return v
 
 

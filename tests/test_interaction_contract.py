@@ -192,6 +192,46 @@ async def test_genuinely_invisible_control_remains_not_visible(interaction_page)
     )
 
 
+async def test_hidden_visibility_path_leaves_no_unhandled_future(interaction_page):
+    service, session, page = interaction_page
+    await page.set_content("<button id='hidden' style='display:none'>Hidden</button>")
+    loop = __import__("asyncio").get_running_loop()
+    unhandled = []
+    previous = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+    try:
+        result = await interact(
+            service, session, InteractionAction.CLICK, selector="#hidden"
+        )
+        await __import__("asyncio").sleep(0.05)
+    finally:
+        loop.set_exception_handler(previous)
+
+    assert result["reason"] == "not_visible"
+    assert unhandled == []
+
+
+async def test_general_structured_extraction_returns_bounded_dom_structure(interaction_page):
+    service, session, page = interaction_page
+    await page.set_content("""
+      <main><h1>Release notes</h1><p>A deterministic paragraph with useful content.</p>
+      <ul><li>First item</li><li>Second item</li></ul>
+      <table><tr><th>Name</th><th>Value</th></tr><tr><td>Alpha</td><td>1</td></tr></table>
+      <a href='/details'>Details</a><p style='display:none'>Hidden text</p></main>
+    """)
+
+    result = await service.extract_structured_data(session, "general", "main")
+    elements = result["data"]["extracted_elements"]
+
+    assert elements["schema"] == "general.dom.v1"
+    assert elements["headings"] == [{"level": 1, "text": "Release notes"}]
+    assert elements["paragraphs"] == ["A deterministic paragraph with useful content."]
+    assert elements["lists"][0]["items"] == ["First item", "Second item"]
+    assert elements["tables"][0]["rows"][1] == ["Alpha", "1"]
+    assert elements["links"][0]["url"].endswith("/details")
+    assert elements["limits"]["raw_content_characters"] == 50000
+
+
 async def test_blocked_main_frame_navigation_is_attributed_to_click(interaction_page, monkeypatch):
     service, session, page = interaction_page
     session.config.block_resources = []
@@ -316,3 +356,34 @@ async def test_actionability_failures_self_resolve_within_original_deadline(inte
     assert result["reason"] == "completed"
     assert result["timing"]["elapsed_ms"] <= result["timing"]["timeout_ms"]
     assert await page.evaluate("window.acted === true") is True
+
+
+async def test_permanently_covered_handle_reports_specific_actionability_reason(interaction_page):
+    service, session, page = interaction_page
+    await page.set_content("""
+      <a id='orbit' href='#instagram'>Instagram</a>
+      <p id='identity'>A spatial map of the studio business.</p>
+      <style>
+        #orbit { position:fixed; left:40px; top:220px; width:100px; height:85px }
+        #identity { position:fixed; inset:0; z-index:2; margin:0 }
+      </style>
+    """)
+    observed = await service.observe_page(session, content_mode="ui")
+    handle = next(
+        item["handle"] for item in observed["elements"]
+        if item["locator"] == "#orbit"
+    )
+
+    result = await service.interact_with_element(
+        session=session,
+        action=InteractionAction.CLICK,
+        handle=handle,
+        contract_version="interaction.v1",
+        timeout=200,
+    )
+
+    assert result["reason"] == "covered_by"
+    assert result["timing"]["deadline_exhausted"] is False
+    assert "intercepts pointer events" in result["error"]["message"]
+    assert "A spatial map of the studio business" in result["error"]["message"]
+    assert await page.evaluate("location.hash") == ""

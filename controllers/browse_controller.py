@@ -1,6 +1,6 @@
 """One-shot browse controller for Surf Browser Service."""
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status
 import structlog
 
 from core.foundation import (
@@ -21,7 +21,6 @@ async def browse(
     request: BrowseRequest,
     browse_service: BrowseService = Depends(get_browse_service),
     user: Dict[str, Any] = Depends(get_current_user),
-    x_surf_admin_token: Optional[str] = Header(default=None, alias="X-Surf-Admin-Token"),
 ):
     """One-shot browse: create session, navigate, settle, extract, close."""
     try:
@@ -36,7 +35,7 @@ async def browse(
             max_text_length=request.max_text_length,
             max_items=request.max_items,
             timeout=request.timeout,
-            admin_token=x_surf_admin_token,
+            allow_aggressive=user.get("profile") == "ui",
         )
         return BrowseResponse(
             success=result["success"],

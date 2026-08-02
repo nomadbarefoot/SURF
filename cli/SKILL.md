@@ -16,7 +16,9 @@ surf transcript <youtube-url>             # timestamped captions + Markdown arti
 surf preflight                             # service/dependency probes
 ```
 
-Requires `SURF_URL` (host:port); `SURF_API_TOKEN` when auth mode is token.
+Requires `SURF_URL` (host:port). Browser commands use `SURF_BROWSE_KEY`,
+interactive commands use `SURF_UI_KEY`, and operations probes use `SURF_OPS_KEY`.
+Public web commands are keyless on the private endpoint.
 
 All commands accept `--timeout SECONDS`; `search`, `extract`, `fetch`, and
 `transcript` also accept `--json` for machine-readable output. `extract` exits

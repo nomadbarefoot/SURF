@@ -1,15 +1,21 @@
 # SURF Usage
 
-Agent MCP bridge:
+Keyless web MCP bridge:
 
 ```bash
 .venv/bin/python surfctl.py mcp
 ```
 
+Specialist stdio bridges use `--profile browse`, `--profile ui`, or
+`--profile finance` and require the matching `SURF_*_KEY`. Remote MCP is
+available at `/mcp/web`, `/mcp/browse`, `/mcp/ui`, and `/mcp/finance`.
+
 Script JSONL bridge:
 
 ```bash
 .venv/bin/python surfctl.py stdio
+# Browser requests require the browse profile and key:
+SURF_BROWSE_KEY=… .venv/bin/python surfctl.py stdio --profile browse
 ```
 
 Manual HTTP development server:
@@ -32,19 +38,19 @@ Use `--json` for raw response output and `--timeout SECONDS` for longer-lived
 requests. `extract` returns a non-zero exit status if any URL in the batch
 fails.
 
-Default auth is loopback-only for the manual HTTP server and does not require login. If `SURF_AUTH_MODE=token`, send `Authorization: Bearer $SURF_API_TOKEN`.
+Public web retrieval is keyless on loopback. Browser, UI, finance, and operations routes accept only their dedicated bearer keys; unset specialist keys disable those profiles.
 
 ## Agent Flow
 
-SURF MCP tools cover `browser_*`, `search_*`, `youtube_transcript`, and `finance_*`.
+SURF MCP tools are split across `web` (4), `browse` (16), `ui` (22), and `finance` (6) profiles. No client receives the combined 32-tool inventory.
 
 ### Browser
 
 1. `browser_create_session`
 2. `browser_network_start` when XHR/API discovery matters.
 3. `browser_navigate`
-4. `browser_observe`
-5. `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
+4. `browser_snapshot`
+5. `web_fetch` for a bounded public GET.
 6. `browser_download` for files; pass `output_dir` when another tool needs to read the file directly.
 7. `browser_close_session`
 
@@ -52,8 +58,8 @@ SURF MCP tools cover `browser_*`, `search_*`, `youtube_transcript`, and `finance
 
 No browser session needed — SURF manages ephemeral sessions internally.
 
-1. `search_query` with your research question.
-2. `search_extract` on the best URLs; pass `refine_query` to trim irrelevant sections.
+1. `web_search` with your research question.
+2. `web_extract` on the best URLs; pass `refine_query` to trim irrelevant sections.
 
 ### YouTube transcript
 
@@ -65,7 +71,7 @@ translation, playlists, and summarization are not part of this version.
 
 ### Finance Pack
 
-Use `finance_consensus`, `finance_insider`, `finance_corp_actions`, `finance_macro`, `finance_erp`, or `finance_snapshot_us` for structured market data instead of manual search-and-read workflows.
+Use `finance_analyst_consensus`, `finance_insider_transactions`, `finance_corporate_actions`, `finance_macro`, `finance_equity_risk_premium`, or `finance_us_snapshot` for structured market data instead of manual search-and-read workflows.
 
 Default session:
 

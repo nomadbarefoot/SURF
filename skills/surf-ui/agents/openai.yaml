@@ -1,0 +1,15 @@
+interface:
+  display_name: "SURF UI"
+  short_description: "Automate and test browser interfaces"
+  default_prompt: "Use $surf-ui to test this interface through a real browser session."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "surf-ui"
+      description: "SURF interactive browser profile"
+      transport: "streamable_http"
+      url: "http://127.0.0.1:17777/mcp/ui"
+
+policy:
+  allow_implicit_invocation: true

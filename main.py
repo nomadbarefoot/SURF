@@ -1,9 +1,10 @@
 """Main FastAPI application for Surf Browser Service"""
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.routing import Route
 import structlog
 
 from config.settings import get_settings
@@ -16,13 +17,25 @@ from core.foundation import (
     RequestIDMiddleware,
     cleanup_services
 )
-from controllers import browser_controller, session_controller, health_controller, auth_controller, fetch_controller, download_controller, artifact_controller, search_controller, finance_controller, youtube_controller, browse_controller
+from controllers import browser_controller, session_controller, health_controller, fetch_controller, download_controller, artifact_controller, search_controller, finance_controller, youtube_controller, browse_controller
 from utils.logging import configure_logging
+from surfctl import PROFILE_TOOLS, build_mcp_server
 
 # Configure logging
 settings = get_settings()
 configure_logging(settings.log_level)
 logger = structlog.get_logger()
+
+
+class ProfileMCPEndpoint:
+    """Dispatch to the MCP server instance created for this app lifespan."""
+
+    def __init__(self, profile: str):
+        self.profile = profile
+
+    async def __call__(self, scope, receive, send):
+        endpoint = scope["app"].state.mcp_endpoints[self.profile]
+        await endpoint(scope, receive, send)
 
 
 @asynccontextmanager
@@ -51,7 +64,23 @@ async def lifespan(app: FastAPI):
     loop.set_exception_handler(handle_loop_exception)
     logger.info("Starting Surf Browser Service", version="1.0.0")
     try:
-        yield
+        async with AsyncExitStack() as stack:
+            servers = {
+                profile: build_mcp_server(profile, embedded=True)
+                for profile in PROFILE_TOOLS
+            }
+            endpoints = {}
+            for profile, server in servers.items():
+                mcp_app = server.streamable_http_app()
+                endpoints[profile] = next(
+                    route.endpoint
+                    for route in mcp_app.routes
+                    if isinstance(route, Route)
+                )
+                await stack.enter_async_context(server.session_manager.run())
+            app.state.mcp_servers = servers
+            app.state.mcp_endpoints = endpoints
+            yield
     finally:
         # Shutdown
         logger.info("Shutting down Surf Browser Service")
@@ -92,7 +121,6 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth_controller.router, prefix="/auth", tags=["Authentication"])
 app.include_router(session_controller.router, prefix="/sessions", tags=["Sessions"])
 app.include_router(browser_controller.router, prefix="/browser", tags=["Browser Operations"])
 app.include_router(fetch_controller.router, prefix="/fetch", tags=["HTTP Fetch"])
@@ -103,6 +131,13 @@ app.include_router(search_controller.router, prefix="/search", tags=["Search"])
 app.include_router(youtube_controller.router, prefix="/youtube", tags=["YouTube"])
 app.include_router(finance_controller.router, prefix="/finance", tags=["Finance"])
 app.include_router(browse_controller.router, prefix="/browse", tags=["Browse"])
+
+# Profile-scoped Streamable HTTP MCP. The outer FastAPI middleware owns
+# authentication; each lifespan gets fresh, restartable MCP session managers.
+for profile in PROFILE_TOOLS:
+    app.router.routes.append(
+        Route(f"/mcp/{profile}", endpoint=ProfileMCPEndpoint(profile))
+    )
 
 # Root endpoint
 @app.get("/")

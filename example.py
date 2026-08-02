@@ -10,7 +10,7 @@ BASE_URL = os.getenv("SURF_BASE_URL", "http://127.0.0.1:17777")
 
 
 async def main():
-    token = os.getenv("SURF_API_TOKEN")
+    token = os.getenv("SURF_BROWSE_KEY")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     async with httpx.AsyncClient(timeout=60.0) as client:

@@ -8,8 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config import get_settings
-from core.foundation import RateLimitMiddleware, RequestSizeLimitMiddleware
-from main import app
+from core.foundation import RateLimitMiddleware, RequestSizeLimitMiddleware, SecurityMiddleware
 
 
 @pytest.mark.asyncio
@@ -68,17 +67,31 @@ def test_rate_limit_returns_429_without_exception_translation():
     assert int(response.headers["Retry-After"]) >= 1
 
 
-def test_only_liveness_is_anonymous_among_health_details(monkeypatch):
+def test_health_details_use_profile_keys(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "auth_mode", "loopback")
-    monkeypatch.setattr(settings, "api_token", "health-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
+    monkeypatch.setattr(settings, "ops_key", "o" * 32)
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityMiddleware)
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    @test_app.get("/health/live")
+    async def live():
+        return {"status": "alive"}
+
+    @test_app.get("/health/metrics")
+    async def metrics():
+        return {"status": "ok"}
+
+    @test_app.get("/health/runtime")
+    async def runtime():
+        return {"browser_runtime": {"status": "not_started"}}
+
+    with TestClient(test_app, raise_server_exceptions=False) as client:
         assert client.get("/health/live").status_code == 200
-        assert client.get("/health/metrics").status_code == 403
+        assert client.get("/health/metrics").status_code == 401
         response = client.get(
             "/health/runtime",
-            headers={"Authorization": "Bearer health-token"},
+            headers={"Authorization": f"Bearer {'b' * 32}"},
         )
 
     assert response.status_code == 200

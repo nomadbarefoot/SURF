@@ -84,7 +84,7 @@ class BrowseService:
         max_text_length: int = 8000,
         max_items: int = 100,
         timeout: int = 30000,
-        admin_token: Optional[str] = None,
+        allow_aggressive: bool = False,
     ) -> Dict[str, Any]:
         """Execute a one-shot browse workflow using a resolved profile."""
         if not self.initialized:
@@ -94,7 +94,9 @@ class BrowseService:
         # Resolve the profile before touching the browser services: a rejected
         # mode must not boot a Playwright runtime it will never use.
         profile_service = await self._profile_service()
-        profile = profile_service.resolve(requested_mode=mode, url=url, admin_token=admin_token)
+        profile = profile_service.resolve(
+            requested_mode=mode, url=url, allow_aggressive=allow_aggressive
+        )
 
         session_service = await self._session_service()
         browser_service = await self._browser_service()

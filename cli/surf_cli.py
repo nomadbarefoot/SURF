@@ -3,7 +3,9 @@
 
 Config via environment variables:
   SURF_URL          Host and port of the SURF service, e.g. localhost:17777 (required)
-  SURF_API_TOKEN    Bearer token when SURF_AUTH_MODE=token (optional)
+  SURF_BROWSE_KEY   Read-oriented browser profile key
+  SURF_UI_KEY       Interactive browser profile key
+  SURF_OPS_KEY      Operations profile key
 
 Usage:
   surf search "<query>" [--max-results N]
@@ -37,8 +39,28 @@ def _base_url() -> str:
     return raw.rstrip("/")
 
 
-def _headers() -> dict:
-    token = os.environ.get("SURF_API_TOKEN", "").strip()
+def _profile_for_url(url: str) -> str | None:
+    path = httpx.URL(url).path
+    if path in {"/browser/interact", "/browser/press-key", "/browser/viewport", "/browser/batch"}:
+        return "ui"
+    if path.startswith(("/sessions/", "/browser/", "/browse/", "/downloads/")):
+        return "browse"
+    if path.startswith("/finance/"):
+        return "finance"
+    if path == "/health/runtime":
+        return "browse"
+    if path.startswith("/health/") and path not in {
+        "/health/live",
+        "/health/ready",
+        "/health/searxng",
+    }:
+        return "ops"
+    return None
+
+
+def _headers(url: str, profile: str | None = None) -> dict:
+    selected = profile or _profile_for_url(url)
+    token = os.environ.get(f"SURF_{selected.upper()}_KEY", "").strip() if selected else ""
     if token:
         return {"Authorization": f"Bearer {token}"}
     return {}
@@ -53,7 +75,7 @@ def _request(
     headers: dict | None = None,
 ) -> httpx.Response:
     try:
-        request_headers = _headers()
+        request_headers = _headers(url)
         if headers:
             request_headers.update(headers)
         resp = httpx.request(
@@ -328,7 +350,6 @@ def cmd_browse(args: argparse.Namespace) -> None:
     if readiness:
         data["readiness"] = readiness
     for key in (
-        "admin_token",
         "wait_selector",
         "wait_text",
         "wait_url",
@@ -338,12 +359,7 @@ def cmd_browse(args: argparse.Namespace) -> None:
     ):
         data.pop(key, None)
 
-    admin_token = getattr(args, "admin_token", None)
-    headers = (
-        {"X-Surf-Admin-Token": admin_token}
-        if admin_token
-        else None
-    )
+    headers = _headers(f"{base}/browse/browse", "ui") if args.mode == "aggressive" else None
     result = _post(f"{base}/browse/browse", data, args.timeout, headers=headers)
     if args.json:
         _print_json(result)
@@ -525,7 +541,9 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Environment variables:\n"
             "  SURF_URL          host:port of the SURF service (required)\n"
-            "  SURF_API_TOKEN    bearer token when SURF_AUTH_MODE=token\n"
+            "  SURF_BROWSE_KEY   read-oriented browser profile key\n"
+            "  SURF_UI_KEY       interactive browser profile key\n"
+            "  SURF_OPS_KEY      operations profile key\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
@@ -635,9 +653,6 @@ def _build_parser() -> argparse.ArgumentParser:
     p_browse.add_argument("url", help="URL to browse")
     p_browse.add_argument(
         "--mode", default="standard", help="Browsing mode (default: standard)"
-    )
-    p_browse.add_argument(
-        "--admin-token", help="Admin token for gated browsing modes"
     )
     p_browse.add_argument(
         "--content-mode", default="compact", help="Observation content mode"

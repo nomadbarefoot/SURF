@@ -158,25 +158,15 @@ def test_list_modes(profile_service, monkeypatch):
     assert aggressive["requires_env"] == "SURF_ALLOW_AGGRESSIVE_MODE"
 
 
-def test_aggressive_mode_allowed_with_admin_token(profile_service, monkeypatch):
+def test_aggressive_mode_allowed_for_ui_profile(profile_service, monkeypatch):
     monkeypatch.delenv("SURF_ALLOW_AGGRESSIVE_MODE", raising=False)
-    from config import get_settings
-
-    settings = get_settings()
-    monkeypatch.setattr(settings, "admin_token", "admin-secret-123")
     resolved = profile_service.resolve(
-        requested_mode="aggressive", admin_token="admin-secret-123"
+        requested_mode="aggressive", allow_aggressive=True
     )
     assert resolved.mode == "aggressive"
 
 
-def test_aggressive_mode_rejected_with_bad_admin_token(profile_service, monkeypatch):
+def test_aggressive_mode_rejected_without_ui_profile(profile_service, monkeypatch):
     monkeypatch.delenv("SURF_ALLOW_AGGRESSIVE_MODE", raising=False)
-    from config import get_settings
-
-    settings = get_settings()
-    monkeypatch.setattr(settings, "admin_token", "admin-secret-123")
     with pytest.raises(Exception):
-        profile_service.resolve(
-            requested_mode="aggressive", admin_token="wrong-token"
-        )
+        profile_service.resolve(requested_mode="aggressive")

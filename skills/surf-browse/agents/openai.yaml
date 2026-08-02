@@ -1,0 +1,15 @@
+interface:
+  display_name: "SURF Browse"
+  short_description: "Inspect rendered pages with read tools"
+  default_prompt: "Use $surf-browse to inspect this rendered page and extract its content."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "surf-browse"
+      description: "SURF read-oriented browser profile"
+      transport: "streamable_http"
+      url: "http://127.0.0.1:17777/mcp/browse"
+
+policy:
+  allow_implicit_invocation: true

@@ -150,10 +150,25 @@ agent-visible presence assertions. Use the same rendered baseline for
 | 4 | additive | `contract_version=interaction.v1` opt-in; normalize Playwright exceptions **before** the controller discards them |
 | 5 | additive | Optional `handle` + `structured_outcomes` on click/type/select/hover |
 | 6 | non-breaking fix | Add `ui` mode; correct visibility extraction; regression tests for hidden filtered content, whitespace boundaries, bare React inputs, radios/options, ambiguity, stale-handle rejection |
-| 7 | additive deprecation | Default MCP to structured outcomes; deprecate `selector_hint` and selector-only targeting |
-| 8 | **breaking (major)** | Required target union `{handle}\|{locator}\|{selector}`; remove legacy projections after a deprecation window |
+| 7 | additive deprecation — **complete 2026-08-02** | MCP click/type/select/hover default to `interaction.v1`; `selector_hint` and selector-only targeting are deprecated, with verified handles preferred |
+| 8 | **breaking (major), deferred** | Required target union `{handle}\|{locator}\|{selector}`; remove legacy projections after a deprecation window |
 
 Steps 1–7 keep every current tool signature working.
+
+Step 7 changes only MCP defaults. Direct HTTP `/browser/interact` requests keep
+their legacy response default unless they opt into `contract_version:
+interaction.v1` or `structured_outcomes: true`. MCP and HTTP callers may still
+send `selector`; inventory `actions[].selector_hint` and all legacy projections
+remain present for compatibility. New callers should observe an element and
+send its verified `handle`. Removal is explicitly reserved for deferred step 8.
+
+Raw keyboard input is an adjacent deterministic primitive, not a new
+`InteractionAction`: `/browser/press-key` has a bounded timeout and either
+focuses one explicit selector/verified handle or preserves the active element.
+Console capture has explicit start/read/clear/stop lifecycle and bounded
+page-scoped storage. Viewport resize mutates the active page in place and
+returns the actual `window.innerWidth`/`window.innerHeight`; neither operation
+creates a session or browser context.
 
 ## Acceptance criteria
 

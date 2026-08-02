@@ -16,12 +16,40 @@ from models.schemas import (
     CaptchaDetectionRequest, CaptchaDetectionResponse,
     BatchRequest, BatchOperationResponse, ExtractType, InteractionAction,
     ScrollRequest, ScrollResponse,
+    KeyPressRequest, ConsoleCaptureRequest, ViewportResizeRequest,
 )
 from services.browser_service import BrowserService
 from services.session_service import SessionService
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+async def _active_page_operation(request, operation, method, browser_service, session_service):
+    try:
+        async with session_service.session_operation(request.session_id, operation) as session:
+            result = await method(session)
+        return InteractResponse(success=True, data=result)
+    except SessionNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"{operation} failed", error=str(e), session_id=request.session_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{operation} failed")
+
+
+@router.post("/press-key", response_model=InteractResponse)
+async def press_key(request: KeyPressRequest, browser_service: BrowserService = Depends(get_browser_service), session_service: SessionService = Depends(get_session_service), user: Dict[str, Any] = Depends(get_current_user)):
+    return await _active_page_operation(request, "press_key", lambda session: browser_service.press_key(session, request.key, request.selector, request.handle, request.timeout), browser_service, session_service)
+
+
+@router.post("/console", response_model=InteractResponse)
+async def console_capture(request: ConsoleCaptureRequest, browser_service: BrowserService = Depends(get_browser_service), session_service: SessionService = Depends(get_session_service), user: Dict[str, Any] = Depends(get_current_user)):
+    return await _active_page_operation(request, "console_capture", lambda session: browser_service.manage_console_capture(session, request.action, request.limit, request.clear_after_read), browser_service, session_service)
+
+
+@router.post("/viewport", response_model=InteractResponse)
+async def resize_viewport(request: ViewportResizeRequest, browser_service: BrowserService = Depends(get_browser_service), session_service: SessionService = Depends(get_session_service), user: Dict[str, Any] = Depends(get_current_user)):
+    return await _active_page_operation(request, "resize_viewport", lambda session: browser_service.resize_viewport(session, request.width, request.height, request.timeout), browser_service, session_service)
 
 
 @router.post("/navigate", response_model=NavigationResponse)

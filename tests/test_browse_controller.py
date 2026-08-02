@@ -10,10 +10,9 @@ def client():
     return TestClient(app)
 
 
-def test_browse_endpoint_requires_auth(client):
+def test_browse_endpoint_is_disabled_without_a_profile_key(client):
     response = client.post("/browse/browse", json={"url": "https://example.com"})
-    # In loopback mode without a token, /browse is not in FREE_TIER_ROUTES.
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_browse_endpoint_returns_browse_result(client, monkeypatch):
@@ -22,7 +21,7 @@ def test_browse_endpoint_returns_browse_result(client, monkeypatch):
     from core import foundation
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "api_token", "test-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
 
     async def fake_browse(*, url, **kwargs):
         return {
@@ -54,7 +53,7 @@ def test_browse_endpoint_returns_browse_result(client, monkeypatch):
     response = client.post(
         "/browse/browse",
         json={"url": "https://example.com"},
-        headers={"Authorization": "Bearer test-token"},
+        headers={"Authorization": f"Bearer {'b' * 32}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -69,7 +68,7 @@ def test_browse_endpoint_propagates_browse_error(client, monkeypatch):
     from core import foundation
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "api_token", "test-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
 
     async def fake_browse(*, url, **kwargs):
         raise bs_module.BrowserOperationError("browse", "mode not enabled")
@@ -81,7 +80,7 @@ def test_browse_endpoint_propagates_browse_error(client, monkeypatch):
     response = client.post(
         "/browse/browse",
         json={"url": "https://example.com", "mode": "aggressive"},
-        headers={"Authorization": "Bearer test-token"},
+        headers={"Authorization": f"Bearer {'b' * 32}"},
     )
     assert response.status_code == 500
     assert "not enabled" in response.json()["detail"].lower()
@@ -100,7 +99,7 @@ def test_browse_endpoint_maps_egress_denial_to_403(client, monkeypatch):
     from core import foundation
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "api_token", "test-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
 
     async def fake_browse(*, url, **kwargs):
         raise OutboundPolicyError("Target blocked by egress policy")
@@ -112,7 +111,7 @@ def test_browse_endpoint_maps_egress_denial_to_403(client, monkeypatch):
     response = client.post(
         "/browse/browse",
         json={"url": "https://example.com"},
-        headers={"Authorization": "Bearer test-token"},
+        headers={"Authorization": f"Bearer {'b' * 32}"},
     )
     assert response.status_code == 403
     assert "egress policy" in response.json()["detail"].lower()

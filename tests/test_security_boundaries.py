@@ -3,32 +3,40 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config import get_settings
-from main import app
+from core.foundation import SecurityMiddleware
 from services.download_service import DownloadService
 from services.fetch_service import FetchService
 from services.outbound_policy import ValidatedTarget
 from utils.path_policy import resolve_export_directory
 
 
-def test_loopback_protected_route_requires_configured_token(monkeypatch):
+def test_specialist_routes_require_the_matching_profile_key(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "auth_mode", "loopback")
-    monkeypatch.setattr(settings, "api_token", "expected-token")
+    monkeypatch.setattr(settings, "browse_key", "b" * 32)
+    monkeypatch.setattr(settings, "finance_key", "f" * 32)
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityMiddleware)
 
-    with TestClient(app, raise_server_exceptions=False) as client:
-        assert client.get("/auth/me").status_code == 403
-        assert client.get(
-            "/auth/me", headers={"Authorization": "Bearer arbitrary"}
+    @test_app.post("/sessions/")
+    async def protected_session_route():
+        return {"ok": True}
+
+    with TestClient(test_app, raise_server_exceptions=False) as client:
+        assert client.post("/sessions/").status_code == 401
+        assert client.post(
+            "/sessions/",
+            headers={"Authorization": f"Bearer {'f' * 32}"},
         ).status_code == 403
-        response = client.get(
-            "/auth/me", headers={"Authorization": "Bearer expected-token"}
+        response = client.post(
+            "/sessions/",
+            headers={"Authorization": f"Bearer {'b' * 32}"},
         )
 
     assert response.status_code == 200
-    assert response.json()["user"]["auth_type"] == "local_token"
 
 
 @pytest.mark.asyncio

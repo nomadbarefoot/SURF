@@ -58,7 +58,7 @@ flowchart TB
   end
 
   subgraph API["FastAPI routers"]
-    Auth["/auth"]
+    MCPHTTP["/mcp/{profile}"]
     Sess["/sessions"]
     Br["/browser"]
     Fet["/fetch"]
@@ -150,7 +150,7 @@ flowchart TD
   C --> D["navigate / interact"]
   D --> E["Playwright route<br/>AdblockService"]
   E --> F["observe / links / screenshot"]
-  F --> G["optional browser_fetch<br/>cookie-sharing context"]
+  F --> G["optional web_fetch<br/>bounded public GET"]
   G --> H["download → data/downloads/"]
   H --> I["close session / idle reap"]
   I --> J["browser runtime idle teardown"]
@@ -208,22 +208,24 @@ flowchart LR
   Compose --> VK["Valkey limiter<br/>ephemeral"]
   SurfC -->|SURF_SEARXNG_BASE_URL<br/>http://searxng:8080| SXC
   SurfC -->|shared external network<br/>http://litellm:4000/v1| LiteLLM["LiteLLM proxy"]
-  Host -->|127.0.0.1:17777<br/>token auth| SurfC
+  Host -->|127.0.0.1:17777<br/>profile-scoped MCP/HTTP| SurfC
   SXC --> VK
   Vol1[("surf-data")] --- SurfC
 ```
 
-Compose forces `SURF_AUTH_MODE=token`; Docker publishes it on host loopback only. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests. Host-side MCP/stdio does **not** proxy into the container; the image serves HTTP only.
+Compose explicitly enables keyless `web` and publishes Docker on host loopback only. Optional `browse`, `ui`, `finance`, and `ops` keys enable only their matching profiles. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests.
+
+The MCP transport keeps DNS-rebinding protection enabled. Loopback hosts are always accepted; Compose explicitly adds only `surf:17777` through `SURF_MCP_ALLOWED_HOSTS` for AEGIS and HERMES traffic on the private network.
 
 ## Entrypoints
 
-- `surfctl.py`: agent bridge for MCP stdio and raw JSONL stdio.
+- `surfctl.py`: canonical tool registry plus profile-scoped MCP stdio bridge.
 - `start_surf.py`: optional manual HTTP development server with port checks (Docker `CMD`).
-- `main.py`: FastAPI application, middleware, lifespan cleanup, router mounting.
+- `main.py`: FastAPI application, middleware, lifespan cleanup, router mounting, and Streamable HTTP MCP endpoints.
 
 Mounted routers:
 
-- `/auth`: local auth introspection and disabled compatibility endpoints.
+- `/mcp/web`, `/mcp/browse`, `/mcp/ui`, `/mcp/finance`: profile-scoped Streamable HTTP MCP.
 - `/sessions`: browser session lifecycle and monitoring.
 - `/browser`: navigation, observation, interaction, screenshots, network capture, downloads.
 - `/fetch`: one-off HTTP/browser-context fetches.
@@ -257,11 +259,11 @@ These paths are ignored by Git.
 
 ## Auth Model
 
-Default `SURF_AUTH_MODE=loopback` allows free-tier search/fetch/YouTube routes only when SURF is bound to a loopback host. A configured bearer is required for privileged browser/session routes and detailed health probes. `SURF_AUTH_MODE=token` requires `SURF_API_TOKEN` for normal routes; only `/health/live` remains anonymous.
+Authorization is profile-scoped. `web` exposes four retrieval tools and is keyless only on loopback or when explicitly enabled for a private deployment. `browse` exposes 16 read-oriented browser tools, `ui` exposes all 22 browser tools, and `finance` exposes six financial-data tools. Their keys are independent and non-transitive. `ops` protects service operations but is not model-facing.
 
-SURF refuses loopback auth on non-loopback hosts. Demo login and runtime API-key creation are disabled.
+The REST route matrix enforces the same capabilities. `web_fetch` permits only a bounded public GET for a `web` principal. Missing specialist keys disable those profiles; invalid credentials never downgrade to keyless web. The legacy universal API token, admin token, auth mode, and runtime auth routes are unsupported.
 
-MCP registers browser/finance tools only when `SURF_API_TOKEN` is set in the process environment; without it, free-tier tools (`search_*`, `youtube_transcript`, `browser_fetch`, `browser_health`) remain available.
+SURF owns tool names, schemas, descriptions, profile inventories, and the four profile skills. Consumers such as AEGIS own only transport wrappers and mounting, and discover the live MCP contract rather than duplicating it.
 
 ## Session Model
 

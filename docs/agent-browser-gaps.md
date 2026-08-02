@@ -216,6 +216,12 @@ mask genuine errors in logs and suggests a task spawned during the
 `hover_then_recheck` / `wait_visible` ladder is not cleaned up on the failure
 path. Low severity, worth tidying.
 
+**Closed (2026-08-02).** The visibility probe now resolves a boolean on its
+expected timeout and raises synchronously in Python, so cancellation cannot
+leave a rejecting browser-side future behind. A loop exception-handler
+regression test exercises the permanently hidden click path and requires zero
+unhandled async contexts after the outcome returns.
+
 ## Open gaps, ranked by determinism cost
 
 ### G13. Hover-revealed controls cannot be clicked at all
@@ -362,14 +368,13 @@ and for `<select>` the option list.
 
 ### G7. Missing tools that block whole categories of UI testing
 
-- **Key press** — no tool. Blocks Enter/Tab/Escape/arrow flows.
-  Undocumented workaround discovered by accident: a trailing `\n` in
-  `browser_type` submits.
-- **Console capture** — no tool. JS errors are invisible, so "does this page
-  throw?" cannot be answered. Major for UI testing.
-- **Viewport resize** — no tool. Viewport is fixed at session creation, so each
-  breakpoint needs a *new session* = new browser context = all state
-  (auth, cart, scroll) lost. Responsive testing cannot be done in one flow.
+- **Key press — complete.** `browser_press_key` presses Playwright key chords
+  within a caller-bounded timeout. With a selector or verified handle it first
+  focuses exactly one target; without one it explicitly preserves current focus.
+- **Console capture — complete.** `browser_console` provides start/read/clear/stop
+  lifecycle operations over a page-scoped bounded buffer of structured entries.
+- **Viewport resize — complete.** `browser_resize_viewport` mutates the active
+  page in its existing context/session and reports browser-observed dimensions.
 - Also absent (tracked in `surf-tdq2`): dialog handling, file upload, multi-tab,
   history back, drag/drop.
 
@@ -378,6 +383,15 @@ and for `<select>` the option list.
 `content_type: "general"` returned `extracted_elements: {}` and raw text —
 the same content `observe` already provides. `content_quality_score: 0.4` is an
 unexplained magic number with no documented scale.
+
+**Closed (2026-08-02).** General extraction now emits deterministic
+`general.dom.v1` DOM structure: visible headings (with levels), paragraphs,
+ordered/unordered lists, tables, and resolved links. It performs no model call.
+The response declares its caps (50 headings, 100 paragraphs, 30 lists × 40
+items, 20 tables × 30 rows × 20 columns, 100 links, and 50,000 raw-text
+characters); individual strings are also clipped. `metrics.content_quality_score`
+remains the existing deterministic `0..1` length/word-density/structure score,
+not a confidence probability.
 
 ### G9. Diagnostics mislabel DNS failure as policy denial
 
@@ -389,6 +403,12 @@ are different operational problems and must not share a label.
 
 Same root cause as item (5) noted in blackboard task `surf-lw6e`. Resolved as
 benign, but the label is still wrong.
+
+**Closed (2026-08-02).** Resolution failures now carry
+`OUTBOUND_DNS_RESOLUTION_FAILED` and browser routing records
+`reason: dns_resolution`; non-public address denials retain
+`OUTBOUND_TARGET_BLOCKED` / `outbound_policy`. Both still abort the request, so
+the outbound guard is unchanged.
 
 ### G10. Cloudflare: SURF self-identifies as headless
 
@@ -489,6 +509,7 @@ Pre-existing, not introduced by F3.
 2. **G3** — structured error reasons. Cheap, and converts retry loops into code
    branches.
 3. **G4** — the hidden-content bug. Correctness, not ergonomics.
-4. **G7** — console capture and key press. Each unblocks a whole test category.
+4. **G7 remaining** — dialog handling, file upload, multi-tab navigation helpers,
+   history back, and drag/drop remain separate gaps.
 5. **G5/G6/G8** — reporting fidelity.
 6. **G10** — Cloudflare/fingerprint alignment, tracked separately in `surf-lw6e`.

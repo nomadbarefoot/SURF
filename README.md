@@ -1,8 +1,8 @@
 # SURF
 
-SURF is a local browser and web-research substrate for agents and one-off scripts. Agents use an MCP stdio bridge that runs the FastAPI app in-process, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies without binding a local port.
+SURF is a local browser and web-research substrate for agents and one-off scripts. It exposes profile-scoped MCP over stdio and Streamable HTTP, launches local Chromium through Playwright, captures network responses, and provides fetch endpoints that can reuse browser-session cookies.
 
-Beyond single-page browsing, SURF includes **web search** (`search_query` via Exa primary with SearXNG fallback), **parallel content extraction** (`search_extract` with headless-to-headed retry, challenge handling, and optional embedding-based section filtering), and **YouTube transcripts** (`youtube_transcript` using original-language captions). A **Finance Pack** (`finance_*` tools) adds curated source ladders that return structured markdown for recurring market-data needs.
+Beyond single-page browsing, SURF includes **web search** (`web_search`), **parallel content extraction** (`web_extract`), and **YouTube transcripts** (`youtube_transcript`). A **Finance Pack** (`finance_*` tools) adds structured market-data retrieval.
 
 The goal is reliable occasional browsing, scraping, and research. SURF supports normal browser workflows, headed sessions, persistent cookies, conservative ad blocking, browser-like fetches, search-then-extract pipelines, and typed financial extractors. It is not a CAPTCHA solver, credential bypass tool, or high-volume crawler.
 
@@ -15,23 +15,32 @@ python3 -m venv .venv
 .venv/bin/python -m playwright install chromium
 ```
 
-Run the agent MCP bridge:
+Run the keyless web MCP bridge:
 
 ```bash
 .venv/bin/python surfctl.py mcp
 ```
 
-Raw JSONL stdio is available for scripts:
+Specialist stdio profiles require their matching environment key:
+
+```bash
+SURF_BROWSE_KEY="$(openssl rand -hex 24)" .venv/bin/python surfctl.py mcp --profile browse
+SURF_UI_KEY="$(openssl rand -hex 24)" .venv/bin/python surfctl.py mcp --profile ui
+SURF_FINANCE_KEY="$(openssl rand -hex 24)" .venv/bin/python surfctl.py mcp --profile finance
+```
+
+Raw JSONL stdio is available for scripts. Select a specialist profile for
+browser or finance routes:
 
 ```bash
 .venv/bin/python surfctl.py stdio
+SURF_BROWSE_KEY=… .venv/bin/python surfctl.py stdio --profile browse
 ```
 
 Send one JSON object per line:
 
 ```jsonl
 {"id":"health","method":"GET","path":"/health/live"}
-{"id":"create","method":"POST","path":"/sessions/","data":{"config":{"profile_id":"agent-default","persist_profile":true}}}
 {"id":"quit","method":"QUIT"}
 ```
 
@@ -59,19 +68,21 @@ OpenAPI docs are available at `/docs` when `SURF_DEBUG=true`.
 
 ## Auth
 
-SURF defaults to `SURF_AUTH_MODE=loopback`, which requires no bearer token but only works when bound to a loopback host.
+SURF uses capability profiles instead of a universal token. `web` is keyless on loopback or when `SURF_KEYLESS_WEB_ENABLED=true`; its `web_fetch` tool is restricted to a bounded public GET. `browse`, `ui`, and `finance` require distinct keys, and `ops` protects operational HTTP routes.
 
-For stricter local process isolation:
+Configure only the profiles the deployment needs; an unset specialist key disables that profile:
 
 ```bash
-export SURF_AUTH_MODE=token
-export SURF_API_TOKEN="$(openssl rand -hex 24)"
+export SURF_BROWSE_KEY="$(openssl rand -hex 24)"
+export SURF_UI_KEY="$(openssl rand -hex 24)"
+export SURF_FINANCE_KEY="$(openssl rand -hex 24)"
+export SURF_OPS_KEY="$(openssl rand -hex 24)"
 .venv/bin/python start_surf.py
 ```
 
-Then send `Authorization: Bearer $SURF_API_TOKEN`.
+The Streamable HTTP MCP endpoints are `/mcp/web`, `/mcp/browse`, `/mcp/ui`, and `/mcp/finance`. Send the selected profile key as a bearer token. A key never grants access to another profile.
 
-SURF refuses `loopback` auth on non-loopback hosts. Runtime demo login and runtime API-key creation are disabled; configure `SURF_API_TOKEN` instead.
+The four canonical skill packages live under `skills/`; their guidance is also used as the MCP server instructions.
 
 ## Docker
 
@@ -81,24 +92,24 @@ SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP ser
 
 ```bash
 cp .env.docker.example .env.docker
-# Set SURF_API_TOKEN, SEARXNG_SECRET, and SURF_EMBEDDING_API_KEY
+# Set the specialist keys you need, plus SEARXNG_SECRET and SURF_EMBEDDING_API_KEY
 docker compose --env-file .env.docker \
   -f docker-compose.yml -f docker-compose.aegis.yml up --build
 ```
 
 SURF is available only on host loopback at `http://127.0.0.1:17777`. SearXNG and its ephemeral Valkey limiter store are private to the compose network.
 
-### Auth inside the container
+### Profiles inside the container
 
-The container binds to `0.0.0.0`, so `loopback` auth is rejected by the runtime validator. Compose forces `SURF_AUTH_MODE=token` and loads `SURF_API_TOKEN` from `.env.docker` via `env_file`:
+Compose explicitly enables keyless `web` because the service is published only on host loopback. Specialist profiles remain disabled until their independent keys are set in `.env.docker`:
 
 ```bash
-# Generate two independent values and put them in .env.docker
-openssl rand -hex 24  # SURF_API_TOKEN
+# Generate independent values and put them in .env.docker
+openssl rand -hex 24  # repeat for each enabled SURF profile key
 openssl rand -hex 32  # SEARXNG_SECRET
 ```
 
-HTTP clients must send `Authorization: Bearer $SURF_API_TOKEN`. Keep `.env.docker` local — it is gitignored; use `.env.docker.example` as the template.
+Specialist HTTP and MCP clients send the matching key as `Authorization: Bearer …`. Keep `.env.docker` local — it is gitignored; use `.env.docker.example` as the template.
 
 Optional: set `SURF_EXA_API_KEY` in `.env.docker` for Exa-backed search. Without it, search falls back to the compose-only SearXNG service at `http://searxng:8080`.
 
@@ -113,9 +124,9 @@ docker compose --env-file .env.docker \
   -f docker-compose.yml -f docker-compose.aegis.yml up --build
 ```
 
-### Stdio MCP
+### MCP transports
 
-The Docker image runs the HTTP server (`start_surf.py`). Agent workflows still use host-side `surfctl.py mcp` / `surfctl.py stdio`, which run FastAPI in-process — they do not automatically proxy to the container.
+The Docker image serves the four Streamable HTTP MCP endpoints through `start_surf.py`. Host-side `surfctl.py mcp --profile …` remains available for stdio clients and runs FastAPI in-process.
 
 ### Persistent data
 
@@ -130,16 +141,16 @@ Compose mounts named volumes for:
 
 ## Quick Agent Flow
 
-SURF exposes three MCP tool families: `browser_*`, `search_*`, and `finance_*`.
+SURF exposes four isolated MCP profiles: `web`, `browse`, `ui`, and `finance`.
 
 ### Browser automation
 
 - `browser_create_session`
 - `browser_network_start` when XHR/API discovery matters.
 - `browser_navigate`
-- `browser_observe`
+- `browser_snapshot`
 - `browser_links` for full DOM link extraction on disclosure/download pages.
-- `browser_fetch` with `backend="browser"` and `session_id` when cookies matter.
+- `web_fetch` for a bounded public GET.
 - `browser_download`; pass `output_dir` when the caller needs the file in its own workspace.
 - `browser_close_session`
 
@@ -147,15 +158,15 @@ SURF exposes three MCP tool families: `browser_*`, `search_*`, and `finance_*`.
 
 No session required — search and extract spin up ephemeral browser sessions internally.
 
-1. `search_query` — run a web search query via Exa (primary) with SearXNG fallback; returns ranked results with titles, snippets, URLs, source, and hybrid relevance scores.
+1. `web_search` — search the web and return ranked results.
 2. Pick URLs from the results.
-3. `search_extract` — fetch full page content from up to 10 URLs in parallel. Pass `refine_query` to keep only sections relevant to your research topic. Pass a `relevance` map (URL → score from `search_query`) to prioritize headed retries for high-value failures.
+3. `web_extract` — fetch readable content from up to 10 URLs in parallel. Pass `refine_query` to keep only relevant sections.
 
 Example pipeline:
 
 ```json
-{"tool": "search_query", "query": "India Nifty 50 outlook 2026", "max_results": 5}
-{"tool": "search_extract", "urls": ["https://example.com/article"], "refine_query": "Nifty 50 outlook 2026", "content_mode": "reader"}
+{"tool": "web_search", "query": "India Nifty 50 outlook 2026", "max_results": 5}
+{"tool": "web_extract", "urls": ["https://example.com/article"], "refine_query": "Nifty 50 outlook 2026", "content_mode": "reader"}
 ```
 
 SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose). An authenticated `GET /health/searxng` is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, an authenticated `POST /health/searxng/autowake` may start the configured Docker runtime.
@@ -166,12 +177,12 @@ Semantic relevance scoring and section filtering use the OpenAI-compatible embed
 
 Typed endpoints that walk curated source ladders and return fixed markdown (source, as-of, confidence). Prefer these over generic search for recurring ledger data. See `research/FINANCE_PACK.md` for design detail.
 
-- `finance_consensus(symbol, market)` — analyst PT mean/range, EPS estimates
-- `finance_insider(symbol, market)` — insider/promoter transactions and pledges
-- `finance_corp_actions(symbol, market)` — buybacks, dividends, splits
+- `finance_analyst_consensus(symbol, market)` — analyst PT mean/range, EPS estimates
+- `finance_insider_transactions(symbol, market)` — insider/promoter transactions and pledges
+- `finance_corporate_actions(symbol, market)` — buybacks, dividends, splits
 - `finance_macro(country)` — 10Y yield, CDS, FX spot, FX implied vol
-- `finance_erp(home, foreign)` — Damodaran ERP and country default spreads
-- `finance_snapshot_us(symbol)` — degraded US-book basics (price, mcap, P/E)
+- `finance_equity_risk_premium(home, foreign)` — ERP and country default spreads
+- `finance_us_snapshot(symbol)` — degraded US-book basics (price, mcap, P/E)
 
 Probe ladder health with authenticated `GET /health/finance`. Run the harness with `.venv/bin/python scripts/run_finance_tool_harness.py`.
 

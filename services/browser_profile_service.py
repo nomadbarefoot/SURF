@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import re
-import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,7 +16,6 @@ from urllib.parse import urlsplit
 import structlog
 import yaml
 
-from config import get_settings
 from core.foundation import ConfigurationError
 from models.schemas import StealthStrategy
 
@@ -93,27 +91,20 @@ class BrowserProfileService:
         self,
         requested_mode: Optional[str] = None,
         url: Optional[str] = None,
-        admin_token: Optional[str] = None,
+        allow_aggressive: bool = False,
     ) -> ResolvedProfile:
         """Resolve a requested mode plus optional URL to a concrete profile.
 
-        An admin token can unlock gated modes (e.g. aggressive) even when the
-        environment gate is not set, so high-priority requests can opt in
-        without a server restart.
+        The UI profile may unlock gated modes (e.g. aggressive) without a
+        second credential. Other profiles still require the environment gate.
         """
         self.load()
         mode = self._effective_mode(requested_mode, url)
         mode_config = self._modes.get(mode, {})
 
-        settings = get_settings()
         required_env = mode_config.get("requires_env")
         env_satisfied = not required_env or os.getenv(required_env) == "true"
-        admin_override = bool(
-            admin_token
-            and settings.admin_token
-            and secrets.compare_digest(admin_token, settings.admin_token)
-        )
-        gate_open = env_satisfied or admin_override
+        gate_open = env_satisfied or allow_aggressive
 
         if not mode_config.get("enabled", False) and not (required_env and gate_open):
             raise ConfigurationError(
@@ -124,7 +115,7 @@ class BrowserProfileService:
         if required_env and not gate_open:
             raise ConfigurationError(
                 "browser_profile",
-                f"Mode '{mode}' requires {required_env}=true or an admin token",
+                f"Mode '{mode}' requires {required_env}=true or the UI profile",
             )
 
         session_overrides = dict(mode_config.get("session_overrides", {}))

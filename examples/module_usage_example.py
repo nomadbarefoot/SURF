@@ -8,7 +8,7 @@ import httpx
 class SurfClient:
     def __init__(self, base_url: Optional[str] = None, token: Optional[str] = None) -> None:
         self.base_url = (base_url or os.getenv("SURF_BASE_URL") or "http://127.0.0.1:17777").rstrip("/")
-        self.token = token if token is not None else os.getenv("SURF_API_TOKEN")
+        self.token = token if token is not None else os.getenv("SURF_BROWSE_KEY")
         self.headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
         self.client = httpx.Client(timeout=180.0)
 
