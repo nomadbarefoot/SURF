@@ -213,7 +213,7 @@ flowchart LR
   Vol1[("surf-data")] --- SurfC
 ```
 
-Compose explicitly enables keyless `web` and publishes Docker on host loopback only. Optional `browse`, `ui`, `finance`, and `ops` keys enable only their matching profiles. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests.
+Compose explicitly enables keyless `web` and publishes Docker on host loopback only. Optional `browse`, `ui`, `finance`, and `ops` keys enable only their matching profiles. The optional `docker-compose.aegis.yml` override persistently attaches SURF as `surf` to the external, isolated `aegis-services` network; it must be included whenever that container is recreated for AEGIS use. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests.
 
 The MCP transport keeps DNS-rebinding protection enabled. Loopback hosts are always accepted; Compose explicitly adds only `surf:17777` through `SURF_MCP_ALLOWED_HOSTS` for AEGIS and HERMES traffic on the private network.
 
@@ -292,7 +292,7 @@ Browser-context `/fetch/request` reuses cookies but is not part of page adblock 
 
 Stage 1 (`SearchService.search`): queries the configured provider (Exa by default, with optional SearXNG fallback), deduplicates results, batch-encodes query/results once for hybrid BM25 + semantic scoring, filters to results above `SURF_SEARCH_RELEVANCE_THRESHOLD`, and returns ranked snippets. Provider-specific constraints that Exa cannot honor are rejected so SearXNG can handle them. If no result reaches the threshold, the top 3 are returned with `success: false`.
 
-Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures concurrently under the headed-session semaphore when relevance warrants it, applies final Markdown budgets, and optionally refines output with batched `refine_query` embeddings. ETL callers use this public contract and publish artifacts atomically.
+Stage 2 (`SearchService.deep_extract`): spins ephemeral `_search_*` browser sessions (not agent-managed), extracts page content in parallel (up to `SURF_MAX_SEARCH_SESSIONS`), retries failures concurrently under the headed-session semaphore when relevance warrants it, applies final Markdown budgets, and optionally refines output with batched `refine_query` embeddings. Browser extraction and bounded raw `web_fetch` are separate paths: a site can fail extraction while remaining fetchable as raw content. ETL callers use this public contract and publish artifacts atomically.
 
 Search extraction reuses `BrowserService` observe modes and `ChallengeResolver` for Cloudflare-style blocks. Stats are exposed at `GET /search/stats`.
 

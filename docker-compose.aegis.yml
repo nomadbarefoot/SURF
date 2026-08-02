@@ -2,9 +2,9 @@ services:
   surf:
     networks:
       - surf-net
-      - aegis
+      - aegis-services
 
 networks:
-  aegis:
+  aegis-services:
     external: true
-    name: aegis
+    name: aegis-services

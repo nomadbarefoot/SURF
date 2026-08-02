@@ -61,6 +61,8 @@ No browser session needed — SURF manages ephemeral sessions internally.
 1. `web_search` with your research question.
 2. `web_extract` on the best URLs; pass `refine_query` to trim irrelevant sections.
 
+Provider 429s can be transient and may recover through search fallback. Extraction uses a browser path and can fail on a page that `web_fetch` can still retrieve as bounded raw content, so handle their errors independently.
+
 ### YouTube transcript
 
 Call `youtube_transcript` with one public YouTube video URL. It returns bounded,

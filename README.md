@@ -117,12 +117,14 @@ Semantic ranking and section refinement use the OpenAI-compatible LiteLLM embedd
 
 ### LiteLLM network
 
-The base stack attaches SURF only to `surf-net`. To use LiteLLM from the Aegis stack, attach SURF to its shared external Docker network with the override:
+The base stack attaches SURF only to `surf-net`. AEGIS workers resolve SURF through the isolated external `aegis-services` network. Create that network through the AEGIS deployment first, then include the override whenever SURF is created or recreated:
 
 ```bash
 docker compose --env-file .env.docker \
   -f docker-compose.yml -f docker-compose.aegis.yml up --build
 ```
+
+The override gives the service the `surf` alias on `aegis-services`. Running the base Compose file alone recreates SURF without that attachment, and AEGIS correctly fails closed with `service alias 'surf' is not uniquely attached and running`.
 
 ### MCP transports
 
@@ -169,7 +171,9 @@ Example pipeline:
 {"tool": "web_extract", "urls": ["https://example.com/article"], "refine_query": "Nifty 50 outlook 2026", "content_mode": "reader"}
 ```
 
-SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose). An authenticated `GET /health/searxng` is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, an authenticated `POST /health/searxng/autowake` may start the configured Docker runtime.
+SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose). `GET /health/searxng` accepts the keyless `web` profile or the operations key and is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, `POST /health/searxng/autowake` requires the operations key and may start the configured Docker runtime.
+
+Search providers can rate-limit or reject individual requests. `web_search` may recover through the configured provider fallback, but callers should still back off on repeated 429 responses. `web_extract` uses browser extraction and can report `Page unavailable` for a URL that `web_fetch` can retrieve as raw HTML; treat the tools as complementary rather than interchangeable.
 
 Semantic relevance scoring and section filtering use the OpenAI-compatible embedding endpoint configured by `SURF_EMBEDDING_BASE_URL` and `SURF_EMBEDDING_MODEL`. Host-side execution defaults to `http://127.0.0.1:4000/v1`; Compose uses `http://litellm:4000/v1`. Without a working endpoint, search falls back to BM25-only scoring and skips embedding-based filtering.
 
@@ -272,10 +276,11 @@ Health:
 - `POST /health/searxng/autowake`
 - `GET /health/finance`
 
-Only `GET /health/live` is anonymous. Detailed health, readiness, metrics, runtime, SearXNG, and finance probes require the configured API token and return HTTP 503 when unhealthy.
+`GET /health/live` and `GET /health/ready` use the keyless `web` profile. Other health routes follow the route matrix: SearXNG accepts `web` or `ops`, finance accepts `finance` or `ops`, runtime accepts `browse`, `ui`, or `ops`, and remaining operational probes require `ops`. Health probes return HTTP 503 when their dependency is unhealthy.
 
-In loopback mode, `/youtube/` follows the same free-tier policy as `/search/`
-and `/fetch/`. Container deployments still require the global bearer token.
+`/search/` and `/youtube/` use the keyless `web` profile. `/fetch/` accepts
+`web`, `browse`, or `ui`; a `web` principal is restricted to a bounded public
+GET. There is no global bearer token.
 
 ## YouTube Transcripts
 
