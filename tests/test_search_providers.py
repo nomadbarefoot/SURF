@@ -499,7 +499,8 @@ def test_settings_defaults_favor_exa_auto():
     assert settings.exa_contents_highlights is True
     assert settings.exa_fallback_enabled is True
     assert settings.search_relevance_threshold == 0.5
-    assert settings.embedding_base_url == "http://127.0.0.1:4000/v1"
+    # Opt-in: the declared default is unset (a local .env may override it).
+    assert type(settings).model_fields["embedding_base_url"].default is None
     assert settings.embedding_model == "embed-text"
     assert settings.embedding_dimensions == 768
     assert settings.embedding_timeout == 15.0

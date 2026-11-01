@@ -231,6 +231,20 @@ async def searxng_health(
     return {"success": result.get("status") == "ready", **result}
 
 
+@router.get("/embeddings")
+async def embeddings_health(
+    response: Response,
+    _user: Dict[str, Any] = Depends(require_full_access),
+):
+    """Embed a probe string to confirm semantic ranking is active."""
+    from services.embeddings import probe_embeddings
+
+    probe = await probe_embeddings()
+    if probe["status"] != "ready":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"success": probe["status"] == "ready", **probe}
+
+
 @router.post("/searxng/autowake")
 async def searxng_autowake(
     response: Response,

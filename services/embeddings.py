@@ -1,4 +1,9 @@
-"""Remote embedding client for SURF's semantic ranking pipeline."""
+"""OpenAI-compatible embedding client for SURF's semantic ranking pipeline.
+
+Any server exposing ``POST {base_url}/embeddings`` works: Ollama, LiteLLM,
+OpenAI, vLLM, or text-embeddings-inference. When ``SURF_EMBEDDING_BASE_URL``
+is unset, semantic scoring is disabled and callers fall back to BM25.
+"""
 
 from __future__ import annotations
 
@@ -57,8 +62,13 @@ class EmbeddingProvider(ABC):
         return vectors[0] if vectors else None
 
 
+def is_embedding_configured() -> bool:
+    """Report whether an embedding endpoint is configured at all."""
+    return bool((settings.embedding_base_url or "").strip())
+
+
 class LiteLLMEmbeddingProvider(EmbeddingProvider):
-    """OpenAI-compatible embedding client backed by the local LiteLLM proxy."""
+    """OpenAI-compatible embedding client (name kept for compatibility)."""
 
     def __init__(self, transport: Optional[httpx.AsyncBaseTransport] = None):
         self._transport = transport
@@ -68,6 +78,9 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
 
         if not texts:
             return []
+        if not is_embedding_configured():
+            _embed_available = False
+            return None
 
         headers = {}
         if settings.embedding_api_key:
@@ -81,11 +94,7 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
                 response = await client.post(
                     f"{settings.embedding_base_url.rstrip('/')}/embeddings",
                     headers=headers,
-                    json={
-                        "model": settings.embedding_model,
-                        "input": texts,
-                        "dimensions": settings.embedding_dimensions,
-                    },
+                    json=_request_body(texts),
                 )
                 response.raise_for_status()
                 payload = response.json()
@@ -106,6 +115,38 @@ class LiteLLMEmbeddingProvider(EmbeddingProvider):
             _embed_available = False
             logger.warning("embedding_request_failed", error=str(exc))
             return None
+
+
+def _request_body(texts: List[str]) -> dict:
+    body: dict = {"model": settings.embedding_model, "input": texts}
+    if settings.embedding_dimensions > 0:
+        body["dimensions"] = settings.embedding_dimensions
+    return body
+
+
+async def probe_embeddings() -> dict:
+    """Embed one short query and report whether semantic ranking is live."""
+    info = {
+        "configured": is_embedding_configured(),
+        "base_url": settings.embedding_base_url,
+        "model": settings.embedding_model,
+    }
+    if not info["configured"]:
+        return {
+            **info,
+            "status": "disabled",
+            "hint": "Set SURF_EMBEDDING_BASE_URL (and SURF_EMBEDDING_MODEL); "
+            "search is using BM25 only.",
+        }
+    vector = await get_embedder().encode(_prefix("health check", "query"))
+    if vector is None:
+        return {
+            **info,
+            "status": "down",
+            "hint": "Endpoint configured but the embedding request failed; "
+            "check the URL, model name, and API key. Search falls back to BM25.",
+        }
+    return {**info, "status": "ready", "dimensions": len(vector)}
 
 
 def get_embedder() -> EmbeddingProvider:

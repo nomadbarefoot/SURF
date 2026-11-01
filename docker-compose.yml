@@ -18,15 +18,20 @@ services:
       - "SURF_OPS_KEY=${SURF_OPS_KEY:-}"
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
-      - SURF_EMBEDDING_BASE_URL=http://litellm:4000/v1
-      - SURF_EMBEDDING_MODEL=embed-text
-      - SURF_EMBEDDING_DIMENSIONS=768
+      # Semantic ranking. Empty = BM25 only. With `--profile embeddings`, set
+      # SURF_EMBEDDING_BASE_URL=http://embeddings:8080/v1 in .env.docker.
+      - "SURF_EMBEDDING_BASE_URL=${SURF_EMBEDDING_BASE_URL:-}"
+      - "SURF_EMBEDDING_MODEL=${SURF_EMBEDDING_MODEL:-nomic-embed-text}"
+      - "SURF_EMBEDDING_DIMENSIONS=${SURF_EMBEDDING_DIMENSIONS:-768}"
       - SURF_ALLOW_AGGRESSIVE_MODE=false
     volumes:
       - surf-data:/app/data
     depends_on:
       searxng:
         condition: service_healthy
+      embeddings:
+        condition: service_healthy
+        required: false
     init: true
     read_only: true
     shm_size: 1gb
@@ -80,6 +85,48 @@ services:
     networks:
       - surf-net
 
+
+  # Optional local embeddings: `docker compose --profile embeddings up`.
+  # llama.cpp (CPU) serving nomic-embed-text-v1.5 over an OpenAI-compatible
+  # /v1/embeddings API. The model (~140 MB) downloads once into a volume.
+  embeddings:
+    image: ghcr.io/ggml-org/llama.cpp:server-b12030@sha256:e67d88af487390098c76d7982b1761484339fa147b7e41d3c64ae1318759f78b
+    profiles: ["embeddings"]
+    container_name: surf-embeddings
+    command:
+      - "-hf"
+      - "${SURF_EMBEDDING_HF_MODEL:-nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0}"
+      - "--embeddings"
+      - "--pooling"
+      - "mean"
+      - "-c"
+      - "2048"
+      - "-b"
+      - "2048"
+      - "-ub"
+      - "2048"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+    volumes:
+      - embeddings-models:/root/.cache
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 15s
+    networks:
+      - surf-net
+
   valkey:
     image: docker.io/valkey/valkey:8.1-alpine@sha256:94365b275456ae14621001c03556c732b1d93a0cdeacc317d1bdd52eba680885
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
@@ -104,6 +151,7 @@ services:
 
 volumes:
   surf-data:
+  embeddings-models:
   searxng-config:
   searxng-cache:
 

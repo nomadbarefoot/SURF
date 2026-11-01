@@ -267,6 +267,7 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         ("service", "GET", "/health/live", None),
         ("browser runtime", "GET", "/health/runtime", None),
         ("SearXNG", "GET", "/health/searxng", None),
+        ("embeddings", "GET", "/health/embeddings", None),
         (
             "outbound fetch",
             "POST",
@@ -303,7 +304,8 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         for item in results:
             state = "ok" if item["ok"] else "fail"
             detail = item.get("status_code", item.get("error", "unknown"))
-            print(f"[{state}] {item['name']}: {detail}")
+            hint = (item.get("body") or {}).get("hint")
+            print(f"[{state}] {item['name']}: {detail}" + (f" - {hint}" if hint else ""))
 
     if not all(item["ok"] for item in results):
         sys.exit(1)

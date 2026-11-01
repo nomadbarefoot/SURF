@@ -267,7 +267,7 @@ def _route_profiles(method: str, path: str) -> frozenset[str]:
         return frozenset({"finance", "ops"})
     if path == "/health/runtime":
         return frozenset({"browse", "ui", "ops"})
-    if path == "/health/searxng" and method.upper() == "GET":
+    if path in {"/health/searxng", "/health/embeddings"} and method.upper() == "GET":
         return frozenset({"web", "ops"})
     if path.startswith("/health/") or path == "/health":
         return frozenset({"ops"})

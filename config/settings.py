@@ -115,9 +115,12 @@ class Settings(BaseSettings):
     search_refine_embed_enabled: bool = Field(default=True)
     search_refine_embed_threshold: float = Field(default=0.32)
     search_refine_min_block_chars: int = Field(default=40)
-    embedding_base_url: str = Field(default="http://127.0.0.1:4000/v1")
+    # OpenAI-compatible embeddings endpoint (Ollama, LiteLLM, OpenAI, ...).
+    # Unset disables semantic ranking; search then uses BM25 only.
+    embedding_base_url: Optional[str] = Field(default=None)
     embedding_api_key: Optional[str] = Field(default=None)
     embedding_model: str = Field(default="embed-text")
+    # 0 omits the `dimensions` request field for servers that reject it.
     embedding_dimensions: int = Field(default=768)
     embedding_timeout: float = Field(default=15.0)
 

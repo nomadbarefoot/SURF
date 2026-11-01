@@ -153,3 +153,43 @@ def test_cosine_similarity_handles_unnormalized_vectors():
         0.0
     )
     assert math.isfinite(embeddings.cosine_similarity([0.0], [0.0]))
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_endpoint_disables_semantic_without_request(monkeypatch):
+    monkeypatch.setattr(embeddings.settings, "embedding_base_url", None)
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("no request expected when unconfigured")
+
+    assert await _provider(handler).encode_many(["text"]) is None
+    assert embeddings.is_embedder_available() is False
+
+
+@pytest.mark.asyncio
+async def test_zero_dimensions_omits_field(monkeypatch):
+    monkeypatch.setattr(embeddings.settings, "embedding_dimensions", 0)
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [3.0, 4.0]}]})
+
+    assert await _provider(handler).encode_many(["text"]) == [[0.6, 0.8]]
+    assert "dimensions" not in captured["payload"]
+
+
+@pytest.mark.asyncio
+async def test_probe_reports_disabled_ready_and_down(monkeypatch):
+    monkeypatch.setattr(embeddings.settings, "embedding_base_url", None)
+    assert (await embeddings.probe_embeddings())["status"] == "disabled"
+
+    monkeypatch.setattr(embeddings.settings, "embedding_base_url", "http://e:1/v1")
+    embeddings._embed_provider = _provider(
+        lambda r: httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0, 0.0]}]})
+    )
+    ready = await embeddings.probe_embeddings()
+    assert ready["status"] == "ready" and ready["dimensions"] == 2
+
+    embeddings._embed_provider = _provider(lambda r: httpx.Response(500))
+    assert (await embeddings.probe_embeddings())["status"] == "down"
