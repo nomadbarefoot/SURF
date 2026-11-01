@@ -99,6 +99,61 @@ PROFILE_KEY_ENVS = {
     "ui": "SURF_UI_KEY",
     "finance": "SURF_FINANCE_KEY",
 }
+PROFILE_ORDER = ("web", "browse", "ui", "finance")
+# Preferred credential when a route accepts several selected profiles.
+_AUTH_PREFERENCE = ("ui", "browse", "finance", "web")
+
+
+def parse_profiles(value: str | tuple[str, ...] | list[str] = "web") -> tuple[str, ...]:
+    """Parse ``web``, ``web,browse`` or ``all`` into canonical profile names.
+
+    ``all`` means web + ui + finance (ui is a superset of browse). The order is
+    canonical so labels and instructions are stable.
+    """
+    names = value.split(",") if isinstance(value, str) else list(value)
+    selected: set[str] = set()
+    for raw in names:
+        name = raw.strip().lower()
+        if not name:
+            continue
+        if name == "all":
+            selected.update({"web", "ui", "finance"})
+        elif name in PROFILE_TOOLS:
+            selected.add(name)
+        else:
+            raise ValueError(
+                f"unknown SURF profile: {name} (choose from {', '.join(PROFILE_ORDER)}, all)"
+            )
+    if not selected:
+        raise ValueError("at least one SURF profile is required")
+    if "ui" in selected:
+        selected.discard("browse")  # ui already includes every browse tool
+    return tuple(p for p in PROFILE_ORDER if p in selected)
+
+
+def profile_tools(profiles: tuple[str, ...]) -> frozenset[str]:
+    return frozenset().union(*(PROFILE_TOOLS[p] for p in profiles))
+
+
+def ensure_stdio_keys(profiles: tuple[str, ...], *, require_keys: bool) -> list[str]:
+    """Give unset specialist keys a random per-process value for stdio.
+
+    The stdio bridge talks to the app in-process (no socket), so a generated
+    key exposes nothing; it only satisfies the app's profile authorization.
+    Returns the env names that were generated. With ``require_keys``, raise
+    instead, matching the HTTP deployment's explicit-key model.
+    """
+    import secrets
+
+    missing = [
+        PROFILE_KEY_ENVS[p] for p in profiles if p in PROFILE_KEY_ENVS
+        and not os.getenv(PROFILE_KEY_ENVS[p])
+    ]
+    if missing and require_keys:
+        raise SystemExit(f"--require-keys: missing {', '.join(missing)}")
+    for env_name in missing:
+        os.environ[env_name] = secrets.token_hex(24)
+    return missing
 
 
 def tool_metadata(name: str) -> dict[str, str]:
@@ -106,7 +161,11 @@ def tool_metadata(name: str) -> dict[str, str]:
 
 
 def profile_instructions(profile: str) -> str:
-    """Load the canonical profile guidance from its repository-owned skill."""
+    """Load profile guidance from repository-owned skills (one or several)."""
+    profiles = parse_profiles(profile)
+    if len(profiles) > 1:
+        return "\n\n".join(profile_instructions(p) for p in profiles)
+    profile = profiles[0]
     path = ROOT / "skills" / f"surf-{profile}" / "SKILL.md"
     content = path.read_text(encoding="utf-8")
     if content.startswith("---\n"):
@@ -123,6 +182,7 @@ class SurfAppBridge:
     ):
         self.timeout = timeout
         self.profile = profile
+        self.profiles = parse_profiles(profile)
         self.manage_app_lifespan = manage_app_lifespan
         self._client = None
         self._lifespan = None
@@ -160,6 +220,25 @@ class SurfAppBridge:
         if self._lifespan:
             await self._lifespan.__aexit__(exc_type, exc, tb)
 
+    def auth_profile(self, method: str, path: str) -> str:
+        """Pick the selected profile whose credential the route accepts."""
+        if len(self.profiles) == 1:
+            return self.profiles[0]
+        from core.foundation import _route_profiles
+
+        route_path = path.split("?", 1)[0]
+        if route_path.startswith(("http://", "https://")):
+            from urllib.parse import urlsplit
+
+            route_path = urlsplit(route_path).path
+        if not route_path.startswith("/"):
+            route_path = f"/{route_path}"
+        allowed = _route_profiles(method.upper(), route_path)
+        for candidate in _AUTH_PREFERENCE:
+            if candidate in self.profiles and candidate in allowed:
+                return candidate
+        return self.profiles[0]
+
     async def request(
         self,
         method: str,
@@ -169,7 +248,9 @@ class SurfAppBridge:
     ) -> dict[str, Any]:
         assert self._client is not None
         body = json.dumps(data) if isinstance(data, (dict, list)) else data
-        request_headers = build_headers(body, headers or {}, self.profile)
+        request_headers = build_headers(
+            body, headers or {}, self.auth_profile(method, path)
+        )
         if "error" in request_headers:
             return request_headers
         response = await self._client.request(
@@ -369,9 +450,9 @@ def build_mcp_server(profile: str = "web", *, embedded: bool = False):
     from mcp.server.fastmcp import FastMCP
     from mcp.server.transport_security import TransportSecuritySettings
 
-    if profile not in PROFILE_TOOLS:
-        raise ValueError(f"unknown SURF profile: {profile}")
-    full_access = profile != "web"
+    profiles = parse_profiles(profile)
+    profile = ",".join(profiles)
+    full_access = profiles != ("web",)
 
     instructions = profile_instructions(profile)
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
@@ -382,7 +463,7 @@ def build_mcp_server(profile: str = "web", *, embedded: bool = False):
     )
 
     mcp = FastMCP(
-        f"SURF {profile}",
+        f"SURF {'+'.join(profiles)}",
         instructions=instructions,
         log_level="ERROR",
         lifespan=mcp_lifespan(profile, embedded=embedded),
@@ -932,7 +1013,7 @@ def build_mcp_server(profile: str = "web", *, embedded: bool = False):
                 "POST", "/finance/snapshot_us", {"symbol": symbol, "market": "US"}
             )
 
-    enabled = PROFILE_TOOLS[profile]
+    enabled = profile_tools(profiles)
     registered = set(TOOL_DESCRIPTIONS) if full_access else set(WEB_TOOLS)
     for name in registered - enabled:
         mcp.remove_tool(name)
@@ -944,29 +1025,42 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    profile_help = (
+        "Tool profile(s): web, browse, ui, finance, a comma list such as "
+        "web,browse, or all (web+ui+finance). Default: web"
+    )
+    require_help = (
+        "Require SURF_BROWSE_KEY/SURF_UI_KEY/SURF_FINANCE_KEY for specialist "
+        "profiles instead of generating per-process keys"
+    )
     stdio_parser = subparsers.add_parser(
         "stdio", help="Run raw JSONL API over stdin/stdout"
     )
     stdio_parser.add_argument("--timeout", type=float, default=180.0)
-    stdio_parser.add_argument(
-        "--profile", choices=tuple(PROFILE_TOOLS), default="web"
-    )
+    stdio_parser.add_argument("--profile", default="web", help=profile_help)
+    stdio_parser.add_argument("--require-keys", action="store_true", help=require_help)
     mcp_parser = subparsers.add_parser("mcp", help="Run MCP server over stdin/stdout")
-    mcp_parser.add_argument(
-        "--profile", choices=tuple(PROFILE_TOOLS), default="web"
-    )
+    mcp_parser.add_argument("--profile", default="web", help=profile_help)
+    mcp_parser.add_argument("--require-keys", action="store_true", help=require_help)
 
     args = parser.parse_args()
+    try:
+        profiles = parse_profiles(args.profile)
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
+        ensure_stdio_keys(
+            profiles,
+            require_keys=args.require_keys
+            or os.getenv("SURF_STDIO_REQUIRE_KEYS", "").lower() in {"1", "true", "yes"},
+        )
+    except SystemExit as exc:
+        parser.error(str(exc))
+    profile = ",".join(profiles)
     if args.command == "stdio":
-        key_env = PROFILE_KEY_ENVS.get(args.profile)
-        if key_env and not os.getenv(key_env):
-            parser.error(f"{args.profile} profile requires {key_env}")
-        return asyncio.run(stdio_server(args.timeout, args.profile))
+        return asyncio.run(stdio_server(args.timeout, profile))
     if args.command == "mcp":
-        key_env = PROFILE_KEY_ENVS.get(args.profile)
-        if key_env and not os.getenv(key_env):
-            parser.error(f"{args.profile} profile requires {key_env}")
-        build_mcp_server(args.profile).run(transport="stdio")
+        build_mcp_server(profile).run(transport="stdio")
         return 0
     return 2
 

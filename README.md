@@ -12,7 +12,7 @@ agent ──MCP──▶ SURF ──▶ search (Exa / SearXNG) ─┐
 
 - **Runs locally.** No hosted scraping service, no per-page billing. The browser, cookies and downloads stay on your machine.
 - **Built for agents.** Output is compact, readable markdown sized for a context window, not raw HTML. Tool descriptions and bundled skills tell the agent which tool to use when.
-- **The agent gets only the tools it needs.** Tools are split into four profiles (`web`, `browse`, `ui`, `finance`). A research agent never sees click/type tools, and each specialist profile needs its own key.
+- **The agent gets only the tools it needs.** Tools are split into four profiles (`web`, `browse`, `ui`, `finance`) that you combine per agent (`--profile web,browse`). A research agent never sees click/type tools, and over HTTP each specialist profile needs its own key.
 - **Handles real-world sites.** It uses a real Chromium with persistent profiles, headed fallback for JavaScript-heavy or protected pages, browser-cookie fetches and conservative ad blocking.
 - **Safe defaults.** It binds to loopback only, blocks private-network egress (SSRF), sandboxes downloads to known folders, and runs a hardened Docker image (read-only, no capabilities).
 
@@ -98,7 +98,19 @@ Any MCP client (JSON config):
 }
 ```
 
-To use the browser, UI or finance tools, add `--profile browse|ui|finance` and set the matching key, e.g. `SURF_BROWSE_KEY="$(openssl rand -hex 24)"`. A profile with no key set stays disabled.
+### Choose the tools each agent gets
+
+`--profile` picks which tools the agent sees. Use it to give each agent only what it needs:
+
+| `--profile` | Tools | Good for |
+|---|---|---|
+| `web` (default) | 4 | research: search, read pages, fetch, transcripts |
+| `web,browse` | 20 | research plus rendered pages, screenshots, network capture |
+| `web,ui` | 26 | everything above plus clicking, typing and UI testing |
+| `web,finance` | 10 | research plus structured market data |
+| `all` | 32 | everything |
+
+Over stdio no keys are needed: SURF runs in-process and authorizes itself with throwaway per-process keys. Add `--require-keys` (or `SURF_STDIO_REQUIRE_KEYS=true`) to insist on explicit `SURF_*_KEY` values. Over HTTP (`/mcp/web`, `/mcp/browse`, `/mcp/ui`, `/mcp/finance`), the specialist profiles always need their own key.
 
 ### Try it from the shell
 

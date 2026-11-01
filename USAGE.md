@@ -6,16 +6,17 @@ Keyless web MCP bridge:
 .venv/bin/python surfctl.py mcp
 ```
 
-Specialist stdio bridges use `--profile browse`, `--profile ui`, or
-`--profile finance` and require the matching `SURF_*_KEY`. Remote MCP is
+Pick tools with `--profile`: one of `web`, `browse`, `ui`, `finance`, a comma
+list such as `web,browse`, or `all`. Over stdio no keys are needed (pass
+`--require-keys` to demand explicit `SURF_*_KEY` values). Remote MCP is
 available at `/mcp/web`, `/mcp/browse`, `/mcp/ui`, and `/mcp/finance`.
 
 Script JSONL bridge:
 
 ```bash
 .venv/bin/python surfctl.py stdio
-# Browser requests require the browse profile and key:
-SURF_BROWSE_KEY=… .venv/bin/python surfctl.py stdio --profile browse
+# Browser requests need a profile that includes them:
+.venv/bin/python surfctl.py stdio --profile web,browse
 ```
 
 Manual HTTP development server:
@@ -38,11 +39,11 @@ Use `--json` for raw response output and `--timeout SECONDS` for longer-lived
 requests. `extract` returns a non-zero exit status if any URL in the batch
 fails.
 
-Public web retrieval is keyless on loopback. Browser, UI, finance, and operations routes accept only their dedicated bearer keys; unset specialist keys disable those profiles.
+Over HTTP, public web retrieval is keyless on loopback. Browser, UI, finance, and operations routes accept only their dedicated bearer keys; unset specialist keys disable those profiles.
 
 ## Agent Flow
 
-SURF MCP tools are split across `web` (4), `browse` (16), `ui` (22), and `finance` (6) profiles. No client receives the combined 32-tool inventory.
+SURF MCP tools are split across `web` (4), `browse` (16), `ui` (22), and `finance` (6) profiles. A client receives only the union of the profiles it selects; `all` exposes the full 32-tool inventory.
 
 ### Browser
 

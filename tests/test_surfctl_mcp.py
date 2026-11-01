@@ -1,3 +1,6 @@
+import asyncio
+import os
+
 import pytest
 
 import surfctl
@@ -134,3 +137,60 @@ async def test_mcp_interactions_default_to_structured_outcomes(monkeypatch, tool
     data = bridge.calls[-1][0][2]
     assert data["contract_version"] == "interaction.v1"
     assert data["selector"] == arguments["selector"]
+
+
+# ---------------------------------------------------------------------------
+# Profile selection and keyless stdio
+# ---------------------------------------------------------------------------
+
+
+def _clear_env(monkeypatch, *names):
+    """Unset names so monkeypatch restores (removes) them after the test."""
+    for name in names:
+        monkeypatch.setenv(name, "placeholder")
+        monkeypatch.delenv(name)
+
+
+def test_parse_profiles_lists_all_and_ui_superset():
+    assert surfctl.parse_profiles("web") == ("web",)
+    assert surfctl.parse_profiles("browse, web") == ("web", "browse")
+    assert surfctl.parse_profiles("all") == ("web", "ui", "finance")
+    assert surfctl.parse_profiles("ui,browse") == ("ui",)
+    with pytest.raises(ValueError):
+        surfctl.parse_profiles("web,nope")
+    with pytest.raises(ValueError):
+        surfctl.parse_profiles(" , ")
+
+
+def test_combined_profile_server_exposes_union_of_tools():
+    tools = {t.name for t in asyncio.run(surfctl.build_mcp_server("web,finance").list_tools())}
+    assert tools == set(surfctl.WEB_TOOLS) | set(surfctl.FINANCE_TOOLS)
+    all_tools = asyncio.run(surfctl.build_mcp_server("all").list_tools())
+    assert len(all_tools) == len(surfctl.TOOL_DESCRIPTIONS)
+
+
+def test_ensure_stdio_keys_generates_distinct_keys_only_when_missing(monkeypatch):
+    _clear_env(monkeypatch, "SURF_BROWSE_KEY", "SURF_FINANCE_KEY")
+    monkeypatch.setenv("SURF_UI_KEY", "u" * 40)
+    generated = surfctl.ensure_stdio_keys(("web", "ui", "finance"), require_keys=False)
+    assert generated == ["SURF_FINANCE_KEY"]
+    assert len(os.environ["SURF_FINANCE_KEY"]) >= 32
+    assert os.environ["SURF_UI_KEY"] == "u" * 40
+    browse_generated = surfctl.ensure_stdio_keys(("browse",), require_keys=False)
+    assert browse_generated == ["SURF_BROWSE_KEY"]
+    assert os.environ["SURF_BROWSE_KEY"] != os.environ["SURF_FINANCE_KEY"]
+
+
+def test_ensure_stdio_keys_strict_mode_rejects_missing(monkeypatch):
+    _clear_env(monkeypatch, "SURF_BROWSE_KEY")
+    with pytest.raises(SystemExit, match="SURF_BROWSE_KEY"):
+        surfctl.ensure_stdio_keys(("web", "browse"), require_keys=True)
+    assert "SURF_BROWSE_KEY" not in os.environ
+
+
+def test_bridge_picks_credential_allowed_for_route():
+    bridge = surfctl.SurfAppBridge(1, profile="web,browse,finance")
+    assert bridge.auth_profile("POST", "/search/query") == "web"
+    assert bridge.auth_profile("POST", "/browser/navigate") == "browse"
+    assert bridge.auth_profile("POST", "/finance/macro") == "finance"
+    assert bridge.auth_profile("POST", "/fetch/request") == "browse"
