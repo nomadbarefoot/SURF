@@ -91,3 +91,12 @@ temp/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local / personal working files (kept on disk, never published)
+.blackboard.md
+research/
+docker-compose.*.yml
+!docker-compose.yml
+.claude/
+.cursor/
+data/

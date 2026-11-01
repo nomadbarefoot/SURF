@@ -21,7 +21,7 @@ flowchart LR
     Exa["Exa API"]
     SX["SearXNG"]
     Web["Target websites"]
-    LiteLLM["LiteLLM<br/>embedding endpoint"]
+    LiteLLM["Embeddings endpoint<br/>(Ollama / LiteLLM / OpenAI-compatible)"]
   end
 
   subgraph Persist["Local persistence"]
@@ -207,15 +207,15 @@ flowchart LR
   Compose --> SXC["searxng container<br/>internal only"]
   Compose --> VK["Valkey limiter<br/>ephemeral"]
   SurfC -->|SURF_SEARXNG_BASE_URL<br/>http://searxng:8080| SXC
-  SurfC -->|shared external network<br/>http://litellm:4000/v1| LiteLLM["LiteLLM proxy"]
+  SurfC -->|optional profile<br/>http://embeddings:8080/v1| LiteLLM["embeddings (llama.cpp)"]
   Host -->|127.0.0.1:17777<br/>profile-scoped MCP/HTTP| SurfC
   SXC --> VK
   Vol1[("surf-data")] --- SurfC
 ```
 
-Compose explicitly enables keyless `web` and publishes Docker on host loopback only. Optional `browse`, `ui`, `finance`, and `ops` keys enable only their matching profiles. The optional `docker-compose.aegis.yml` override persistently attaches SURF as `surf` to the external, isolated `aegis-services` network; it must be included whenever that container is recreated for AEGIS use. SearXNG is not host-published and uses Valkey-backed limiting. Containers run with a read-only root filesystem, reduced capabilities, no-new-privileges, health checks, and immutable image digests.
+Compose explicitly enables keyless `web` and publishes Docker on host loopback only. Optional `browse`, `ui`, `finance`, and `ops` keys enable only their matching profiles.
 
-The MCP transport keeps DNS-rebinding protection enabled. Loopback hosts are always accepted; Compose explicitly adds only `surf:17777` through `SURF_MCP_ALLOWED_HOSTS` for AEGIS and HERMES traffic on the private network.
+The MCP transport keeps DNS-rebinding protection enabled. Loopback hosts are always accepted; Compose explicitly adds only `surf:17777` through `SURF_MCP_ALLOWED_HOSTS` for other containers on the private Compose network.
 
 ## Entrypoints
 
@@ -263,7 +263,7 @@ Authorization is profile-scoped. `web` exposes four retrieval tools and is keyle
 
 The REST route matrix enforces the same capabilities. `web_fetch` permits only a bounded public GET for a `web` principal. Missing specialist keys disable those profiles; invalid credentials never downgrade to keyless web. The legacy universal API token, admin token, auth mode, and runtime auth routes are unsupported.
 
-SURF owns tool names, schemas, descriptions, profile inventories, and the four profile skills. Consumers such as AEGIS own only transport wrappers and mounting, and discover the live MCP contract rather than duplicating it.
+SURF owns tool names, schemas, descriptions, profile inventories, and the four profile skills. Consumers own only transport wrappers and mounting, and discover the live MCP contract rather than duplicating it.
 
 ## Session Model
 
@@ -298,7 +298,7 @@ Search extraction reuses `BrowserService` observe modes and `ChallengeResolver` 
 
 ## Finance Pack
 
-`FinanceService` walks ordered rungs in `config/finance_sources.yaml` per endpoint. Each rung is a known URL + selector map. Search fallback is the last rung. Output is fixed markdown with explicit `MISSING` fields. Ladder health is probed at `GET /health/finance`. Design notes live in `research/FINANCE_PACK.md`.
+`FinanceService` walks ordered rungs in `config/finance_sources.yaml` per endpoint. Each rung is a known URL + selector map. Search fallback is the last rung. Output is fixed markdown with explicit `MISSING` fields. Ladder health is probed at `GET /health/finance`.
 
 ## Safety Boundary
 
