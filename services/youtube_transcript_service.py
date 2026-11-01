@@ -298,7 +298,7 @@ class YoutubeTranscriptService:
         except ImportError as exc:
             raise TranscriptServiceError(
                 "TRANSCRIPT_DEPENDENCY_UNAVAILABLE",
-                "yt-dlp is not installed",
+                "yt-dlp is not installed (pip install 'surf-web[youtube]')",
                 status_code=503,
             ) from exc
 

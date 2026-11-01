@@ -9,7 +9,11 @@ from config import get_settings
 from core.foundation import ValidationError
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from config.paths import surf_home
+
+
+def _data_root() -> Path:
+    return surf_home()
 
 
 def configured_export_roots() -> tuple[Path, ...]:
@@ -19,7 +23,7 @@ def configured_export_roots() -> tuple[Path, ...]:
     for value in values:
         path = Path(value).expanduser()
         if not path.is_absolute():
-            path = REPO_ROOT / path
+            path = _data_root() / path
         resolved = path.resolve(strict=False)
         if resolved not in roots:
             roots.append(resolved)
@@ -42,7 +46,7 @@ def resolve_export_directory(value: str, *, create: bool = True) -> Path:
         raise ValidationError("output_dir", "Output directory is required")
     path = Path(value).expanduser()
     if not path.is_absolute():
-        path = REPO_ROOT / path
+        path = _data_root() / path
     path = path.resolve(strict=False)
     if not is_allowed_export_path(path):
         raise ValidationError(
@@ -66,13 +70,13 @@ def resolve_export_file(value: str, *, default_root: str) -> Path:
     default_value = getattr(settings, default_root)
     root = Path(default_value).expanduser()
     if not root.is_absolute():
-        root = REPO_ROOT / root
+        root = _data_root() / root
 
     requested = Path(value).expanduser()
     if not requested.is_absolute() and requested.parent == Path("."):
         requested = root / requested.name
     elif not requested.is_absolute():
-        requested = REPO_ROOT / requested
+        requested = _data_root() / requested
     requested = requested.resolve(strict=False)
     if not is_allowed_export_path(requested):
         raise ValidationError("path", "Artifact path is outside configured export roots", value)

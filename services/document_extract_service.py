@@ -305,7 +305,7 @@ class DocumentExtractService:
                 "",
                 content_type,
                 "pdf",
-                f"PDF parser not installed: {exc}",
+                f"PDF parser not installed: {exc} (pip install 'surf-web[docs]')",
             )
         try:
             # PdfReader requires a binary stream; decoding to text corrupts the
@@ -331,7 +331,7 @@ class DocumentExtractService:
                 "",
                 content_type,
                 "docx",
-                f"DOCX parser not installed: {exc}",
+                f"DOCX parser not installed: {exc} (pip install 'surf-web[docs]')",
             )
         try:
             doc = Document(BytesIO(content))
@@ -350,7 +350,7 @@ class DocumentExtractService:
                 "",
                 content_type,
                 "xlsx",
-                f"XLSX parser not installed: {exc}",
+                f"XLSX parser not installed: {exc} (pip install 'surf-web[docs]')",
             )
         try:
             wb = load_workbook(BytesIO(content), data_only=True, read_only=True)

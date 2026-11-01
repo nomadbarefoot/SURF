@@ -1065,5 +1065,12 @@ def main() -> int:
     return 2
 
 
+def mcp_main() -> int:
+    """``surf-mcp [--profile ...]``: the MCP stdio server, no subcommand needed."""
+    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio", "-h", "--help"}:
+        sys.argv.insert(1, "mcp")
+    return main()
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import structlog
 
 from config.settings import settings
+from config.paths import resolve_data_path
 from utils.url_security import safe_url_for_log
 
 logger = structlog.get_logger()
@@ -174,7 +175,4 @@ class AdblockService:
         return path.exists() and (time.time() - path.stat().st_mtime) < settings.adblock_cache_ttl_seconds
 
     def _path(self, value: str) -> Path:
-        path = Path(value)
-        if not path.is_absolute():
-            path = Path(__file__).parent.parent / path
-        return path
+        return resolve_data_path(value)

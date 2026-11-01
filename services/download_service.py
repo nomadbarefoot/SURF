@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import structlog
 
 from config.settings import settings
+from config.paths import resolve_data_path, surf_home
 from core.foundation import BrowserOperationError, ValidationError
 from utils.path_policy import is_allowed_export_path, resolve_export_directory
 
@@ -214,7 +215,7 @@ class DownloadService:
         public = dict(record)
         path = Path(record["path"]).resolve()
         public["absolute_path"] = str(path)
-        public["path"] = str(path) if record.get("external") else os.path.relpath(path, Path(__file__).parent.parent)
+        public["path"] = str(path) if record.get("external") else os.path.relpath(path, surf_home())
         public["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record["created_at_epoch"]))
         return public
 
@@ -244,10 +245,7 @@ class DownloadService:
             return False
 
     def _path(self, value: str) -> Path:
-        path = Path(value)
-        if not path.is_absolute():
-            path = Path(__file__).parent.parent / path
-        return path
+        return resolve_data_path(value)
 
     def _requested_output_dir(self, value: Optional[str]) -> Path:
         return resolve_export_directory(value or "")

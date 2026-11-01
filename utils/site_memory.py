@@ -57,8 +57,9 @@ class SiteMemoryManager:
     
     def __init__(self, ttl: int = 86400, db_path: Optional[Path] = None):
         # Store database locally within surf module
-        surf_dir = Path(__file__).parent.parent
-        self.db_path = Path(db_path) if db_path is not None else surf_dir / "data" / "site_memory.db"
+        from config.paths import resolve_data_path
+
+        self.db_path = Path(db_path) if db_path is not None else resolve_data_path("data/site_memory.db")
         self.ttl = ttl
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()

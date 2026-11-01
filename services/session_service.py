@@ -1,6 +1,7 @@
 """Enhanced session management service for Surf Browser Service"""
 import asyncio
 import shutil
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 import structlog
 
 from config import get_settings
+from config.paths import resolve_data_path
 from core.foundation import (
     SessionNotFoundError,
     InvalidSessionError,
@@ -38,6 +40,43 @@ from services.observation_script import LISTENER_INIT_SCRIPT
 
 logger = structlog.get_logger()
 settings = get_settings()
+
+
+
+_browser_install_lock: Optional[asyncio.Lock] = None
+
+
+async def install_playwright_browser(browser_type: str = "chromium") -> None:
+    """Run `playwright install <browser>` once per process.
+
+    Output is captured, never printed: stdout is the MCP protocol channel in
+    stdio mode.
+    """
+    global _browser_install_lock
+    if _browser_install_lock is None:
+        _browser_install_lock = asyncio.Lock()
+    async with _browser_install_lock:
+        logger.warning("browser_auto_install_started", browser=browser_type)
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "playwright", "install", browser_type,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        try:
+            output, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=settings.browser_install_timeout
+            )
+        except asyncio.TimeoutError as exc:
+            proc.kill()
+            raise ConfigurationError(
+                "browser_type", f"{browser_type} install timed out; run `python -m playwright install {browser_type}`"
+            ) from exc
+        if proc.returncode != 0:
+            tail = output.decode(errors="replace").strip().splitlines()[-3:]
+            raise ConfigurationError(
+                "browser_type", f"{browser_type} install failed: {' | '.join(tail)}"
+            )
+        logger.info("browser_auto_install_finished", browser=browser_type)
 
 
 class SessionService:
@@ -601,28 +640,22 @@ class SessionService:
                 user_data_dir = profile_dir / "_ephemeral" / session_id
                 self.ephemeral_profile_dirs[session_id] = user_data_dir
             user_data_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                return await browser_api.launch_persistent_context(
+            return await self._launch_with_install(
+                browser_type,
+                lambda: browser_api.launch_persistent_context(
                     user_data_dir=str(user_data_dir),
                     **context_options
-                )
-            except Exception as exc:
-                msg = str(exc)
-                if "executable" in msg.lower() or "doesn't exist" in msg.lower() or "is not installed" in msg.lower():
-                    raise ConfigurationError("browser_type", f"{browser_type} is not installed: {msg}")
-                raise
+                ),
+            )
 
         if self.browser is None:
-            try:
-                self.browser = await browser_api.launch(
+            self.browser = await self._launch_with_install(
+                browser_type,
+                lambda: browser_api.launch(
                     headless=not config.headed,
                     args=launch_args
-                )
-            except Exception as exc:
-                msg = str(exc)
-                if "executable" in msg.lower() or "doesn't exist" in msg.lower() or "is not installed" in msg.lower():
-                    raise ConfigurationError("browser_type", f"{browser_type} is not installed: {msg}")
-                raise
+                ),
+            )
         new_context_options = {
             "viewport": config.viewport,
             "java_script_enabled": config.java_script_enabled,
@@ -702,11 +735,35 @@ class SessionService:
         })();
         """
 
+    @staticmethod
+    def _is_missing_browser_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "executable" in msg or "doesn't exist" in msg or "is not installed" in msg
+
+    async def _launch_with_install(self, browser_type: str, launch):
+        """Launch; if the browser binary is missing, install it once and retry."""
+        try:
+            return await launch()
+        except Exception as exc:
+            if not self._is_missing_browser_error(exc):
+                raise
+            hint = f"run `python -m playwright install {browser_type}`"
+            if not settings.browser_auto_install:
+                raise ConfigurationError(
+                    "browser_type", f"{browser_type} is not installed; {hint}"
+                ) from exc
+            await install_playwright_browser(browser_type)
+        try:
+            return await launch()
+        except Exception as exc:
+            if self._is_missing_browser_error(exc):
+                raise ConfigurationError(
+                    "browser_type", f"{browser_type} is still unavailable after install: {exc}"
+                ) from exc
+            raise
+
     def _profile_root(self) -> Path:
-        profile_dir = Path(settings.profiles_dir)
-        if not profile_dir.is_absolute():
-            profile_dir = Path(__file__).parent.parent / profile_dir
-        return profile_dir
+        return resolve_data_path(settings.profiles_dir)
 
     def _cleanup_ephemeral_profile(self, session_id: str) -> None:
         profile_dir = self.ephemeral_profile_dirs.pop(session_id, None)

@@ -28,8 +28,7 @@ def choose_port(host: str, preferred: int) -> int:
     raise RuntimeError(f"No SURF startup port available from {candidates}")
 
 
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+def main() -> None:
     settings = get_settings()
     settings.validate_runtime_security()
     port = choose_port(settings.host, settings.port)
@@ -45,3 +44,8 @@ if __name__ == "__main__":
         reload=settings.debug,
         log_level=settings.log_level.lower()
     )
+
+
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    main()

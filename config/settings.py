@@ -7,13 +7,16 @@ from pydantic import Field, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
+from .paths import surf_home
+
 
 class Settings(BaseSettings):
     """Centralized configuration with environment variable support"""
 
     model_config = SettingsConfigDict(
         env_prefix="SURF_",
-        env_file=".env",
+        # ~/.surf/.env (installed) then ./.env; later files take priority.
+        env_file=(str(surf_home() / ".env"), ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -128,6 +131,11 @@ class Settings(BaseSettings):
     # 0 omits the `dimensions` request field for servers that reject it.
     embedding_dimensions: int = Field(default=768)
     embedding_timeout: float = Field(default=15.0)
+
+    # Download Chromium automatically the first time a browser is needed
+    # (`python -m playwright install chromium`). Disable for locked-down hosts.
+    browser_auto_install: bool = Field(default=True)
+    browser_install_timeout: int = Field(default=600)
 
     # YouTube Transcript Configuration
     youtube_transcript_timeout_seconds: int = Field(default=60, ge=5, le=300)
