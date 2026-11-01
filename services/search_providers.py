@@ -1,8 +1,14 @@
-"""Search provider abstraction: Exa primary, SearXNG fallback."""
+"""Search provider abstraction: Exa primary, SearXNG fallback.
+
+Exa runs in one of two modes: the REST API when ``SURF_EXA_API_KEY`` is set,
+or Exa's free hosted MCP endpoint when it is not (``SURF_EXA_KEYLESS_ENABLED``).
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -159,14 +165,14 @@ class ExaSearchProvider(SearchProvider):
         time_range: Optional[str] = None,
         mode: Optional[str] = None,  # ignored; Exa always uses EXA_SEARCH_MODE
     ) -> Dict[str, Any]:
-        if not self._api_key:
+        if not self._api_key and not settings.exa_keyless_enabled:
             return {
                 "success": False,
                 "provider": self.name,
                 "results": [],
                 "ms": 0,
                 "cost": None,
-                "error": "SURF_EXA_API_KEY is not set",
+                "error": "SURF_EXA_API_KEY is not set and keyless Exa is disabled",
                 "metadata": {},
             }
 
@@ -192,6 +198,8 @@ class ExaSearchProvider(SearchProvider):
 
         # Respect the caller's output ceiling while retaining a provider-side cap.
         num_results = max(1, min(max_results, self._default_num_results))
+        if not self._api_key:
+            return await self._search_keyless(query, num_results)
 
         payload: Dict[str, Any] = {
             "query": query,
@@ -273,6 +281,161 @@ class ExaSearchProvider(SearchProvider):
                 "requested_num_results": num_results,
             },
         }
+
+
+    @property
+    def mode(self) -> str:
+        if self._api_key:
+            return "api"
+        return "keyless_mcp" if settings.exa_keyless_enabled else "disabled"
+
+    async def _search_keyless(self, query: str, num_results: int) -> Dict[str, Any]:
+        """Search through Exa's hosted MCP server (no API key, rate-limited)."""
+        t0 = time.monotonic()
+        metadata: Dict[str, Any] = {"mode": "keyless_mcp", "requested_num_results": num_results}
+
+        def failure(error: str) -> Dict[str, Any]:
+            logger.warning("exa_keyless_search_failed", error=error)
+            return {
+                "success": False,
+                "provider": self.name,
+                "results": [],
+                "ms": int((time.monotonic() - t0) * 1000),
+                "cost": None,
+                "error": error,
+                "metadata": metadata,
+            }
+
+        try:
+            text = await _exa_mcp_call_with_retry(
+                settings.exa_mcp_url,
+                "web_search_exa",
+                {"query": query, "numResults": num_results},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            hint = " (free keyless tier is rate-limited; set SURF_EXA_API_KEY)" if status_code == 429 else ""
+            return failure(f"Exa MCP returned {status_code}{hint}")
+        except Exception as exc:
+            return failure(f"Exa MCP request failed: {exc}")
+
+        results = parse_exa_mcp_results(text)[:num_results]
+        ms = int((time.monotonic() - t0) * 1000)
+        if not results:
+            return failure("Exa MCP returned no parseable results")
+        logger.info("exa_keyless_search_ok", query=query, results=len(results), ms=ms)
+        return {
+            "success": True,
+            "provider": self.name,
+            "results": results,
+            "ms": ms,
+            "cost": None,
+            "error": None,
+            "metadata": metadata,
+        }
+
+
+# The free endpoint rate-limits bursts, so keyless calls are queued and 429s
+# are retried with backoff. Created lazily to bind to the running event loop.
+_EXA_KEYLESS_CONCURRENCY = 2
+_EXA_KEYLESS_RETRIES = 3
+_exa_keyless_gate: Optional[asyncio.Semaphore] = None
+
+
+async def _exa_mcp_call_with_retry(
+    url: str, tool: str, arguments: Dict[str, Any], *, timeout: float
+) -> str:
+    global _exa_keyless_gate
+    if _exa_keyless_gate is None:
+        _exa_keyless_gate = asyncio.Semaphore(_EXA_KEYLESS_CONCURRENCY)
+    async with _exa_keyless_gate:
+        for attempt in range(_EXA_KEYLESS_RETRIES + 1):
+            try:
+                return await _exa_mcp_call(url, tool, arguments, timeout=timeout)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 429 or attempt == _EXA_KEYLESS_RETRIES:
+                    raise
+                retry_after = exc.response.headers.get("retry-after", "")
+                delay = float(retry_after) if retry_after.isdigit() else 1.0 * 2**attempt
+                logger.info("exa_keyless_rate_limited", attempt=attempt + 1, delay=delay)
+                await asyncio.sleep(min(delay, 8.0))
+    raise RuntimeError("unreachable")
+
+
+async def _exa_mcp_call(
+    url: str, tool: str, arguments: Dict[str, Any], *, timeout: float
+) -> str:
+    """Call one tool on a stateless Streamable HTTP MCP server; return its text."""
+    limit = get_settings().max_json_parse_size
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments},
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as response:
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                if len(body) + len(chunk) > limit:
+                    raise ResourceLimitError("provider_response_bytes", limit, len(body) + len(chunk))
+                body.extend(chunk)
+            response.raise_for_status()
+
+    raw = bytes(body).decode("utf-8", errors="replace")
+    message: Optional[Dict[str, Any]] = None
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        for line in raw.splitlines():
+            if line.startswith("data:"):
+                candidate = json.loads(line[5:].strip())
+                if isinstance(candidate, dict) and ("result" in candidate or "error" in candidate):
+                    message = candidate
+    else:
+        message = json.loads(raw)
+    if not isinstance(message, dict):
+        raise ValueError("no JSON-RPC response in Exa MCP stream")
+    if message.get("error"):
+        err = message["error"]
+        raise ValueError(err.get("message") if isinstance(err, dict) else str(err))
+    result = message.get("result") or {}
+    text = "\n".join(
+        part.get("text", "")
+        for part in result.get("content", [])
+        if isinstance(part, dict) and part.get("type") == "text"
+    )
+    if result.get("isError"):
+        raise ValueError(text[:200] or "Exa MCP tool error")
+    return text
+
+
+_EXA_MCP_FIELD = re.compile(r"^(Title|URL|Published|Author):[ \t]*(.*)$", re.M)
+
+
+def parse_exa_mcp_results(text: str) -> List[Dict[str, Any]]:
+    """Parse Exa MCP's ``Title:/URL:/Highlights:`` blocks into SURF results."""
+    results: List[Dict[str, Any]] = []
+    for block in re.split(r"\n-{3,}\n(?=\s*Title:)", text):
+        head, _, highlights = block.partition("Highlights:")
+        fields = {key: value.strip() for key, value in _EXA_MCP_FIELD.findall(head)}
+        url = fields.get("URL", "")
+        if not url.startswith(("http://", "https://")):
+            continue
+        published = fields.get("Published")
+        results.append(
+            {
+                "title": _clean_text(fields.get("Title", "")),
+                "snippet": _clean_text(highlights.strip()),
+                "url": url,
+                "source": "exa",
+                "published": None if published in (None, "", "N/A") else published,
+            }
+        )
+    return results
 
 
 class SearXNGSearchProvider(SearchProvider):

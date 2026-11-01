@@ -16,6 +16,8 @@ services:
       - "SURF_UI_KEY=${SURF_UI_KEY:-}"
       - "SURF_FINANCE_KEY=${SURF_FINANCE_KEY:-}"
       - "SURF_OPS_KEY=${SURF_OPS_KEY:-}"
+      # Search: Exa (keyless by default, or SURF_EXA_API_KEY). SearXNG is an
+      # optional self-hosted fallback: `--profile searxng`.
       - SURF_SEARXNG_BASE_URL=http://searxng:8080
       - SURF_SEARXNG_AUTOWAKE_ENABLED=false
       # Semantic ranking. Empty = BM25 only. With `--profile embeddings`, set
@@ -29,6 +31,7 @@ services:
     depends_on:
       searxng:
         condition: service_healthy
+        required: false
       embeddings:
         condition: service_healthy
         required: false
@@ -51,12 +54,13 @@ services:
       - surf-net
 
   searxng:
+    profiles: ["searxng"]
     image: docker.io/searxng/searxng:latest@sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f
     container_name: surf-searxng
     env_file:
       - .env.docker
     environment:
-      - "SEARXNG_SECRET=${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env.docker}"
+      - "SEARXNG_SECRET=${SEARXNG_SECRET:-}"
       - SEARXNG_LIMITER=true
     depends_on:
       valkey:
@@ -128,6 +132,7 @@ services:
       - surf-net
 
   valkey:
+    profiles: ["searxng"]
     image: docker.io/valkey/valkey:8.1-alpine@sha256:94365b275456ae14621001c03556c732b1d93a0cdeacc317d1bdd52eba680885
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
     read_only: true

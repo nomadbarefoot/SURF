@@ -2,14 +2,14 @@
 
 Step-by-step setup, written so a person **or an AI coding agent** can follow it start to finish. Every step ends with a check. Don't skip the checks: SURF degrades quietly. For example, search still "works" without embeddings, it just ranks results worse.
 
-> **Agents:** do all of the steps, including step 3. A finished install means `./surf preflight` reports `[ok]` on every line. If a step fails, fix it or tell the user exactly which line failed and why. Don't report success while running in BM25-only mode.
+> **Agents:** do all of the steps, including step 3. A finished install means `./surf preflight` exits 0: every required line is `[ok]` (`[skip]` lines are optional). If a step fails, fix it or tell the user exactly which line failed and why. Don't report success while running in BM25-only mode.
 
 ## What a complete install has
 
 | Part | Needed for | Without it |
 |---|---|---|
 | SURF + Playwright Chromium | everything | nothing works |
-| Search backend: SearXNG (bundled in Docker) or `SURF_EXA_API_KEY` | `web_search` | search fails |
+| Search: keyless Exa (default), `SURF_EXA_API_KEY`, or SearXNG | `web_search` | nothing extra to install; keyless Exa is rate-limited |
 | **Embeddings endpoint** | good search ranking, `refine_query` | keyword-only (BM25) ranking, no section filtering |
 
 ---
@@ -21,27 +21,28 @@ Step-by-step setup, written so a person **or an AI coding agent** can follow it 
 ```bash
 git clone https://github.com/nomadbarefoot/SURF.git && cd SURF
 cp .env.docker.example .env.docker
-sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env.docker && rm .env.docker.bak
 ```
 
-The template already points embeddings at the bundled service:
+The template enables the bundled embeddings service (`COMPOSE_PROFILES=embeddings`) and points SURF at it:
 
 ```
 SURF_EMBEDDING_BASE_URL=http://embeddings:8080/v1
 SURF_EMBEDDING_MODEL=nomic-embed-text
 ```
 
-### 2. Start (with the embeddings profile)
+### 2. Start
 
 ```bash
-docker compose --env-file .env.docker --profile embeddings up --build -d
+docker compose --env-file .env.docker up --build -d
 ```
 
 The `embeddings` container is a CPU-only llama.cpp server (~1.2 GB image). On first start it downloads `nomic-embed-text-v1.5` (~140 MB) from Hugging Face into a Docker volume, and later starts reuse it. SURF waits for it to be healthy, so the first boot can take a few minutes. To serve a different GGUF model, set `SURF_EMBEDDING_HF_MODEL`.
 
-**Check:** `docker compose --env-file .env.docker --profile embeddings ps` shows `surf`, `surf-searxng` and `surf-embeddings` as `healthy`.
+**Check:** `docker compose --env-file .env.docker ps` shows `surf` and `surf-embeddings` as `healthy`.
 
-> Always include `--profile embeddings` when you re-run `up`. Without it, Compose starts SURF with no embeddings container, and `/health/embeddings` reports `down`.
+> Always pass `--env-file .env.docker`. It carries `COMPOSE_PROFILES`; without it, Compose starts SURF with no embeddings container, and `/health/embeddings` reports `down`.
+>
+> Optional self-hosted search fallback: set `COMPOSE_PROFILES=embeddings,searxng` and `SEARXNG_SECRET=$(openssl rand -hex 32)`.
 
 ### 3. Verify
 
@@ -49,7 +50,7 @@ The `embeddings` container is a CPU-only llama.cpp server (~1.2 GB image). On fi
 SURF_URL=127.0.0.1:17777 ./surf preflight
 ```
 
-Expected output: `[ok]` for `service`, `SearXNG`, `embeddings` and `outbound fetch`. (`browser runtime` needs a `browse`, `ui` or `ops` key, so it may show `401` on a keyless setup. That's fine.)
+Expected output: `[ok]` for `service`, `search`, `embeddings` and `outbound fetch`. `[skip]` on `browser runtime` (needs a key over HTTP) and `SearXNG (optional)` is fine.
 
 ### 4. Connect an agent
 
@@ -72,9 +73,9 @@ python3 -m venv .venv
 
 ### 2. Search backend
 
-Pick one:
-- **Exa:** `export SURF_EXA_API_KEY=...`
-- **SearXNG:** run any SearXNG instance with JSON output enabled and set `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888`).
+Nothing to do: search uses Exa's free hosted endpoint with no key. Optional:
+- **Higher limits:** `export SURF_EXA_API_KEY=...`
+- **Self-hosted fallback:** run SearXNG with JSON output enabled and set `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888`). To have SURF start a SearXNG container itself, set `SURF_SEARXNG_AUTOWAKE_ENABLED=true`.
 
 ### 3. Embeddings
 
@@ -147,5 +148,6 @@ SURF adds Nomic-style `search_query:` / `search_document:` prefixes to its input
 |---|---|---|
 | `embeddings: 503 - Set SURF_EMBEDDING_BASE_URL…` | Not configured | Step 3 |
 | `embeddings: 503 - …request failed` | Wrong URL or model name, server down, or bad key | Run the `curl` check in step 3 against the same URL and model |
-| Docker: `embeddings` down after a restart | Started without `--profile embeddings` | Re-run `up` with the profile |
+| Docker: `embeddings` down after a restart | Started without `--env-file .env.docker`, or `COMPOSE_PROFILES` lacks `embeddings` | Re-run `up` with the env file |
+| `search` fails with `Exa MCP returned 429` | The free keyless tier is rate-limited | Wait and retry, set `SURF_EXA_API_KEY`, or add SearXNG as a fallback |
 | `search/stats` shows `embedder_active: false` | No search has run since startup, or the last embedding call failed | Use `GET /health/embeddings` instead, which runs a live probe |

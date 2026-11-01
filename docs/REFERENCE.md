@@ -94,8 +94,8 @@ SURF includes a Dockerfile and a `docker-compose.yml` that packages the HTTP ser
 
 ```bash
 cp .env.docker.example .env.docker
-# Set SEARXNG_SECRET plus any specialist keys you need
-docker compose --env-file .env.docker --profile embeddings up --build
+# Optional profiles are chosen by COMPOSE_PROFILES in .env.docker
+docker compose --env-file .env.docker up --build
 ```
 
 SURF is available only on host loopback at `http://127.0.0.1:17777`. SearXNG and its ephemeral Valkey limiter store are private to the compose network.
@@ -112,7 +112,7 @@ openssl rand -hex 32  # SEARXNG_SECRET
 
 Specialist HTTP and MCP clients send the matching key as `Authorization: Bearer …`. Keep `.env.docker` local — it is gitignored; use `.env.docker.example` as the template.
 
-Optional: set `SURF_EXA_API_KEY` in `.env.docker` for Exa-backed search. Without it, search falls back to the compose-only SearXNG service at `http://searxng:8080`.
+Search works without configuration through keyless Exa. Optionally set `SURF_EXA_API_KEY` in `.env.docker` for the Exa API, and/or add `searxng` to `COMPOSE_PROFILES` (with `SEARXNG_SECRET`) for a self-hosted fallback at `http://searxng:8080`.
 
 Semantic ranking and section refinement call any OpenAI-compatible `/v1/embeddings` endpoint set by `SURF_EMBEDDING_BASE_URL`. The optional `embeddings` Compose profile runs a CPU llama.cpp server with `nomic-embed-text-v1.5` at `http://embeddings:8080/v1`. Nomic retrieval prefixes (`search_query:` / `search_document:`) are applied once at the query/document boundary, so Nomic models give the best results. If the variable is unset or the endpoint fails, ranking falls back to BM25 and refinement leaves sections unchanged. `GET /health/embeddings` (keyless `web` or `ops`) embeds a probe string and reports `ready`, `down`, or `disabled`.
 
@@ -161,7 +161,7 @@ Example pipeline:
 {"tool": "web_extract", "urls": ["https://example.com/article"], "refine_query": "Nifty 50 outlook 2026", "content_mode": "reader"}
 ```
 
-SearXNG must be reachable at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose). `GET /health/searxng` accepts the keyless `web` profile or the operations key and is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, `POST /health/searxng/autowake` requires the operations key and may start the configured Docker runtime.
+Search uses Exa first: the Exa API when `SURF_EXA_API_KEY` is set, otherwise Exa's free hosted MCP endpoint (`SURF_EXA_MCP_URL`, rate-limited; SURF runs at most 2 keyless calls at once and retries 429s with backoff). Set `SURF_EXA_KEYLESS_ENABLED=false` to never query Exa without a key. SearXNG is the optional fallback at `SURF_SEARXNG_BASE_URL` (default `http://localhost:8888` outside compose; the `searxng` Compose profile inside it). Autowake (`SURF_SEARXNG_AUTOWAKE_ENABLED`) is off by default. `GET /health/searxng` accepts the keyless `web` profile or the operations key and is probe-only. When `SURF_SEARXNG_AUTOWAKE_ENABLED=true`, `POST /health/searxng/autowake` requires the operations key and may start the configured Docker runtime.
 
 Search providers can rate-limit or reject individual requests. `web_search` may recover through the configured provider fallback, but callers should still back off on repeated 429 responses. `web_extract` uses browser extraction and can report `Page unavailable` for a URL that `web_fetch` can retrieve as raw HTML; treat the tools as complementary rather than interchangeable.
 

@@ -263,20 +263,30 @@ def cmd_transcript(args: argparse.Namespace) -> None:
 def cmd_preflight(args: argparse.Namespace) -> None:
     """Run non-mutating service, runtime, SearXNG, and outbound probes."""
     base = _base_url()
+    # (name, method, path, payload, required). Optional checks are reported
+    # but never fail the preflight.
     checks = [
-        ("service", "GET", "/health/live", None),
-        ("browser runtime", "GET", "/health/runtime", None),
-        ("SearXNG", "GET", "/health/searxng", None),
-        ("embeddings", "GET", "/health/embeddings", None),
+        ("service", "GET", "/health/live", None, True),
+        ("browser runtime (browse/ui key)", "GET", "/health/runtime", None, False),
+        (
+            "search",
+            "POST",
+            "/search/query",
+            {"query": "python programming language", "max_results": 1, "min_relevance": 0},
+            True,
+        ),
+        ("embeddings", "GET", "/health/embeddings", None, True),
+        ("SearXNG (optional)", "GET", "/health/searxng", None, False),
         (
             "outbound fetch",
             "POST",
             "/fetch/request",
             {"method": "GET", "url": args.probe_url},
+            True,
         ),
     ]
     results = []
-    for name, method, path, payload in checks:
+    for name, method, path, payload, required in checks:
         try:
             response = _request(
                 method,
@@ -291,23 +301,28 @@ def cmd_preflight(args: argparse.Namespace) -> None:
                 {
                     "name": name,
                     "ok": passed,
+                    "required": required,
                     "status_code": response.status_code,
                     "body": body,
                 }
             )
         except SystemExit:
-            results.append({"name": name, "ok": False, "error": "request failed"})
+            results.append(
+                {"name": name, "ok": False, "required": required, "error": "request failed"}
+            )
+
+    required_ok = all(item["ok"] for item in results if item["required"])
 
     if args.json:
-        _print_json({"success": all(item["ok"] for item in results), "checks": results})
+        _print_json({"success": required_ok, "checks": results})
     else:
         for item in results:
-            state = "ok" if item["ok"] else "fail"
+            state = "ok" if item["ok"] else ("fail" if item["required"] else "skip")
             detail = item.get("status_code", item.get("error", "unknown"))
             hint = (item.get("body") or {}).get("hint")
             print(f"[{state}] {item['name']}: {detail}" + (f" - {hint}" if hint else ""))
 
-    if not all(item["ok"] for item in results):
+    if not required_ok:
         sys.exit(1)
 
 

@@ -82,12 +82,17 @@ class Settings(BaseSettings):
     exa_contents_text: bool = Field(default=False)
     exa_contents_summary: bool = Field(default=False)
     exa_fallback_enabled: bool = Field(default=True)
+    # Without an API key, use Exa's free hosted MCP endpoint (rate-limited,
+    # no SLA). Set false to require a key (or rely on SearXNG only).
+    exa_keyless_enabled: bool = Field(default=True)
+    exa_mcp_url: str = Field(default="https://mcp.exa.ai/mcp")
 
     # SearXNG Configuration
     searxng_base_url: str = Field(default="http://localhost:8888")
     searxng_engines: List[str] = Field(default=[])
     searxng_timeout: int = Field(default=10)
-    searxng_autowake_enabled: bool = Field(default=True)
+    # Opt-in: lets SURF `docker start`/`docker run` a SearXNG container on demand.
+    searxng_autowake_enabled: bool = Field(default=False)
     searxng_container_name: str = Field(default="searxng")
     searxng_docker_image: str = Field(default="docker.io/searxng/searxng:latest")
     searxng_config_dir: str = Field(default="~/searxng/config")

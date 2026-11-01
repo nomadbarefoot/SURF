@@ -21,7 +21,7 @@ agent ──MCP──▶ SURF ──▶ search (Exa / SearXNG) ─┐
 ### `web`: research (keyless, 4 tools)
 | Tool | What it does |
 |---|---|
-| `web_search` | Web search via Exa (if keyed) or SearXNG, re-ranked by keyword + semantic (embedding) relevance and filtered by score |
+| `web_search` | Web search via Exa (**no API key needed**; a key raises limits) with optional SearXNG fallback, re-ranked by keyword + semantic (embedding) relevance and filtered by score |
 | `web_extract` | Reads up to 10 URLs in parallel as clean markdown. `refine_query` keeps only the relevant sections |
 | `web_fetch` | Bounded public GET for APIs and raw files |
 | `youtube_transcript` | Timestamped captions for a YouTube video, also saved as markdown |
@@ -46,14 +46,14 @@ Analyst consensus, insider transactions, corporate actions, macro (yields, CDS, 
 
 ### Option A: Docker (full stack, recommended)
 
-Includes SearXNG (search with no API key) and a local embeddings server for ranking.
+One container for SURF, plus a local embeddings server for ranking. Search needs no API key.
 
 ```bash
 git clone https://github.com/nomadbarefoot/SURF.git && cd SURF
 cp .env.docker.example .env.docker
-# Set SEARXNG_SECRET (e.g. `openssl rand -hex 32`). Everything else is optional.
-docker compose --env-file .env.docker --profile embeddings up --build -d
-./surf preflight          # service, SearXNG, embeddings, outbound fetch → [ok]
+# Optional: SURF_EXA_API_KEY, or add `searxng` to COMPOSE_PROFILES for a self-hosted fallback.
+docker compose --env-file .env.docker up --build -d
+./surf preflight          # service, search, embeddings, outbound fetch → [ok]
 ```
 
 SURF is now at `http://127.0.0.1:17777`. Point an MCP client at `http://127.0.0.1:17777/mcp/web`. The first boot downloads a ~140 MB embedding model.
@@ -69,7 +69,7 @@ python3 -m venv .venv
 .venv/bin/python surfctl.py mcp          # stdio MCP server, `web` profile
 ```
 
-Extract, fetch and transcripts work right away. For `web_search`, either set `SURF_EXA_API_KEY` or run SearXNG at `http://localhost:8888` (or set `SURF_SEARXNG_BASE_URL`). For good ranking, also set up embeddings (next section).
+Search, extract, fetch and transcripts work right away with no keys. For good ranking, also set up embeddings (next section).
 
 ### Connect your agent
 
@@ -118,7 +118,7 @@ Without embeddings, SURF falls back to keywords alone. It still works, but it's 
 
 | Setup | How |
 |---|---|
-| **Docker** | `--profile embeddings` (above). Runs a CPU llama.cpp server with `nomic-embed-text-v1.5` at `http://embeddings:8080/v1` |
+| **Docker** | On by default (`COMPOSE_PROFILES=embeddings` in `.env.docker`). Runs a CPU llama.cpp server with `nomic-embed-text-v1.5` at `http://embeddings:8080/v1` |
 | **Local** | `ollama pull nomic-embed-text`, then `SURF_EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1` and `SURF_EMBEDDING_MODEL=nomic-embed-text` |
 | **Your own** | Any OpenAI-compatible `/v1/embeddings` endpoint (LiteLLM, OpenAI, vLLM). Set `SURF_EMBEDDING_BASE_URL`, `_MODEL` and `_API_KEY` |
 
@@ -128,7 +128,9 @@ Embeddings are **off until `SURF_EMBEDDING_BASE_URL` is set**. Check them with `
 
 | Setting | Effect |
 |---|---|
-| `SURF_EXA_API_KEY` | Uses Exa as the primary search provider, with SearXNG as fallback |
+| `SURF_EXA_API_KEY` | Uses the Exa API directly. Without a key, SURF uses Exa's free hosted endpoint, which is rate-limited (SURF queues requests and retries) |
+| `SURF_SEARXNG_BASE_URL` | Self-hosted SearXNG as a fallback search provider. In Docker, add `searxng` to `COMPOSE_PROFILES` and set `SEARXNG_SECRET` |
+| `SURF_EXA_KEYLESS_ENABLED=false` | Never send queries to Exa without a key (e.g. SearXNG-only for privacy) |
 | `SURF_OUTBOUND_ALLOWED_HOSTS` | Lets SURF reach specific internal hosts (private networks are blocked by default) |
 
 See [docs/REFERENCE.md](docs/REFERENCE.md) for every setting and endpoint.

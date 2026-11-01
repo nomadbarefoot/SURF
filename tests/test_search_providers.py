@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -102,8 +104,10 @@ async def test_exa_provider_uses_auto_mode(exa_provider):
 
 @pytest.mark.asyncio
 async def test_exa_provider_missing_key_returns_error():
-    """Without an API key the provider should fail fast and report the reason."""
-    with patch("services.search_providers.settings.exa_api_key", None):
+    """Without a key and with keyless mode off, fail fast and report the reason."""
+    with patch("services.search_providers.settings.exa_api_key", None), patch(
+        "services.search_providers.settings.exa_keyless_enabled", False
+    ):
         provider = ExaSearchProvider()
         result = await provider.search("anything")
 
@@ -613,3 +617,121 @@ def test_search_query_endpoint_returns_error_when_no_results(client):
     data = response.json()
     assert data["success"] is False
     assert "Rate limit" in data["error"]
+
+
+# ---------------------------------------------------------------------------
+# Keyless Exa (hosted MCP)
+# ---------------------------------------------------------------------------
+
+_EXA_MCP_TEXT = """Title: asyncio - Asynchronous I/O
+URL: https://docs.python.org/3/library/asyncio.html
+Published: N/A
+Author: N/A
+Highlights:
+asyncio is a library to write concurrent code using the async/await syntax.
+
+---
+
+Title: Async Programming in Python - Real Python
+URL: https://realpython.com/python-async-features/
+Published: 2026-08-31T14:00:00.000Z
+Author: Jane Doe
+Highlights:
+Learn coroutines.
+---
+Not a divider inside text.
+"""
+
+
+def test_parse_exa_mcp_results_extracts_blocks():
+    from services.search_providers import parse_exa_mcp_results
+
+    results = parse_exa_mcp_results(_EXA_MCP_TEXT)
+    assert [r["url"] for r in results] == [
+        "https://docs.python.org/3/library/asyncio.html",
+        "https://realpython.com/python-async-features/",
+    ]
+    assert results[0]["published"] is None
+    assert results[1]["published"] == "2026-08-31T14:00:00.000Z"
+    assert "async/await" in results[0]["snippet"]
+    assert "Not a divider inside text." in results[1]["snippet"]
+    assert all(r["source"] == "exa" for r in results)
+
+
+@pytest.mark.asyncio
+async def test_exa_without_key_uses_keyless_mcp(monkeypatch):
+    from services import search_providers as sp
+
+    monkeypatch.setattr(sp.settings, "exa_api_key", None)
+    monkeypatch.setattr(sp.settings, "exa_keyless_enabled", True)
+    calls = {}
+
+    async def fake_call(url, tool, arguments, *, timeout):
+        calls.update(url=url, tool=tool, arguments=arguments)
+        return _EXA_MCP_TEXT
+
+    monkeypatch.setattr(sp, "_exa_mcp_call", fake_call)
+    provider = sp.ExaSearchProvider()
+    assert provider.mode == "keyless_mcp"
+    result = await provider.search("python asyncio", max_results=1)
+    assert result["success"] is True
+    assert len(result["results"]) == 1
+    assert result["metadata"]["mode"] == "keyless_mcp"
+    assert calls["tool"] == "web_search_exa"
+    assert calls["arguments"] == {"query": "python asyncio", "numResults": 1}
+
+
+@pytest.mark.asyncio
+async def test_exa_keyless_disabled_without_key_fails_fast(monkeypatch):
+    from services import search_providers as sp
+
+    monkeypatch.setattr(sp.settings, "exa_api_key", None)
+    monkeypatch.setattr(sp.settings, "exa_keyless_enabled", False)
+
+    async def boom(*args, **kwargs):  # pragma: no cover
+        raise AssertionError("no request expected")
+
+    monkeypatch.setattr(sp, "_exa_mcp_call", boom)
+    provider = sp.ExaSearchProvider()
+    assert provider.mode == "disabled"
+    result = await provider.search("q")
+    assert result["success"] is False
+    assert "keyless Exa is disabled" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_exa_keyless_error_reports_failure(monkeypatch):
+    from services import search_providers as sp
+
+    monkeypatch.setattr(sp.settings, "exa_api_key", None)
+    monkeypatch.setattr(sp.settings, "exa_keyless_enabled", True)
+
+    async def rate_limited(*args, **kwargs):
+        raise ValueError("Rate limit exceeded")
+
+    monkeypatch.setattr(sp, "_exa_mcp_call", rate_limited)
+    result = await sp.ExaSearchProvider().search("q")
+    assert result["success"] is False
+    assert "Rate limit exceeded" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_exa_keyless_retries_rate_limit_then_succeeds(monkeypatch):
+    from services import search_providers as sp
+
+    monkeypatch.setattr(sp, "_exa_keyless_gate", None)
+    attempts = {"n": 0}
+    request = httpx.Request("POST", "https://mcp.exa.ai/mcp")
+
+    async def flaky(*args, **kwargs):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise httpx.HTTPStatusError(
+                "429", request=request,
+                response=httpx.Response(429, headers={"retry-after": "0"}, request=request),
+            )
+        return "ok"
+
+    monkeypatch.setattr(sp, "_exa_mcp_call", flaky)
+    assert await sp._exa_mcp_call_with_retry("u", "t", {}, timeout=1) == "ok"
+    assert attempts["n"] == 3
