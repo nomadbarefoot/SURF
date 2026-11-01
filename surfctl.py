@@ -1043,7 +1043,22 @@ def main() -> int:
     mcp_parser.add_argument("--profile", default="web", help=profile_help)
     mcp_parser.add_argument("--require-keys", action="store_true", help=require_help)
 
+    from cli import agent_install
+
+    install_parser = subparsers.add_parser(
+        "install",
+        help="Add SURF to the MCP config of installed agents (Claude Code, Codex, "
+        "Cursor, VS Code, Gemini, Hermes, ...)",
+    )
+    agent_install.add_arguments(install_parser)
+    uninstall_parser = subparsers.add_parser(
+        "uninstall", help="Remove SURF from agents' MCP config"
+    )
+    agent_install.add_arguments(uninstall_parser)
+
     args = parser.parse_args()
+    if args.command in {"install", "uninstall"}:
+        return agent_install.run(args, remove=args.command == "uninstall")
     try:
         profiles = parse_profiles(args.profile)
     except ValueError as exc:
@@ -1067,7 +1082,7 @@ def main() -> int:
 
 def mcp_main() -> int:
     """``surf-mcp [--profile ...]``: the MCP stdio server, no subcommand needed."""
-    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio"}:
+    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio", "install", "uninstall"}:
         sys.argv.insert(1, "mcp")
     return main()
 

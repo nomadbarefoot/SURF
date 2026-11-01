@@ -79,30 +79,22 @@ kill $SERVER
 
 Expected output: `[ok]` for `service`, `search`, `embeddings` and `outbound fetch`. `[skip]` on `browser runtime` and `SearXNG (optional)` is fine. If embeddings says `disabled`, `~/.surf/.env` isn't being read. If it says `down`, the URL or model is wrong, or Ollama isn't running.
 
-### 5. Connect an agent
-
-Claude Code:
+### 5. Connect your agents
 
 ```bash
-claude mcp add surf -- uvx --from "surf-web[all] @ git+https://github.com/nomadbarefoot/SURF" surf-mcp --profile web
+uvx --from "surf-web[all] @ git+https://github.com/nomadbarefoot/SURF" surf-mcp install --extras all --profile web
 ```
 
-Any MCP client:
+This detects the installed agents (Claude Code, Codex CLI, Cursor, VS Code, Gemini CLI, Claude Desktop, Windsurf, OpenCode, Hermes Agent) and adds SURF to each one's user-level config. It runs the server once first so the agents' first launch is fast, and prints a YAML report:
 
-```json
-{
-  "mcpServers": {
-    "surf": {
-      "command": "uvx",
-      "args": ["--from", "surf-web[all] @ git+https://github.com/nomadbarefoot/SURF", "surf-mcp", "--profile", "web"]
-    }
-  }
-}
-```
+- `installed`: done. Restart that agent.
+- `exists`: a `surf` entry is already there. Rerun with `--force` to replace it.
+- `manual`: the config couldn't be edited safely. Paste the printed `snippet`.
+- `failed`: shows the error, plus a snippet to paste instead.
 
-Choose `--profile` per agent: `web`, `web,browse`, `web,ui`, `web,finance` or `all` (see the [README](../README.md#choose-the-tools-each-agent-gets)). No keys are needed over stdio.
+Useful options: `--client codex,hermes` targets specific agents, `--dry-run` previews the changes, and `--profile web,browse` (or `web,ui`, `web,finance`, `all`) chooses the tools. No keys are needed over stdio. For an agent that isn't listed, use the generic command from the [README](../README.md#manual-any-mcp-client).
 
-**Check:** ask the agent to search for something. In Claude Code, `/mcp` should list `surf` as connected.
+**Check:** restart the agent and ask it to search for something. Most agents also list connected MCP servers, e.g. `/mcp` in Claude Code or `codex mcp list`.
 
 ---
 
@@ -181,6 +173,7 @@ SURF adds Nomic-style `search_query:` / `search_document:` prefixes to its input
 |---|---|---|
 | `embeddings: 503 - Set SURF_EMBEDDING_BASE_URL…` | Not configured | Path A step 3 |
 | `embeddings: 503 - …request failed` | Wrong URL or model name, server down, or bad key | Run the `curl` check in step 3 against the same URL and model |
+| Agent says the SURF server timed out on first start | Its first launch downloaded dependencies | Run `uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp --help` once, then restart the agent (`surf-mcp install` does this automatically) |
 | First browser tool call is slow or times out | Chromium is downloading (~2 min) | Wait and retry, or pre-install: `uvx --from git+https://github.com/nomadbarefoot/SURF playwright install chromium` |
 | `yt-dlp is not installed` / `parser not installed` | Installed without extras | Use `surf-web[all] @ git+…` (or `[youtube]` / `[docs]`) |
 | Docker: `embeddings` down after a restart | Started without `--env-file .env.docker`, or `COMPOSE_PROFILES` lacks `embeddings` | Re-run `up` with the env file |

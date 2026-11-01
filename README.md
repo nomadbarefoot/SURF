@@ -1,12 +1,12 @@
 # SURF
 
-**The whole web toolkit for AI agents, in one local MCP server, with no API keys.** SURF gives an agent (Claude, Codex, a local model, or any MCP client) web search, clean page reading, YouTube transcripts, a real browser for automation and UI testing, and structured finance data, all running on your own machine.
+**The whole web toolkit for AI agents, in one local MCP server, with no API keys.** SURF gives any MCP-capable agent (Claude Code, Codex, Cursor, VS Code, Gemini CLI, Hermes, OpenCode, or one running a local model) web search, clean page reading, YouTube transcripts, a real browser for automation and UI testing, and structured finance data, all running on your own machine.
 
 ```bash
-claude mcp add surf -- uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp
+uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp install
 ```
 
-That's the whole install: search works immediately, and Chromium downloads itself the first time a browser tool runs.
+That's the whole install. It finds the agents on your machine and adds SURF to each one's global config. Search works immediately, and Chromium downloads itself the first time a browser tool runs.
 
 ```
 agent ──MCP──▶ SURF ──▶ search (Exa, keyless / SearXNG) ─┐
@@ -53,30 +53,66 @@ Analyst consensus, insider transactions, corporate actions, macro (yields, CDS, 
 
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`). Python 3.12+ is fetched automatically if you don't have it.
 
-### Claude Code
+### Automatic: configure every agent you have
 
 ```bash
-claude mcp add surf -- uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp
+uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp install
 ```
 
-### Any MCP client (JSON config)
+It detects which agents are installed and registers SURF in each one's **user-level (global)** config, so it's available in every project. It reports what it did per agent, then you restart those agents.
+
+| Option | Effect |
+|---|---|
+| `--client codex,cursor` | Only these agents (`all` = every supported agent, detected or not) |
+| `--profile web,browse` | Which tools the agents get (see [below](#choose-the-tools-each-agent-gets)) |
+| `--extras all` | Include YouTube and document parsing |
+| `--env KEY=VALUE` | Pass a setting to the server, e.g. `SURF_EMBEDDING_BASE_URL` |
+| `--dry-run` | Show what would change without writing anything |
+| `--force` | Replace an existing `surf` entry |
+
+It never overwrites an existing entry without `--force`. It backs up each file it edits (`*.surf-backup`), and if a config can't be edited safely (for example JSON with comments), it prints a snippet to paste instead. `surf-mcp uninstall` reverses it.
+
+Supported: **Claude Code, Codex CLI, Cursor, VS Code (Copilot agent mode), Gemini CLI, Claude Desktop, Windsurf, OpenCode, Hermes Agent.**
+
+### Manual: any MCP client
+
+Every MCP client needs the same three things:
+
+```
+command:  uvx
+args:     --from git+https://github.com/nomadbarefoot/SURF surf-mcp --profile web
+env:      (optional) SURF_EMBEDDING_BASE_URL=..., SURF_EMBEDDING_MODEL=...
+```
+
+Where each agent keeps them:
+
+| Agent | Command or global config file |
+|---|---|
+| Claude Code | `claude mcp add -s user surf -- uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp` |
+| Codex CLI (GPT) | `codex mcp add surf -- uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp`, or `[mcp_servers.surf]` in `~/.codex/config.toml` |
+| Gemini CLI | `gemini mcp add -s user surf uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp`, or `mcpServers` in `~/.gemini/settings.json` |
+| Cursor | `mcpServers` in `~/.cursor/mcp.json` |
+| VS Code | `servers` in the user `mcp.json` (Command Palette → *MCP: Open User Configuration*), with `"type": "stdio"` |
+| Claude Desktop | `mcpServers` in `claude_desktop_config.json` (Settings → Developer → Edit Config) |
+| Windsurf | `mcpServers` in `~/.codeium/windsurf/mcp_config.json` |
+| OpenCode | `mcp` in `~/.config/opencode/opencode.json`, as `{"type": "local", "command": ["uvx", "--from", "…", "surf-mcp"]}` |
+| Hermes Agent | `mcp_servers` in `~/.hermes/config.yaml` |
+| Anything else | Use the generic `command` + `args` above, or the HTTP endpoint from [Docker](#docker-http-service) for clients that only take a URL |
+
+The JSON form used by most clients:
 
 ```json
 {
   "mcpServers": {
     "surf": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/nomadbarefoot/SURF", "surf-mcp", "--profile", "web"],
-      "env": {
-        "SURF_EMBEDDING_BASE_URL": "http://127.0.0.1:11434/v1",
-        "SURF_EMBEDDING_MODEL": "nomic-embed-text"
-      }
+      "args": ["--from", "git+https://github.com/nomadbarefoot/SURF", "surf-mcp", "--profile", "web"]
     }
   }
 }
 ```
 
-The `env` block turns on semantic ranking (see [Embeddings](#embeddings-search-ranking)). Leave it out to start with keyword ranking only.
+The first launch downloads SURF's dependencies (~20 s on a fast connection), which can exceed an agent's connect timeout. If the agent reports a timeout the first time, run `uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp --help` once and restart it. `surf-mcp install` does this for you.
 
 ### Optional extras
 
@@ -91,7 +127,7 @@ Use `[youtube]` or `[docs]` to pick one. Runtime data (browser profiles, downloa
 
 ### Choose the tools each agent gets
 
-Add `--profile` after `surf-mcp`:
+Pass `--profile` to `surf-mcp install`, or add it after `surf-mcp` in a manual config:
 
 | `--profile` | Tools | Good for |
 |---|---|---|
