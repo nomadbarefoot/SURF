@@ -1067,7 +1067,7 @@ def main() -> int:
 
 def mcp_main() -> int:
     """``surf-mcp [--profile ...]``: the MCP stdio server, no subcommand needed."""
-    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio", "-h", "--help"}:
+    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio"}:
         sys.argv.insert(1, "mcp")
     return main()
 
