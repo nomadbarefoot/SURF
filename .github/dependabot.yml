@@ -1,19 +1,42 @@
+# Dependency updates. Each PR runs .github/workflows/tests.yml; patch and
+# minor bumps (and every yt-dlp release) merge automatically when the unit
+# tests and the Docker build pass. Major bumps wait for a human.
 version: 2
 updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    # Bump exact pins in requirements*.txt; leave pyproject ranges alone
+    # unless a release falls outside them.
+    versioning-strategy: increase-if-necessary
+    open-pull-requests-limit: 10
+    ignore:
+      # Must match the Docker base image tag; bump both together by hand.
+      - dependency-name: "playwright"
+    groups:
+      # yt-dlp tracks YouTube changes: always its own PR, merged fast.
+      yt-dlp:
+        patterns: ["yt-dlp"]
+      python-minor:
+        patterns: ["*"]
+        exclude-patterns: ["yt-dlp"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
+    ignore:
+      # Coupled to the pip playwright pin (see above).
+      - dependency-name: "mcr.microsoft.com/playwright/python"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 2
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]

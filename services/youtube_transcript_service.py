@@ -10,7 +10,7 @@ import json
 import re
 import shutil
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 from urllib.parse import parse_qs, urlsplit
 
@@ -38,6 +38,48 @@ _YOUTUBE_HOSTS = {
     "youtu.be",
     "www.youtu.be",
 }
+
+
+_CAPTION_ATTEMPTS = 2
+_MAX_RETRY_DELAY_SECONDS = 5.0
+_DEFAULT_RETRY_DELAY_SECONDS = 2.0
+_SESSION_COOKIE_KEY = "_surf_session_cookie"
+_BLOCKED_HINT = (
+    "YouTube blocks caption downloads from many VPN and datacenter IPs. "
+    "Disconnect the VPN or exclude youtube.com from it, then retry. On a home "
+    "connection, a persistent failure usually means yt-dlp is out of date: "
+    "run `surf-mcp update` (or rebuild the Docker image)."
+)
+
+
+def _is_youtube_host(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").lower()
+    return host == "youtube.com" or host.endswith(".youtube.com")
+
+
+def _session_cookie_header(ydl: Any) -> Optional[str]:
+    try:
+        return ydl.cookiejar.get_cookie_header("https://www.youtube.com/") or None
+    except Exception:  # cookie reuse is best effort
+        return None
+
+
+def _is_retryable_caption_response(response: Dict[str, Any]) -> bool:
+    status = int(response.get("status") or 0)
+    if status == 429:
+        return True
+    return 200 <= status < 300 and not (response.get("_content_bytes") or b"").strip()
+
+
+def _retry_delay(response: Dict[str, Any]) -> float:
+    headers = {
+        str(key).lower(): value for key, value in (response.get("headers") or {}).items()
+    }
+    try:
+        delay = float(headers.get("retry-after", _DEFAULT_RETRY_DELAY_SECONDS))
+    except (TypeError, ValueError):
+        delay = _DEFAULT_RETRY_DELAY_SECONDS
+    return max(0.0, min(delay, _MAX_RETRY_DELAY_SECONDS))
 
 
 class TranscriptServiceError(Exception):
@@ -198,13 +240,54 @@ class YoutubeTranscriptService:
             requested_languages=requested_languages,
             allow_auto_captions=allow_auto_captions,
         )
+        headers = dict(track.get("http_headers") or info.get("http_headers") or {})
+        cookie = info.get(_SESSION_COOKIE_KEY)
+        if cookie and _is_youtube_host(str(track["url"])):
+            # Reuse yt-dlp's YouTube session so the caption request matches the
+            # metadata request that produced its URL.
+            headers.setdefault("Cookie", str(cookie))
+
+        response: Dict[str, Any] = {}
+        for attempt in range(_CAPTION_ATTEMPTS):
+            response = await self._download_caption(str(track["url"]), headers)
+            if not _is_retryable_caption_response(response):
+                break
+            if attempt + 1 < _CAPTION_ATTEMPTS:
+                await asyncio.sleep(_retry_delay(response))
+
+        status = int(response.get("status") or 0)
+        if status == 429:
+            raise TranscriptServiceError(
+                "UPSTREAM_RATE_LIMITED",
+                "YouTube rate-limited the caption request",
+                status_code=429,
+                details={"hint": _BLOCKED_HINT},
+            )
+        if status < 200 or status >= 300:
+            raise TranscriptServiceError(
+                "TRANSCRIPT_EXTRACTION_FAILED",
+                f"Caption download returned HTTP {status}",
+                status_code=502,
+            )
+
+        raw = response.get("_content_bytes") or b""
+        if not raw.strip():
+            raise TranscriptServiceError(
+                "TRANSCRIPT_EXTRACTION_FAILED",
+                "YouTube returned an empty caption file (bot check)",
+                status_code=502,
+                details={"hint": _BLOCKED_HINT},
+            )
+        return self._build_document(info, track, raw, canonical_url)
+
+    async def _download_caption(
+        self, url: str, headers: Dict[str, str]
+    ) -> Dict[str, Any]:
         try:
-            response = await self.fetch_service.request(
+            return await self.fetch_service.request(
                 method="GET",
-                url=str(track["url"]),
-                headers=dict(
-                    track.get("http_headers") or info.get("http_headers") or {}
-                ),
+                url=url,
+                headers=headers,
                 timeout=int(settings.youtube_transcript_timeout_seconds * 1000),
                 backend=FetchBackend.HTTPX,
             )
@@ -227,21 +310,14 @@ class YoutubeTranscriptService:
                 "YouTube caption download failed",
                 status_code=502,
             ) from exc
-        status = int(response.get("status") or 0)
-        if status == 429:
-            raise TranscriptServiceError(
-                "UPSTREAM_RATE_LIMITED",
-                "YouTube rate-limited the caption request",
-                status_code=429,
-            )
-        if status < 200 or status >= 300:
-            raise TranscriptServiceError(
-                "TRANSCRIPT_EXTRACTION_FAILED",
-                f"Caption download returned HTTP {status}",
-                status_code=502,
-            )
 
-        raw = response.get("_content_bytes") or b""
+    @staticmethod
+    def _build_document(
+        info: Dict[str, Any],
+        track: Dict[str, Any],
+        raw: bytes,
+        canonical_url: str,
+    ) -> TranscriptDocument:
         if len(raw) > settings.youtube_transcript_max_caption_bytes:
             raise TranscriptServiceError(
                 "TRANSCRIPT_TOO_LARGE",
@@ -317,12 +393,15 @@ class YoutubeTranscriptService:
         with yt_dlp.YoutubeDL(options) as ydl:
             extracted = ydl.extract_info(url, download=False)
             info = ydl.sanitize_info(extracted)
+            cookie = _session_cookie_header(ydl)
         if not isinstance(info, dict) or info.get("_type") == "playlist":
             raise TranscriptServiceError(
                 "INVALID_YOUTUBE_URL",
                 "A single YouTube video URL is required",
                 status_code=400,
             )
+        if cookie:
+            info[_SESSION_COOKIE_KEY] = cookie
         return info
 
     @staticmethod
@@ -330,15 +409,24 @@ class YoutubeTranscriptService:
         message = str(exc)
         lowered = message.lower()
         safe_message = "YouTube video metadata could not be retrieved"
-        if "private video" in lowered or "sign in" in lowered or "age" in lowered:
+        bot_check = "not a bot" in lowered or "page needs to be reloaded" in lowered
+        age_gate = "age-restricted" in lowered or "confirm your age" in lowered
+        if not bot_check and (
+            "private video" in lowered or "sign in" in lowered or age_gate
+        ):
             return TranscriptServiceError(
                 "VIDEO_UNAVAILABLE", safe_message, status_code=403
             )
-        if "429" in lowered or "too many requests" in lowered:
+        if (
+            "429" in lowered
+            or "too many requests" in lowered
+            or bot_check
+        ):
             return TranscriptServiceError(
                 "UPSTREAM_RATE_LIMITED",
                 "YouTube rate-limited the metadata request",
                 status_code=429,
+                details={"hint": _BLOCKED_HINT},
             )
         if "unavailable" in lowered or "not available" in lowered:
             return TranscriptServiceError(
@@ -402,11 +490,36 @@ class YoutubeTranscriptService:
                 deno_path = deno.find_deno_bin()
             except (ImportError, OSError):
                 deno_path = None
-        return {
+        status: Dict[str, Any] = {
             "available": version is not None,
             "yt_dlp_version": version,
             "deno_available": deno_path is not None,
         }
+        age = yt_dlp_age_days(version)
+        if age is not None:
+            status["yt_dlp_age_days"] = age
+            status["yt_dlp_stale"] = age > YT_DLP_STALE_DAYS
+            if status["yt_dlp_stale"]:
+                status["hint"] = (
+                    "yt-dlp is old and YouTube changes often break it: "
+                    "run `surf-mcp update` (or rebuild the Docker image)"
+                )
+        return status
+
+
+YT_DLP_STALE_DAYS = 60
+
+
+def yt_dlp_age_days(version: Optional[str], today: Optional[date] = None) -> Optional[int]:
+    """yt-dlp versions are release dates (YYYY.MM.DD[.N])."""
+    match = re.match(r"^(\d{4})\.(\d{1,2})\.(\d{1,2})", version or "")
+    if not match:
+        return None
+    try:
+        released = date(*(int(part) for part in match.groups()))
+    except ValueError:
+        return None
+    return max(0, ((today or date.today()) - released).days)
 
 
 def canonicalize_youtube_url(url: str) -> tuple[str, str]:

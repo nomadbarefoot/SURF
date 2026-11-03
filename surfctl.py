@@ -1055,8 +1055,14 @@ def main() -> int:
         "uninstall", help="Remove SURF from agents' MCP config"
     )
     agent_install.add_arguments(uninstall_parser)
+    update_parser = subparsers.add_parser(
+        "update", help="Pull the newest compatible SURF dependencies (e.g. yt-dlp)"
+    )
+    agent_install.add_update_arguments(update_parser)
 
     args = parser.parse_args()
+    if args.command == "update":
+        return agent_install.run_update(args)
     if args.command in {"install", "uninstall"}:
         return agent_install.run(args, remove=args.command == "uninstall")
     try:
@@ -1082,7 +1088,7 @@ def main() -> int:
 
 def mcp_main() -> int:
     """``surf-mcp [--profile ...]``: the MCP stdio server, no subcommand needed."""
-    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio", "install", "uninstall"}:
+    if len(sys.argv) < 2 or sys.argv[1] not in {"mcp", "stdio", "install", "uninstall", "update"}:
         sys.argv.insert(1, "mcp")
     return main()
 

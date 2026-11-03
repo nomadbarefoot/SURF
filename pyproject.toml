@@ -12,23 +12,23 @@ license-files = ["LICENSE"]
 authors = [{ name = "Ayan Nag" }]
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.136.3",
-    "uvicorn[standard]==0.49.0",
-    "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
-    "playwright==1.61.0",
-    "httpx==0.28.1",
-    "curl_cffi==0.15.0",
-    "adblock==0.6.0",
-    "mcp==1.27.2",
-    "structlog==25.5.0",
-    "psutil==7.2.2",
+    "fastapi>=0.136.3,<1",
+    "uvicorn[standard]>=0.49.0,<1",
+    "pydantic>=2.13.4,<3",
+    "pydantic-settings>=2.14.1,<3",
+    "playwright>=1.61.0,<2",
+    "httpx>=0.28.1,<1",
+    "curl_cffi>=0.15.0,<1",
+    "adblock>=0.6.0,<1",
+    "mcp>=1.27.2,<2",
+    "structlog>=25.5.0",
+    "psutil>=7.2.2,<8",
     "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
 # youtube_transcript: yt-dlp plus its bundled JavaScript runtime (~100 MB).
-youtube = ["yt-dlp[default,deno]==2026.6.9"]
+youtube = ["yt-dlp[default,deno]>=2026.10.26"]
 # PDF / DOCX / XLSX text extraction from downloads (~26 MB).
 docs = ["pypdf>=4.0,<5.0", "python-docx>=1.1.0", "openpyxl>=3.1.0"]
 all = ["surf-web[youtube,docs]"]

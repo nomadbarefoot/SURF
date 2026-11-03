@@ -176,6 +176,8 @@ SURF adds Nomic-style `search_query:` / `search_document:` prefixes to its input
 | Agent says the SURF server timed out on first start | Its first launch downloaded dependencies | Run `uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp --help` once, then restart the agent (`surf-mcp install` does this automatically) |
 | First browser tool call is slow or times out | Chromium is downloading (~2 min) | Wait and retry, or pre-install: `uvx --from git+https://github.com/nomadbarefoot/SURF playwright install chromium` |
 | `yt-dlp is not installed` / `parser not installed` | Installed without extras | Use `surf-web[all] @ git+…` (or `[youtube]` / `[docs]`) |
+| `youtube_transcript` fails with `UPSTREAM_RATE_LIMITED` or "empty caption file", every time | YouTube blocks caption downloads from most VPN and datacenter IPs, even for a real browser | Disconnect the VPN or exclude `youtube.com` and `googlevideo.com` from it (split tunnelling). Servers in the cloud hit this too |
+| `youtube_transcript` fails on a home connection | yt-dlp is out of date (`GET /health/ready` shows `yt_dlp_stale: true`) | `uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp update`, then restart the agent. In Docker, pull or rebuild the image |
 | Docker: `embeddings` down after a restart | Started without `--env-file .env.docker`, or `COMPOSE_PROFILES` lacks `embeddings` | Re-run `up` with the env file |
 | `search` fails with `Exa MCP returned 429` | The free keyless tier is rate-limited | Wait and retry, set `SURF_EXA_API_KEY`, or add SearXNG as a fallback |
 | `search/stats` shows `embedder_active: false` | No search has run since startup, or the last embedding call failed | Use `GET /health/embeddings` instead, which runs a live probe |

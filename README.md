@@ -162,6 +162,20 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 In a checkout, runtime data stays in `./data`.
 
+### Staying up to date
+
+```bash
+uvx --from git+https://github.com/nomadbarefoot/SURF surf-mcp update
+```
+
+This rebuilds the cached environment your agents launch, pulling the newest compatible dependencies. In a source checkout, it upgrades yt-dlp in `.venv` instead. Restart your agents afterwards. Run it whenever YouTube transcripts start failing: YouTube changes often, and yt-dlp releases fixes within days. `GET /health/ready` reports `yt_dlp_age_days` and flags a copy older than 60 days.
+
+How dependencies are kept current:
+
+- **Package installs** (uvx, pipx) declare minimum versions with a ceiling at the next major release, so a fresh resolve gets the latest compatible release of everything.
+- **The Docker image** pins exact versions. Dependabot checks pip daily and opens PRs; patch and minor bumps, plus every yt-dlp release, merge on their own once the unit tests and a Docker build pass. A new image is published after each merge. Major bumps wait for review.
+- **Playwright** is the exception: the pip package and the Docker base image must be the same version, so they're bumped together by hand. A test fails if they drift apart.
+
 ## Embeddings (search ranking)
 
 Search engines return results in their own order. SURF re-scores each result against your query: **60% keyword match (BM25) + 40% semantic similarity** from an embedding model, then drops anything below a relevance threshold. `web_extract`'s `refine_query` uses the same embeddings to keep only the sections of a page that match.

@@ -631,6 +631,57 @@ def run(args, *, remove: bool = False) -> int:
     return 1 if any(r.status == "failed" for r in results) else 0
 
 
+# Fast-moving dependencies whose breakage comes from the remote site, not from
+# SURF. A source checkout upgrades these in place; uvx refreshes everything.
+FAST_MOVING = ["yt-dlp[default,deno]"]
+
+
+def update_commands(mode: str = "auto", extras: str = "all", source: str = DEFAULT_SOURCE) -> list[list[str]]:
+    """Commands that pull the newest compatible SURF dependencies."""
+    if mode == "auto":
+        mode = "uvx" if _is_installed_package() else "local"
+    if mode == "uvx":
+        # Refresh the same requirement agents launch, so their cached env is
+        # the one rebuilt. Refresh the bare spec too in case extras differ.
+        specs = [build_spec(extras=extras, source=source, mode="uvx")]
+        if extras:
+            specs.append(build_spec(source=source, mode="uvx"))
+        return [
+            ["uvx", "--refresh", *spec.args[: spec.args.index("--profile")], "--help"]
+            for spec in specs
+        ]
+    python = build_spec(mode="local").command
+    if shutil.which("uv"):
+        return [["uv", "pip", "install", "--python", python, "--upgrade", *FAST_MOVING]]
+    return [[python, "-m", "pip", "install", "--upgrade", *FAST_MOVING]]
+
+
+def run_update(args) -> int:
+    commands = update_commands(args.mode, args.extras, args.source)
+    for command in commands:
+        print(f"$ {' '.join(command)}", file=sys.stderr)
+        if args.dry_run:
+            continue
+        try:
+            proc = subprocess.run(command, capture_output=True, text=True, timeout=900)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"update: failed\ndetail: {json.dumps(str(exc))}")
+            return 1
+        if proc.returncode != 0:
+            print(f"update: failed\ndetail: {json.dumps((proc.stderr or proc.stdout).strip()[-300:])}")
+            return 1
+    print("update: planned" if args.dry_run else "update: ok\nnext: restart your agents so they relaunch SURF")
+    return 0
+
+
+def add_update_arguments(parser) -> None:
+    parser.add_argument("--extras", default="all", help="Extras to refresh in uvx mode (default: all)")
+    parser.add_argument("--source", default=DEFAULT_SOURCE, help="Package source for uvx mode")
+    parser.add_argument("--mode", choices=("auto", "uvx", "local"), default="auto",
+                        help="uvx: refresh the uvx cache; local: upgrade this checkout's venv")
+    parser.add_argument("--dry-run", action="store_true", help="Print the commands without running them")
+
+
 def prepare(spec: ServerSpec) -> tuple[bool, str]:
     """Run the configured command once so agents' first launch is fast.
 

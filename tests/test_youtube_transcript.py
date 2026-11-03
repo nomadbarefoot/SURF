@@ -243,6 +243,122 @@ async def test_service_bounds_inline_content_keeps_full_artifact_and_caches(
     assert downloads.calls == 2
 
 
+class ScriptedFetch:
+    """Returns queued responses in order and records request headers."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.headers = []
+
+    async def request(self, **kwargs):
+        self.headers.append(kwargs.get("headers") or {})
+        return self.responses.pop(0)
+
+
+def _info(url="https://www.youtube.com/api/timedtext?v=x", cookie=None):
+    info = {
+        "id": VIDEO_ID,
+        "language": "en",
+        "subtitles": {"en": [{"ext": "json3", "url": url, "name": "English"}]},
+    }
+    if cookie:
+        info["_surf_session_cookie"] = cookie
+    return info
+
+
+_GOOD = {"status": 200, "_content_bytes": b'{"events":[{"tStartMs":0,"segs":[{"utf8":"hi"}]}]}'}
+
+
+@pytest.fixture
+def no_retry_delay(monkeypatch):
+    import services.youtube_transcript_service as yts
+
+    monkeypatch.setattr(yts, "_DEFAULT_RETRY_DELAY_SECONDS", 0.0)
+    monkeypatch.setattr(yts, "_MAX_RETRY_DELAY_SECONDS", 0.0)
+
+
+async def _transcript(tmp_path, monkeypatch, fetch, info):
+    service = YoutubeTranscriptService(fetch, FakeDownloads(tmp_path), FakeCache())
+    monkeypatch.setattr(service, "_extract_info_sync", lambda _url: info)
+    return await service.get_transcript(url=f"https://youtu.be/{VIDEO_ID}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "first",
+    [
+        {"status": 429, "headers": {"Retry-After": "1"}},
+        {"status": 200, "_content_bytes": b""},
+    ],
+)
+async def test_caption_download_retries_once(tmp_path, monkeypatch, no_retry_delay, first):
+    fetch = ScriptedFetch([first, _GOOD])
+    result = await _transcript(tmp_path, monkeypatch, fetch, _info())
+    assert result["content"].endswith("hi")
+    assert len(fetch.headers) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response, code",
+    [
+        ({"status": 429}, "UPSTREAM_RATE_LIMITED"),
+        ({"status": 200, "_content_bytes": b"  "}, "TRANSCRIPT_EXTRACTION_FAILED"),
+    ],
+)
+async def test_persistent_block_reports_vpn_hint(
+    tmp_path, monkeypatch, no_retry_delay, response, code
+):
+    fetch = ScriptedFetch([response, response])
+    with pytest.raises(TranscriptServiceError) as exc_info:
+        await _transcript(tmp_path, monkeypatch, fetch, _info())
+    assert exc_info.value.code == code
+    assert "VPN" in exc_info.value.details["hint"]
+    assert len(fetch.headers) == 2
+
+
+@pytest.mark.asyncio
+async def test_session_cookie_only_sent_to_youtube(tmp_path, monkeypatch):
+    fetch = ScriptedFetch([_GOOD])
+    await _transcript(tmp_path, monkeypatch, fetch, _info(cookie="VISITOR=abc"))
+    assert fetch.headers[0]["Cookie"] == "VISITOR=abc"
+
+    other = ScriptedFetch([_GOOD])
+    info = _info(url="https://captions.example/track", cookie="VISITOR=abc")
+    await _transcript(tmp_path, monkeypatch, other, info)
+    assert "Cookie" not in other.headers[0]
+
+
+@pytest.mark.parametrize(
+    "message, code",
+    [
+        ("ERROR: [youtube] x: The page needs to be reloaded.", "UPSTREAM_RATE_LIMITED"),
+        ("Sign in to confirm you're not a bot", "UPSTREAM_RATE_LIMITED"),
+        ("HTTP Error 429: Too Many Requests", "UPSTREAM_RATE_LIMITED"),
+        ("Private video. Sign in if you've been granted access", "VIDEO_UNAVAILABLE"),
+        ("Sign in to confirm your age", "VIDEO_UNAVAILABLE"),
+        ("Video unavailable", "VIDEO_UNAVAILABLE"),
+    ],
+)
+def test_extractor_error_mapping(message, code):
+    error = YoutubeTranscriptService._map_extractor_error(Exception(message))
+    assert error.code == code
+    if code == "UPSTREAM_RATE_LIMITED":
+        assert "VPN" in error.details["hint"]
+
+
+def test_yt_dlp_age_from_calver():
+    from datetime import date
+
+    from services.youtube_transcript_service import yt_dlp_age_days
+
+    today = date(2026, 11, 3)
+    assert yt_dlp_age_days("2026.10.26", today) == 8
+    assert yt_dlp_age_days("2026.06.09.232301", today) == 147
+    assert yt_dlp_age_days("nightly", today) is None
+    assert yt_dlp_age_days(None, today) is None
+
+
 def test_youtube_route_is_available_in_loopback_free_tier(tmp_path, monkeypatch):
     class FakeService:
         async def get_transcript(self, **_kwargs):

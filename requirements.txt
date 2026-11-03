@@ -16,7 +16,8 @@ httpx==0.28.1
 curl_cffi==0.15.0
 adblock==0.6.0
 mcp==1.27.2
-yt-dlp[default,deno]==2026.6.9
+PyYAML==6.0.3
+yt-dlp[default,deno]==2026.10.26
 
 # Optional compatibility backend for some Cloudflare-fronted pages.
 # Install only when explicitly needed:

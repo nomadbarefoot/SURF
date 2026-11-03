@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Unit tests
+        run: python -m pytest -q -W ignore
+
+      - name: Package installs and launches
+        run: |
+          pip install ".[all]"
+          cd "$RUNNER_TEMP" && surf-mcp --help > /dev/null && surf-mcp update --dry-run
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+
+  # Merge Dependabot PRs once both jobs pass. Majors stay open for review,
+  # except yt-dlp, whose calendar versions look "major" every January.
+  automerge:
+    needs: [unit, docker]
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge
+        if: steps.meta.outputs.update-type != 'version-update:semver-major' || steps.meta.outputs.dependency-group == 'yt-dlp'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr merge --squash --delete-branch "$PR_URL"
+          # Merges made with GITHUB_TOKEN don't fire push workflows, so start
+          # the image publish explicitly.
+          gh workflow run docker-build.yml --ref main --repo "$GITHUB_REPOSITORY"

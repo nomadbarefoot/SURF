@@ -148,6 +148,18 @@ def test_select_clients_validation():
         ai.select_clients("cursor,nope")
 
 
+def test_update_refreshes_the_spec_agents_launch():
+    full, bare = ai.update_commands(mode="uvx", extras="all")
+    assert full == ["uvx", "--refresh", "--from", f"surf-web[all] @ {ai.DEFAULT_SOURCE}", "surf-mcp", "--help"]
+    assert bare == ["uvx", "--refresh", "--from", ai.DEFAULT_SOURCE, "surf-mcp", "--help"]
+    assert ai.update_commands(mode="uvx", extras="") == [bare]
+
+
+def test_update_local_upgrades_fast_moving_deps():
+    [command] = ai.update_commands(mode="local")
+    assert "--upgrade" in command and command[-1] == "yt-dlp[default,deno]"
+
+
 def test_claude_code_cli_argument_order(monkeypatch, spec):
     calls = []
     client = ai.ClaudeCode()
