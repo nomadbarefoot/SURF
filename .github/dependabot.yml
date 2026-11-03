@@ -29,8 +29,9 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 2
     ignore:
-      # Coupled to the pip playwright pin (see above).
-      - dependency-name: "mcr.microsoft.com/playwright/python"
+      # Coupled to the pip playwright pin (see above). Dependabot names the
+      # image without its registry.
+      - dependency-name: "playwright/python"
 
   - package-ecosystem: "github-actions"
     directory: "/"
