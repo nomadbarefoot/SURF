@@ -30,7 +30,7 @@ dependencies = [
 # youtube_transcript: yt-dlp plus its bundled JavaScript runtime (~100 MB).
 youtube = ["yt-dlp[default,deno]>=2026.10.26"]
 # PDF / DOCX / XLSX text extraction from downloads (~26 MB).
-docs = ["pypdf>=4.0,<5.0", "python-docx>=1.1.0", "openpyxl>=3.1.0"]
+docs = ["pypdf>=4.0,<7.0", "python-docx>=1.1.0", "openpyxl>=3.1.0"]
 all = ["surf-web[youtube,docs]"]
 
 [project.scripts]
